@@ -2,7 +2,7 @@ import { useState, type FormEvent, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useCreateBriefing } from '@workspace/api-client-react';
 import type { BriefingResult, BriefSource } from '@workspace/api-client-react';
-import { ArrowDown, ArrowUpRight, Check, Clipboard, Clock3, FileText, Link2, LoaderCircle, Printer, Radio, RefreshCw, Sparkles } from 'lucide-react';
+import { ArrowDown, ArrowUpRight, Check, Clipboard, Clock3, FileText, Link2, LoaderCircle, Printer, Radio, RefreshCw } from 'lucide-react';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -298,7 +298,7 @@ function Home() {
               <div className="mt-1 text-right font-mono text-[9px] text-[#aaa4af]">{context.length} / 1500</div>
 
               <button type="submit" disabled={mutation.isPending || subject.trim().length < 2 || !meetingAt} className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#2b304a] px-4 text-sm font-semibold text-[#faf7f0] transition hover:bg-[#3c4160] disabled:opacity-55" data-testid="button-generate-briefing">
-                {mutation.isPending ? <><LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />Researching sources…</> : <><Sparkles className="h-4 w-4 text-[#c9b9ee]" aria-hidden="true" />Build my briefing<ArrowDown className="ml-auto h-4 w-4 opacity-60" aria-hidden="true" /></>}
+                {mutation.isPending ? <><LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />Researching sources…</> : <><FileText className="h-4 w-4 text-[#c9b9ee]" aria-hidden="true" />Build my briefing<ArrowDown className="ml-auto h-4 w-4 opacity-60" aria-hidden="true" /></>}
               </button>
               <p id="form-note" className="mt-3 text-center text-[10px] leading-relaxed text-[#898392]">Your brief is built from traceable articles, not guesswork.</p>
             </form>

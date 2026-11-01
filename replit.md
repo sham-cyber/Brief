@@ -26,13 +26,12 @@ A pre-meeting research app that creates concise one-page briefs on a person or c
 - `artifacts/briefing-agent` — briefing app interface
 - `artifacts/api-server/src/routes/briefings.ts` — research and brief-generation endpoint
 - `lib/api-spec/openapi.yaml` — API contract source of truth
-- `lib/integrations-openai-ai-server` — Replit-managed OpenAI client
 - `lib/api-client-react` and `lib/api-zod` — generated API client and validation schemas
 
 ## Architecture decisions
 
 - Search recent articles from Google News RSS and use the returned article URLs as the allowed citation set.
-- Generate a concise structured brief through Replit AI Integrations; validate that every factual summary cites returned source IDs.
+- Build a concise, deterministic brief directly from returned article titles and snippets; link each item to its source.
 - Briefs are generated on demand and are not persisted.
 
 ## Product
@@ -47,7 +46,6 @@ _Populate as you build — explicit user instructions worth remembering across s
 
 ## Gotchas
 
-- The briefing endpoint depends on the `AI_INTEGRATIONS_OPENAI_*` environment variables provisioned by the Replit AI integration.
 - If no recent sources are returned, generation fails explicitly rather than producing an unsourced brief.
 
 ## Pointers
