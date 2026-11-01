@@ -7,4 +7,4 @@ The user means the existing Briefing Agent in this workspace when referring to t
 
 **Why:** The user clarified the 30-day crawler brief, Company/Person differences, category buttons, voice/Q&A features, cost controls, and explicitly removed email automation.
 
-**How to apply:** Extend the existing Briefing Agent as a user-triggered web app. Prioritize only stated meeting context; do not infer private motives or finances, make investment recommendations, or add email integration unless the user changes direction.
+**How to apply:** Extend the existing Briefing Agent as a user-triggered web app. Prioritize only stated meeting context; do not infer private motives or finances, make investment recommendations, or add email integration unless the user changes direction. Each block should have a replay action that reuses its existing audio without another AI speech request.
