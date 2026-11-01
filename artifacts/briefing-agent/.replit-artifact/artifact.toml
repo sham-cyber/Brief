@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Briefing Agent"
+description = "A pre-meeting research app that creates concise one-page briefs on a person or company from recent, verifiable sources, covering news, leadership changes, launches, and open questions."
+version = "1.0.0"
+id = "artifacts/briefing-agent"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 21375
+
+[services.development]
+run = "pnpm --filter @workspace/briefing-agent run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/briefing-agent", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/briefing-agent/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21375"
+BASE_PATH = "/"
