@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useCreateBriefing } from '@workspace/api-client-react';
 import type { BriefingResult, BriefSource } from '@workspace/api-client-react';
-import { ArrowDown, ArrowUpRight, Check, Clipboard, Clock3, FileText, Link2, LoaderCircle, Printer, Radio, RefreshCw } from 'lucide-react';
+import { ArrowDown, ArrowUpRight, Check, Clipboard, Clock3, FileText, Link2, LoaderCircle, Play, Printer, Radio, RefreshCw, Search, Square, Volume2 } from 'lucide-react';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -10,6 +10,42 @@ import NotFound from '@/pages/not-found';
 import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 
 const queryClient = new QueryClient();
+const TOPICS = [
+  { value: 'news', label: 'News' },
+  { value: 'hire', label: 'Hires' },
+  { value: 'launch', label: 'Launches' },
+  { value: 'financial', label: 'Financial Facts' },
+  { value: 'risk', label: 'Risks & Open Questions' },
+] as const;
+type Topic = typeof TOPICS[number]['value'];
+
+function speechText(value: string) {
+  const words = value.trim().split(/\s+/).filter(Boolean);
+  const capped = words.slice(0, 280).join(' ');
+  return { text: capped, words: Math.min(words.length, 280), clipped: words.length > 280 };
+}
+
+function isVideoSource(source: BriefSource) {
+  return /(?:youtube\.com|youtu\.be|vimeo\.com|\.mp4(?:$|\?)|\.webm(?:$|\?)|\.ogg(?:$|\?))/i.test(`${source.url} ${source.title}`);
+}
+
+function playableVideoUrl(url: string) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname.includes('youtu.be')) return `https://www.youtube-nocookie.com/embed/${parsed.pathname.slice(1)}`;
+    if (parsed.hostname.includes('youtube.com')) {
+      const id = parsed.searchParams.get('v') ?? parsed.pathname.match(/\/(?:embed|shorts)\/([^/]+)/)?.[1];
+      return id ? `https://www.youtube-nocookie.com/embed/${id}` : null;
+    }
+    if (parsed.hostname.includes('vimeo.com')) {
+      const id = parsed.pathname.match(/\/(\d+)/)?.[1];
+      return id ? `https://player.vimeo.com/video/${id}` : null;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
 
 function formatDate(value: string | null | undefined, options?: Intl.DateTimeFormatOptions) {
   if (!value) return 'Date not provided';
@@ -38,7 +74,7 @@ function References({ sourceIds, sources }: { sourceIds: string[]; sources: Brie
       {sourceIds.map((id) => {
         const source = sourceById.get(id);
         return source ? (
-          <a key={id} className="reference-pill" href={`#source-${encodeURIComponent(id)}`} aria-label={`Open source: ${source.title}`} title={source.title}>
+          <a key={id} className="reference-pill" href={`#source-${encodeURIComponent(id)}`} aria-label={`Open source: ${source.title}`} title={source.title} data-testid={`link-reference-${encodeURIComponent(id)}`}>
             {id}
           </a>
         ) : (
@@ -50,7 +86,7 @@ function References({ sourceIds, sources }: { sourceIds: string[]; sources: Brie
 }
 
 function SourceList({ sources }: { sources: BriefSource[] }) {
-  if (!sources.length) return <p className="text-sm text-muted-foreground">No source links were returned for this briefing.</p>;
+  if (!sources.length) return <p className="text-sm text-muted-foreground">Links will appear here after the source crawl.</p>;
   return (
     <ol className="divide-y divide-border/80">
       {sources.map((source, index) => (
@@ -58,16 +94,35 @@ function SourceList({ sources }: { sources: BriefSource[] }) {
           <div className="flex gap-4">
             <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[#d8d1e5] bg-[#f1eef7] font-mono text-[11px] text-[#594b87]">{source.id}</span>
             <div className="min-w-0 flex-1">
-              <a href={source.url} target="_blank" rel="noreferrer" className="group inline-flex items-start gap-1.5 text-[15px] font-semibold leading-snug text-foreground decoration-[#8a7bb0] underline-offset-4 hover:underline">
+              <a href={source.url} target="_blank" rel="noreferrer" className="group inline-flex items-start gap-1.5 text-[15px] font-semibold leading-snug text-foreground decoration-[#8a7bb0] underline-offset-4 hover:underline" data-testid={`link-source-title-${index + 1}`}>
                 <span>{source.title}</span><ArrowUpRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground group-hover:text-primary" aria-hidden="true" />
               </a>
+              {isVideoSource(source) && (
+                <div className="source-video mt-4" data-testid={`source-video-${index + 1}`}>
+                  {playableVideoUrl(source.url) ? (
+                    <iframe
+                      src={playableVideoUrl(source.url) ?? undefined}
+                      title={`Video source: ${source.title}`}
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      referrerPolicy="strict-origin-when-cross-origin"
+                      allowFullScreen
+                    />
+                  ) : /\.(?:mp4|webm|ogg)(?:$|\?)/i.test(source.url) ? (
+                    <video controls preload="metadata" aria-label={`Play video: ${source.title}`}>
+                      <source src={source.url} />
+                    </video>
+                  ) : (
+                    <a className="video-link" href={source.url} target="_blank" rel="noreferrer" data-testid={`link-play-video-${index + 1}`}>Open video source</a>
+                  )}
+                </div>
+              )}
               <div className="mt-1.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
                 <span className="font-medium text-[#655b7a]">{source.publisher}</span>
                 <span aria-hidden="true">·</span>
                 <time dateTime={source.publishedAt ?? undefined}>{formatDate(source.publishedAt, { dateStyle: 'medium' })}</time>
               </div>
               {source.snippet && <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">{source.snippet}</p>}
-              <a className="mt-2 inline-flex max-w-full items-center gap-1.5 truncate font-mono text-[10px] text-[#71658e] underline decoration-[#c7bfd7] underline-offset-2 hover:text-primary" href={source.url} target="_blank" rel="noreferrer" aria-label={`Open URL for ${source.title}`}>
+              <a className="mt-2 inline-flex max-w-full items-center gap-1.5 truncate font-mono text-[10px] text-[#71658e] underline decoration-[#c7bfd7] underline-offset-2 hover:text-primary" href={source.url} target="_blank" rel="noreferrer" aria-label={`Open URL for ${source.title}`} data-testid={`link-source-url-${index + 1}`}>
                 <Link2 className="h-3 w-3 shrink-0" aria-hidden="true" /><span className="truncate">{source.url}</span>
               </a>
             </div>
@@ -78,8 +133,168 @@ function SourceList({ sources }: { sources: BriefSource[] }) {
   );
 }
 
+function SourceColumn({ sources }: { sources: BriefSource[] }) {
+  const hasVideo = sources.some(isVideoSource);
+  return (
+    <aside className="space-y-4" aria-label="Source links and video" data-testid="source-column">
+      <section className="rounded-2xl border border-border bg-card px-5 py-5 sm:px-6" aria-labelledby="source-column-heading">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <SectionEyebrow>Trace every claim</SectionEyebrow>
+            <h3 id="source-column-heading" className="mt-2 font-serif text-2xl text-foreground">Link column</h3>
+          </div>
+          <span className="rounded-full bg-[#f1eef7] px-3 py-1 font-mono text-[10px] text-[#5d5279]">{sources.length} links</span>
+        </div>
+        <SourceList sources={sources} />
+      </section>
+      {!hasVideo && (
+        <section className="rounded-2xl border border-border bg-card px-5 py-5 sm:px-6" aria-labelledby="video-column-heading">
+          <SectionEyebrow>Source media</SectionEyebrow>
+          <h3 id="video-column-heading" className="mt-2 font-serif text-2xl text-foreground">Video box</h3>
+          <div className="source-video video-placeholder mt-4" data-testid="video-placeholder">
+            <Play className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <span>{sources.length ? 'No video source found in this crawl.' : 'A playable video appears here when found.'}</span>
+          </div>
+        </section>
+      )}
+    </aside>
+  );
+}
+
+function speakBlock(text: string) {
+  if (!('speechSynthesis' in window)) return;
+  const { text: capped } = speechText(text);
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(capped);
+  utterance.rate = 1;
+  window.speechSynthesis.speak(utterance);
+}
+
+function VoiceControls({ text }: { text: string }) {
+  const estimate = speechText(text);
+  const seconds = Math.ceil(estimate.words / 2.5);
+  const hasText = Boolean(text.trim());
+  return (
+    <div className="flex items-center gap-3" data-testid="voice-controls">
+      <button
+        type="button"
+        disabled
+        title="AI voice is not connected. This stays off until you ask for AI integration."
+        aria-describedby="ai-voice-status"
+        className="voice-button flex h-24 w-24 shrink-0 flex-col items-center justify-center gap-1 rounded-full text-[11px] font-bold text-[#164b36]"
+        aria-label="AI voice is not connected"
+        data-testid="button-ai-voice"
+      >
+        <Volume2 className="h-5 w-5" aria-hidden="true" />
+        AI voice
+      </button>
+      <div className="min-w-0">
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={!hasText}
+            onClick={() => speakBlock(text)}
+            className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#cde0d4] bg-[#edf6f0] px-3 text-xs font-semibold text-[#32634a] transition hover:bg-[#e2f0e7] disabled:cursor-not-allowed disabled:opacity-50"
+            data-testid="button-read-briefing"
+          >
+            <Volume2 className="h-3.5 w-3.5" aria-hidden="true" /> Read aloud
+          </button>
+          <button
+            type="button"
+            onClick={() => window.speechSynthesis?.cancel()}
+            className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#e4b7b2] bg-[#fbefed] px-3 text-xs font-semibold text-[#98453e] transition hover:bg-[#f7e1de]"
+            data-testid="button-stop-speech"
+          >
+            <Square className="h-3.5 w-3.5 fill-current" aria-hidden="true" /> Stop
+          </button>
+        </div>
+        <p id="ai-voice-status" className="mt-2 max-w-52 text-[10px] leading-relaxed text-muted-foreground">
+          AI voice is not connected.
+        </p>
+        <p className="text-[9px] text-muted-foreground" data-testid="status-speech-estimate">
+          {hasText ? `Device voice · about ${seconds}s, ${estimate.words} words${estimate.clipped ? ' (capped)' : ''}` : 'Device read-aloud becomes available after the crawl.'}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function TopicBlock({
+  topic,
+  title,
+  highlights,
+  questions,
+  sources,
+}: {
+  topic: Topic;
+  title: string;
+  highlights: BriefingResult['highlights'];
+  questions?: BriefingResult['questions'];
+  sources: BriefSource[];
+}) {
+  const [filter, setFilter] = useState('');
+  const filteredHighlights = highlights.filter((item) => `${item.title} ${item.summary}`.toLowerCase().includes(filter.toLowerCase()));
+  const filteredQuestions = (questions ?? []).filter((item) => item.text.toLowerCase().includes(filter.toLowerCase()));
+  const readable = [
+    ...filteredHighlights.flatMap((item) => [item.title, item.summary]),
+    ...filteredQuestions.map((item) => item.text),
+  ].join('. ') || `${title}. No matching items.`;
+  return (
+    <section className="topic-block print-card mt-7 rounded-2xl border border-border bg-card px-5 py-5 sm:px-7" aria-labelledby={`topic-${topic}`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <SectionEyebrow>{TOPICS.find((item) => item.value === topic)?.label}</SectionEyebrow>
+          <h3 id={`topic-${topic}`} className="mt-2 font-serif text-3xl text-foreground">{title}</h3>
+        </div>
+        <button type="button" onClick={() => speakBlock(readable)} className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#cde0d4] bg-[#edf6f0] px-3 text-xs font-semibold text-[#32634a] hover:bg-[#e2f0e7]" data-testid={`button-repeat-${topic}`}>
+          <Volume2 className="h-3.5 w-3.5" aria-hidden="true" /> Repeat
+        </button>
+      </div>
+      <label className="relative mt-4 block max-w-sm">
+        <span className="sr-only">Filter {title}</span>
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#81788d]" aria-hidden="true" />
+        <input
+          value={filter}
+          onChange={(event) => setFilter(event.target.value)}
+          placeholder={`Filter ${title.toLowerCase()}…`}
+          className="h-9 w-full rounded-lg border border-[#ded9e2] bg-[#fffefa] pl-9 pr-3 text-xs focus:border-[#8c7dae] focus:outline-none"
+          data-testid={`input-filter-${topic}`}
+        />
+      </label>
+      {filteredHighlights.length || filteredQuestions.length ? (
+        <div className="mt-4 space-y-3">
+          {filteredHighlights.map((item, index) => (
+            <article key={`${item.title}-${index}`} className="rounded-xl border border-border/80 bg-[#fbfaf7] px-4 py-4" data-testid={`highlight-${topic}-${index + 1}`}>
+              <h4 className="font-semibold leading-snug text-[#292d43]">{item.title}</h4>
+              <p className="briefing-prose mt-2 text-sm leading-[1.75] text-[#5f6070]">
+                {item.summary}<References sourceIds={item.sourceIds} sources={sources} />
+              </p>
+            </article>
+          ))}
+          {filteredQuestions.map((question, index) => (
+            <p key={`${question.text}-${index}`} className="briefing-prose border-t border-[#ded9e5] pt-3 text-sm leading-relaxed text-[#454151]" data-testid={`question-${topic}-${index + 1}`}>
+              {question.text}<References sourceIds={question.sourceIds} sources={sources} />
+            </p>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-4 rounded-lg border border-dashed border-border px-4 py-5 text-sm text-muted-foreground" data-testid={`empty-topic-${topic}`}>
+          {filter ? 'No items match this filter.' : 'No items were returned in this category.'}
+        </p>
+      )}
+    </section>
+  );
+}
+
 function BriefingDocument({ result }: { result: BriefingResult }) {
   const [copied, setCopied] = useState(false);
+  const [activeTopic, setActiveTopic] = useState<'all' | Topic>('all');
+  const visibleTopics = result.topics.filter((topic) => activeTopic === 'all' || activeTopic === topic);
+
+  useEffect(() => {
+    setActiveTopic('all');
+  }, [result.generatedAt]);
+
   const copyBrief = async () => {
     const lines = [
       `${result.subject} — meeting briefing`,
@@ -106,13 +321,6 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
     }
   };
 
-  const categoryLabel = (category: string) => category === 'hire' ? 'People' : category === 'launch' ? 'Product' : 'News';
-  const categoryStyle = (category: string) => category === 'hire'
-    ? 'border-[#d7e5df] bg-[#edf5f1] text-[#426d5b]'
-    : category === 'launch'
-      ? 'border-[#e9ddc9] bg-[#f8f1e6] text-[#8a6632]'
-      : 'border-[#d9d4e8] bg-[#f0eef7] text-[#5a4d83]';
-
   return (
     <article className="fade-up min-w-0" aria-label={`Briefing for ${result.subject}`} data-testid="briefing-result">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3 no-print">
@@ -137,7 +345,7 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
         <div className="absolute -right-16 -top-24 h-64 w-64 rounded-full border border-white/10" aria-hidden="true" />
         <div className="absolute -right-2 -top-12 h-44 w-44 rounded-full border border-white/10" aria-hidden="true" />
         <div className="relative">
-          <p className="font-mono text-[10px] uppercase tracking-[.2em] text-[#c5b9e8]">Conversation file / 01</p>
+          <p className="font-mono text-[10px] uppercase tracking-[.2em] text-[#c5b9e8]">{result.subjectType} briefing</p>
           <h2 className="mt-4 max-w-3xl font-serif text-4xl leading-[.98] tracking-[-.02em] sm:text-5xl">{result.subject}</h2>
           <div className="mt-6 flex flex-wrap gap-x-6 gap-y-3 text-xs text-[#d2d0da]">
             <span className="inline-flex items-center gap-2"><Clock3 className="h-3.5 w-3.5 text-[#c5b9e8]" />{formatDate(result.meetingAt)}</span>
@@ -146,7 +354,9 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
         </div>
       </header>
 
-      <section className="print-card mt-5 rounded-2xl border border-border bg-card px-6 py-6 shadow-[0_8px_28px_rgba(38,37,55,.035)] sm:px-8" aria-labelledby="overview-heading">
+      <div className="mt-5 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]" data-testid="briefing-columns">
+        <div className="min-w-0">
+      <section className="print-card rounded-2xl border border-border bg-card px-6 py-6 shadow-[0_8px_28px_rgba(38,37,55,.035)] sm:px-8" aria-labelledby="overview-heading">
         <SectionEyebrow>01 / The short read</SectionEyebrow>
         <h3 id="overview-heading" className="sr-only">Overview</h3>
         <p className="briefing-prose mt-4 max-w-4xl font-serif text-[22px] leading-[1.45] text-[#30334a] sm:text-[25px]">
@@ -155,56 +365,63 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
         </p>
       </section>
 
-      <section className="mt-9" aria-labelledby="highlights-heading">
-        <div className="mb-4 flex items-end justify-between gap-3">
-          <div><SectionEyebrow>02 / What changed</SectionEyebrow><h3 id="highlights-heading" className="mt-2 font-serif text-3xl text-foreground">Recent signals</h3></div>
-          <span className="font-mono text-[10px] uppercase tracking-[.14em] text-muted-foreground">{result.highlights.length} {result.highlights.length === 1 ? 'item' : 'items'}</span>
-        </div>
-        {result.highlights.length ? (
-          <div className="space-y-3">
-            {result.highlights.map((item, index) => (
-              <article key={`${item.category}-${item.title}-${index}`} className="print-card grid grid-cols-[auto_1fr] gap-x-4 rounded-xl border border-border/90 bg-card px-5 py-5 sm:grid-cols-[104px_1fr] sm:gap-x-6 sm:px-6">
-                <span className={`mt-0.5 h-fit rounded-full border px-2.5 py-1 text-center text-[10px] font-semibold uppercase tracking-[.08em] ${categoryStyle(item.category)}`}>{categoryLabel(item.category)}</span>
-                <div className="min-w-0">
-                  <h4 className="font-semibold leading-snug text-[#292d43]">{item.title}</h4>
-                  <p className="briefing-prose mt-2 text-sm leading-[1.75] text-[#5f6070]">
-                    {item.summary}<References sourceIds={item.sourceIds} sources={result.sources} />
-                  </p>
-                </div>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-xl border border-dashed border-border bg-card/60 px-5 py-7 text-sm text-muted-foreground">No recent signals were returned for this briefing.</div>
-        )}
-      </section>
+      <nav className="no-print mt-6 flex flex-wrap gap-2" aria-label="Filter briefing by topic" data-testid="topic-filters">
+        <button
+          type="button"
+          onClick={() => setActiveTopic('all')}
+          aria-pressed={activeTopic === 'all'}
+          className={`rounded-full border px-3 py-2 text-xs font-semibold transition ${activeTopic === 'all' ? 'border-[#5b5078] bg-[#292e46] text-white' : 'border-border bg-card text-foreground hover:bg-accent'}`}
+          data-testid="button-topic-filter-all"
+        >
+          All selected topics
+        </button>
+        {TOPICS.map((topic) => {
+          const included = result.topics.includes(topic.value);
+          return (
+            <button
+              key={topic.value}
+              type="button"
+              onClick={() => setActiveTopic(topic.value)}
+              disabled={!included}
+              aria-pressed={activeTopic === topic.value}
+              className={`rounded-full border px-3 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${activeTopic === topic.value ? 'border-[#5b5078] bg-[#292e46] text-white' : 'border-border bg-card text-foreground hover:bg-accent'}`}
+              data-testid={`button-topic-filter-${topic.value}`}
+            >
+              {topic.label}
+            </button>
+          );
+        })}
+      </nav>
 
-      <section className="print-card mt-9 rounded-2xl border border-[#ddd5e9] bg-[#f0edf6] px-6 py-6 sm:px-8" aria-labelledby="questions-heading">
-        <SectionEyebrow>03 / Take into the room</SectionEyebrow>
-        <h3 id="questions-heading" className="mt-2 font-serif text-3xl text-[#302b44]">Questions worth asking</h3>
-        {result.questions.length ? (
-          <ol className="mt-5 space-y-0">
-            {result.questions.map((question, index) => (
-              <li key={`${question.text}-${index}`} className="flex gap-4 border-t border-[#d9d2e5] py-4 first:border-0 first:pt-0 last:pb-0">
-                <span className="pt-0.5 font-mono text-xs text-[#766a93]">0{index + 1}</span>
-                <p className="briefing-prose text-[15px] leading-relaxed text-[#3e3a50]">
-                  {question.text}<References sourceIds={question.sourceIds} sources={result.sources} />
-                </p>
-              </li>
-            ))}
-          </ol>
-        ) : (
-          <p className="mt-4 text-sm text-muted-foreground">No discussion prompts were returned for this briefing.</p>
-        )}
-      </section>
-
-      <section className="print-card mt-9 rounded-2xl border border-border bg-card px-6 py-6 sm:px-8" aria-labelledby="sources-heading">
-        <div className="mb-5 flex items-end justify-between gap-4">
-          <div><SectionEyebrow>04 / Trace every claim</SectionEyebrow><h3 id="sources-heading" className="mt-2 font-serif text-3xl">Sources</h3></div>
-          <span className="rounded-full bg-[#f1eef7] px-3 py-1 font-mono text-[10px] text-[#5d5279]">{result.sources.length} references</span>
+      <div className="mt-9 flex flex-wrap items-center justify-between gap-5 rounded-2xl border border-[#d8d2df] bg-[#f4f1e9] p-5 sm:p-6" data-testid="voice-summary">
+        <div className="max-w-md">
+          <SectionEyebrow>Listen before you walk in</SectionEyebrow>
+          <p className="mt-2 text-sm leading-relaxed text-[#65616d]">Read this brief aloud using your device’s built-in voice. No AI voice service is connected.</p>
         </div>
-        <SourceList sources={result.sources} />
-      </section>
+        <VoiceControls text={[
+          result.overview.text,
+          ...result.highlights.flatMap((item) => [item.title, item.summary]),
+          ...result.questions.map((question) => question.text),
+        ].join('. ')} />
+      </div>
+
+      {visibleTopics.map((topic) => {
+        const selected = TOPICS.find((item) => item.value === topic)!;
+        return (
+          <TopicBlock
+            key={topic}
+            topic={topic}
+            title={selected.label}
+            highlights={result.highlights.filter((item) => item.category === topic)}
+            questions={topic === 'risk' ? result.questions : undefined}
+            sources={result.sources}
+          />
+        );
+      })}
+
+        </div>
+        <SourceColumn sources={result.sources} />
+      </div>
       <p className="mt-5 text-right font-mono text-[10px] uppercase tracking-[.12em] text-muted-foreground">Generated {formatDate(result.generatedAt)}</p>
     </article>
   );
@@ -215,51 +432,80 @@ function SectionEyebrow({ children }: { children: ReactNode }) {
 }
 
 function Home() {
-  const mutation = useCreateBriefing();
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const mutation = useCreateBriefing({ request: { get signal() { return abortControllerRef.current?.signal; } } });
   const [subject, setSubject] = useState('');
+  const [subjectType, setSubjectType] = useState<'company' | 'person'>('company');
+  const [topics, setTopics] = useState<Topic[]>(TOPICS.map((topic) => topic.value));
   const [meetingAt, setMeetingAt] = useState('');
   const [context, setContext] = useState('');
   const [resultKey, setResultKey] = useState('');
   const [failedKey, setFailedKey] = useState('');
+  const [timedOutKey, setTimedOutKey] = useState('');
   const lastAutoRequestKey = useRef('');
   const activeRequestKey = useRef('');
-  const requestKey = JSON.stringify([subject.trim(), meetingAt]);
+  const timeoutRef = useRef<number | undefined>(undefined);
+  const requestKey = JSON.stringify([subject.trim(), subjectType, meetingAt, topics, context.trim()]);
   const meetingTimeIsValid = Boolean(meetingAt && !Number.isNaN(new Date(meetingAt).getTime()));
   const hasValidSubject = subject.trim().length >= 2;
+  const hasTopics = topics.length > 0;
   const hasCurrentResult = Boolean(mutation.data && resultKey === requestKey);
   const result = hasCurrentResult ? mutation.data : undefined;
-  const currentRequestIsPending = mutation.isPending && activeRequestKey.current === requestKey;
-  const currentRequestFailed = mutation.isError && failedKey === requestKey;
+  const currentRequestIsPending = mutation.isPending;
+  const currentRequestFailed = (mutation.isError && failedKey === requestKey) || timedOutKey === requestKey;
+  const researchWindow = useMemo(() => {
+    if (!meetingTimeIsValid) return '';
+    const end = new Date();
+    const start = new Date(end.getTime() - 30 * 86_400_000);
+    return `${formatDate(start.toISOString(), { dateStyle: 'medium' })} — ${formatDate(end.toISOString(), { dateStyle: 'medium' })}`;
+  }, [meetingAt, meetingTimeIsValid]);
 
   const runBriefing = useCallback((key: string) => {
-    if (!hasValidSubject || !meetingTimeIsValid) return;
+    if (!hasValidSubject || !meetingTimeIsValid || !hasTopics || mutation.isPending) return;
     lastAutoRequestKey.current = key;
     activeRequestKey.current = key;
     setFailedKey('');
+    setTimedOutKey('');
+    if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
+    abortControllerRef.current = new AbortController();
+    timeoutRef.current = window.setTimeout(() => {
+      if (activeRequestKey.current === key) {
+        setTimedOutKey(key);
+        activeRequestKey.current = `timed-out:${key}`;
+        abortControllerRef.current?.abort();
+      }
+    }, 120_000);
     mutation.mutate(
-      { data: { subject: subject.trim(), meetingAt, ...(context.trim() ? { context: context.trim() } : {}) } },
+      { data: { subject: subject.trim(), subjectType, meetingAt, topics, ...(context.trim() ? { context: context.trim() } : {}) } },
       {
         onSuccess: () => {
-          if (activeRequestKey.current === key) setResultKey(key);
+          if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
+          abortControllerRef.current = null;
+          if (activeRequestKey.current === key) {
+            setResultKey(key);
+            setFailedKey('');
+          }
         },
         onError: () => {
+          if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
+          abortControllerRef.current = null;
           if (activeRequestKey.current === key) setFailedKey(key);
         },
       },
     );
-  }, [context, hasValidSubject, meetingAt, meetingTimeIsValid, mutation.mutate, subject]);
+  }, [context, hasTopics, hasValidSubject, meetingAt, meetingTimeIsValid, mutation.isPending, mutation.mutate, subject, subjectType, topics]);
 
   useEffect(() => {
-    if (!hasValidSubject || !meetingTimeIsValid || mutation.isPending) return;
+    if (!hasValidSubject || !meetingTimeIsValid || !hasTopics || mutation.isPending) return;
     if (lastAutoRequestKey.current === requestKey) return;
 
     const timeout = window.setTimeout(() => {
       if (lastAutoRequestKey.current !== requestKey && !mutation.isPending) {
         runBriefing(requestKey);
       }
-    }, 450);
+    }, 650);
     return () => window.clearTimeout(timeout);
-  }, [hasValidSubject, meetingTimeIsValid, mutation.isPending, requestKey, runBriefing]);
+  }, [hasTopics, hasValidSubject, meetingTimeIsValid, mutation.isPending, requestKey, runBriefing]);
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -269,7 +515,7 @@ function Home() {
   const errorMessage = mutation.error instanceof Error
     ? mutation.error.message
     : 'The briefing could not be generated. Check your connection and try again.';
-  const readinessState = !meetingTimeIsValid || !hasValidSubject
+  const readinessState = !meetingTimeIsValid || !hasValidSubject || !hasTopics
     ? 'not-ready'
     : currentRequestFailed
       ? 'error'
@@ -286,30 +532,30 @@ function Home() {
     ready: 'border-[#c7dfd2] bg-[#edf6f0] text-[#2f6d4c]',
   }[readinessState];
   const readinessMessage = readinessState === 'not-ready'
-    ? !meetingTimeIsValid ? 'Not ready — set a meeting time to start research.' : 'Not ready — add a company or person to start research.'
+    ? !hasValidSubject ? 'Not ready — enter a company or person.' : !meetingTimeIsValid ? 'Not ready — set a meeting time to start research.' : 'Not ready — select at least one topic.'
     : readinessState === 'error'
-      ? 'Not ready — source collection failed. Try again.'
+      ? timedOutKey === requestKey ? 'Not ready — collection exceeded the 2-minute limit.' : 'Not ready — source collection failed. Try again.'
       : readinessState === 'crawling'
         ? 'Collecting sources — this may take up to 2 minutes.'
-        : readinessState === 'ready'
+      : readinessState === 'ready'
           ? 'Data ready — sources collected for this meeting.'
-          : 'Starting source collection…';
+          : 'Starting a one-time source collection…';
 
   return (
     <main className="paper-grid min-h-[100dvh] overflow-hidden">
       <div className="mx-auto max-w-[1240px] px-5 pb-16 pt-5 sm:px-8 lg:px-12">
         <nav className="no-print flex items-center justify-between border-b border-[#d9d4df] pb-4" aria-label="Main">
-          <a href="/" className="inline-flex items-center gap-2.5 text-foreground no-underline" aria-label="Briefing Desk home">
+          <a href="/" className="inline-flex items-center gap-2.5 text-foreground no-underline" aria-label="Briefing Agent home" data-testid="link-home">
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#292e46] text-[#d9cef3]"><FileText className="h-4 w-4" aria-hidden="true" /></span>
-            <span className="text-[13px] font-bold tracking-[-.02em]">briefing<span className="font-normal text-[#786d93]">desk</span></span>
+            <span className="text-[13px] font-bold tracking-[-.02em]">briefing<span className="font-normal text-[#786d93]"> agent</span></span>
           </a>
           <div className="flex items-center gap-2 font-mono text-[9px] uppercase tracking-[.14em] text-[#736d7d] sm:text-[10px]">
             <span className="h-1.5 w-1.5 rounded-full bg-[#5b9b7e]" aria-hidden="true" /> Research, with receipts
           </div>
         </nav>
 
-        <div className="mt-8 grid items-start gap-10 lg:mt-12 lg:grid-cols-[350px_minmax(0,1fr)] lg:gap-14">
-          <aside className="no-print fade-up lg:sticky lg:top-8" aria-labelledby="create-heading">
+        <div className="mt-8 space-y-8 lg:mt-12">
+          <section className="no-print fade-up" aria-labelledby="create-heading">
             <div className="mb-5">
               <p className="font-mono text-[10px] uppercase tracking-[.17em] text-[#766a93]">Your research desk</p>
               <h1 id="create-heading" className="mt-2 font-serif text-[38px] leading-[1.02] tracking-[-.02em] text-[#282d43]">Walk in<br /><em className="font-normal text-[#655487]">well briefed.</em></h1>
@@ -321,7 +567,29 @@ function Home() {
                 <span className="font-mono text-[10px] uppercase tracking-[.15em] text-[#6b6278]">New conversation</span>
                 <span className="font-mono text-[10px] text-[#968da0]">01 — 03</span>
               </div>
-              <label htmlFor="subject" className="mb-1.5 block text-xs font-semibold text-[#35364a]">Who are you meeting?</label>
+              <fieldset className="mt-4">
+                <legend className="mb-2 text-xs font-semibold text-[#35364a]">Briefing subject</legend>
+                <div className="grid max-w-md grid-cols-2 gap-2">
+                  {(['company', 'person'] as const).map((kind) => (
+                    <label key={kind} className={`flex h-10 cursor-pointer items-center gap-2 rounded-lg border px-3 text-xs font-semibold transition ${subjectType === kind ? 'border-[#9183ad] bg-[#f0edf6] text-[#493d65]' : 'border-[#d9d4df] bg-[#fffefa] text-[#777280]'}`}>
+                      <input
+                        type="radio"
+                        name="subjectType"
+                        value={kind}
+                        checked={subjectType === kind}
+                        onChange={() => setSubjectType(kind)}
+                        className="accent-[#655487]"
+                        data-testid={`radio-subject-type-${kind}`}
+                      />
+                      {kind === 'company' ? 'Company' : 'Person'}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+
+              <label htmlFor="subject" className="mb-1.5 mt-4 block text-xs font-semibold text-[#35364a]">
+                {subjectType === 'company' ? 'Company name' : 'Person name'}
+              </label>
               <input
                 id="subject"
                 value={subject}
@@ -329,12 +597,44 @@ function Home() {
                 required
                 minLength={2}
                 maxLength={200}
-                placeholder="Company, person, or organization"
+                placeholder={subjectType === 'company' ? 'Enter a company name' : 'Enter a person’s name'}
                 className="h-11 w-full rounded-lg border border-[#d9d4df] bg-[#fffefa] px-3 text-sm text-foreground placeholder:text-[#aaa4af] focus:border-[#8c7dae] focus:outline-none"
                 data-testid="input-subject"
               />
 
-              <label htmlFor="meetingAt" className="mb-1.5 mt-4 block text-xs font-semibold text-[#35364a]">When is the meeting?</label>
+              <fieldset className="mt-5">
+                <legend className="mb-2 flex w-full items-center justify-between gap-2 text-xs font-semibold text-[#35364a]">
+                  <span>Choose what to include</span>
+                  <span className="font-mono text-[9px] font-normal text-[#8d8694]">{topics.length} of 5 selected</span>
+                </legend>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+                  {TOPICS.map((topic, index) => (
+                    <label
+                      key={topic.value}
+                      className={`flex min-h-[68px] cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 text-xs transition ${
+                        topics.includes(topic.value)
+                          ? 'border-[#9284ae] bg-[#f0edf6] text-[#493d65]'
+                          : 'border-[#ded9e2] bg-[#fffefa] text-[#777280] hover:border-[#bbb1cc]'
+                      }`}
+                      data-testid={`topic-card-${topic.value}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={topics.includes(topic.value)}
+                        onChange={(event) => setTopics((selected) => event.target.checked ? [...selected, topic.value] : selected.filter((value) => value !== topic.value))}
+                        className="h-4 w-4 shrink-0 rounded accent-[#655487]"
+                        data-testid={`checkbox-topic-${topic.value}`}
+                      />
+                      <span className="min-w-0">
+                        <span className="block font-mono text-[9px] text-[#8b819a]">0{index + 1}</span>
+                        <span className="mt-0.5 block font-semibold leading-tight">{topic.label}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+
+              <label htmlFor="meetingAt" className="mb-1.5 mt-5 block text-xs font-semibold text-[#35364a]">When is the meeting?</label>
               <input
                 id="meetingAt"
                 type="datetime-local"
@@ -344,8 +644,13 @@ function Home() {
                 className="h-11 w-full rounded-lg border border-[#d9d4df] bg-[#fffefa] px-3 text-sm text-foreground focus:border-[#8c7dae] focus:outline-none"
                 data-testid="input-meeting-time"
               />
+              {researchWindow && (
+                <p className="mt-2 rounded-lg bg-[#f2efe8] px-3 py-2 text-[10px] leading-relaxed text-[#625d69]" data-testid="text-research-window">
+                  Exact 30-day research range: <strong>{researchWindow}</strong>
+                </p>
+              )}
               <div
-                className={`mt-2 flex min-h-9 items-center gap-2 rounded-lg border px-3 py-2 text-[11px] font-medium ${readinessStyles}`}
+                className={`mt-3 flex min-h-9 items-center gap-2 rounded-lg border px-3 py-2 text-[11px] font-medium ${readinessStyles}`}
                 id="meeting-readiness"
                 role="status"
                 aria-live="polite"
@@ -375,10 +680,10 @@ function Home() {
               />
               <div className="mt-1 text-right font-mono text-[9px] text-[#aaa4af]">{context.length} / 1500</div>
 
-              <button type="submit" disabled={mutation.isPending || !hasValidSubject || !meetingTimeIsValid} className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#2b304a] px-4 text-sm font-semibold text-[#faf7f0] transition hover:bg-[#3c4160] disabled:opacity-55" data-testid="button-generate-briefing">
+              <button type="submit" disabled={mutation.isPending || !hasValidSubject || !meetingTimeIsValid || !hasTopics} className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#2b304a] px-4 text-sm font-semibold text-[#faf7f0] transition hover:bg-[#3c4160] disabled:opacity-55" data-testid="button-generate-briefing">
                 {mutation.isPending ? <><LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />Crawling sources…</> : <><FileText className="h-4 w-4 text-[#c9b9ee]" aria-hidden="true" />{hasCurrentResult ? 'Refresh briefing' : 'Crawl & prepare briefing'}<ArrowDown className="ml-auto h-4 w-4 opacity-60" aria-hidden="true" /></>}
               </button>
-              <p id="form-note" className="mt-3 text-center text-[10px] leading-relaxed text-[#898392]">Your brief is built from traceable articles, not guesswork.</p>
+              <p id="form-note" className="mt-3 text-center text-[10px] leading-relaxed text-[#898392]">One source crawl per input set. It runs once now, never on a schedule or at meeting time. Results are limited to two minutes.</p>
             </form>
 
             {mutation.isPending && (
@@ -399,9 +704,9 @@ function Home() {
 
             <div className="mt-5 flex items-start gap-2.5 px-1 text-[11px] leading-relaxed text-[#777280]">
               <span className="mt-0.5 font-mono text-[9px] text-[#897ca6]">NOTE</span>
-              <p>Each point in your brief links back to its original reporting, so you can go deeper when it counts.</p>
+              <p>Public sources only. No email, WhatsApp, or private health data is collected. Each factual point links to its original reporting.</p>
             </div>
-          </aside>
+          </section>
 
           <section className="min-w-0" aria-live="polite" aria-label="Briefing">
             {(currentRequestIsPending || readinessState === 'starting') && !result ? (
@@ -441,17 +746,30 @@ function LoadingBrief() {
 
 function EmptyBriefing() {
   return (
-    <div className="fade-up flex min-h-[540px] flex-col items-center justify-center rounded-2xl border border-dashed border-[#d1cad9] bg-[#f8f6f2]/80 px-6 py-12 text-center" data-testid="empty-briefing">
-      <div className="relative flex h-24 w-24 items-center justify-center">
-        <span className="absolute inset-1 rounded-full border border-[#ded8e5]" aria-hidden="true" />
-        <span className="absolute inset-4 rounded-full border border-[#ded8e5]" aria-hidden="true" />
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#292e46] text-[#d9cef3]"><FileText className="h-5 w-5" aria-hidden="true" /></span>
+    <div className="fade-up grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_360px]" data-testid="empty-briefing">
+      <div className="flex min-h-[420px] flex-col items-center justify-center rounded-2xl border border-dashed border-[#d1cad9] bg-[#f8f6f2]/80 px-6 py-12 text-center">
+        <div className="relative flex h-24 w-24 items-center justify-center">
+          <span className="absolute inset-1 rounded-full border border-[#ded8e5]" aria-hidden="true" />
+          <span className="absolute inset-4 rounded-full border border-[#ded8e5]" aria-hidden="true" />
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#292e46] text-[#d9cef3]"><FileText className="h-5 w-5" aria-hidden="true" /></span>
+        </div>
+        <p className="mt-7 font-mono text-[10px] uppercase tracking-[.18em] text-[#7a6e95]">Ready when you are</p>
+        <h2 className="mt-3 max-w-sm font-serif text-3xl leading-tight text-[#2e3147]">Start with the conversation ahead.</h2>
+        <p className="mt-3 max-w-sm text-sm leading-relaxed text-[#777280]">Add a name and meeting time. Your sourced briefing will appear here, ready to scan or print.</p>
+        <div className="mt-8 flex items-center gap-3 text-[10px] text-[#8f8996]">
+          <span className="h-px w-8 bg-[#d8d1df]" /><span className="font-mono uppercase tracking-[.13em]">Context in, clarity out</span><span className="h-px w-8 bg-[#d8d1df]" />
+        </div>
       </div>
-      <p className="mt-7 font-mono text-[10px] uppercase tracking-[.18em] text-[#7a6e95]">Ready when you are</p>
-      <h2 className="mt-3 max-w-sm font-serif text-3xl leading-tight text-[#2e3147]">Start with the conversation ahead.</h2>
-      <p className="mt-3 max-w-sm text-sm leading-relaxed text-[#777280]">Add a name and meeting time. Your sourced briefing will appear here, ready to scan or print.</p>
-      <div className="mt-8 flex items-center gap-3 text-[10px] text-[#8f8996]">
-        <span className="h-px w-8 bg-[#d8d1df]" /><span className="font-mono uppercase tracking-[.13em]">Context in, clarity out</span><span className="h-px w-8 bg-[#d8d1df]" />
+      <div className="space-y-4">
+        <SourceColumn sources={[]} />
+        <section className="rounded-2xl border border-border bg-card px-5 py-5 sm:px-6" aria-labelledby="voice-empty-heading">
+          <SectionEyebrow>Voice controls</SectionEyebrow>
+          <h3 id="voice-empty-heading" className="mt-2 font-serif text-2xl text-foreground">AI and device speech</h3>
+          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">The AI voice button is shown but disabled. Device read-aloud becomes available after a briefing is collected.</p>
+          <div className="mt-4">
+            <VoiceControls text="" />
+          </div>
+        </section>
       </div>
     </div>
   );

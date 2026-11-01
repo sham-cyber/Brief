@@ -13,4 +13,6 @@ export const BriefingHighlightCategory = {
   news: 'news',
   hire: 'hire',
   launch: 'launch',
+  financial: 'financial',
+  risk: 'risk',
 } as const;

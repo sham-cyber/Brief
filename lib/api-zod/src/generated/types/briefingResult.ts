@@ -8,10 +8,14 @@
 import type { BriefingHighlight } from './briefingHighlight';
 import type { BriefingOverview } from './briefingOverview';
 import type { BriefingQuestion } from './briefingQuestion';
+import type { BriefingResultSubjectType } from './briefingResultSubjectType';
+import type { BriefingResultTopicsItem } from './briefingResultTopicsItem';
 import type { BriefSource } from './briefSource';
 
 export interface BriefingResult {
   subject: string;
+  subjectType: BriefingResultSubjectType;
+  topics: BriefingResultTopicsItem[];
   meetingAt: Date;
   generatedAt: Date;
   windowStart: Date;

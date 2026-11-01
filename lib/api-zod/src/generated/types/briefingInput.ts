@@ -5,6 +5,8 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { BriefingInputSubjectType } from './briefingInputSubjectType';
+import type { BriefingInputTopicsItem } from './briefingInputTopicsItem';
 
 export interface BriefingInput {
   /**
@@ -12,7 +14,10 @@ export interface BriefingInput {
      * @maxLength 200
      */
   subject: string;
+  subjectType: BriefingInputSubjectType;
   meetingAt: Date;
   /** @maxLength 1500 */
   context?: string;
+  /** @minItems 1 */
+  topics: BriefingInputTopicsItem[];
 }

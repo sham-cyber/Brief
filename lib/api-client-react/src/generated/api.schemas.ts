@@ -13,15 +13,37 @@ export interface Error {
   error: string;
 }
 
+export type BriefingInputSubjectType = typeof BriefingInputSubjectType[keyof typeof BriefingInputSubjectType];
+
+
+export const BriefingInputSubjectType = {
+  company: 'company',
+  person: 'person',
+} as const;
+
+export type BriefingInputTopicsItem = typeof BriefingInputTopicsItem[keyof typeof BriefingInputTopicsItem];
+
+
+export const BriefingInputTopicsItem = {
+  news: 'news',
+  hire: 'hire',
+  launch: 'launch',
+  financial: 'financial',
+  risk: 'risk',
+} as const;
+
 export interface BriefingInput {
   /**
      * @minLength 2
      * @maxLength 200
      */
   subject: string;
+  subjectType: BriefingInputSubjectType;
   meetingAt: string;
   /** @maxLength 1500 */
   context?: string;
+  /** @minItems 1 */
+  topics: BriefingInputTopicsItem[];
 }
 
 export interface BriefSource {
@@ -41,6 +63,8 @@ export const BriefingHighlightCategory = {
   news: 'news',
   hire: 'hire',
   launch: 'launch',
+  financial: 'financial',
+  risk: 'risk',
 } as const;
 
 export interface BriefingHighlight {
@@ -62,8 +86,29 @@ export interface BriefingQuestion {
   sourceIds: string[];
 }
 
+export type BriefingResultSubjectType = typeof BriefingResultSubjectType[keyof typeof BriefingResultSubjectType];
+
+
+export const BriefingResultSubjectType = {
+  company: 'company',
+  person: 'person',
+} as const;
+
+export type BriefingResultTopicsItem = typeof BriefingResultTopicsItem[keyof typeof BriefingResultTopicsItem];
+
+
+export const BriefingResultTopicsItem = {
+  news: 'news',
+  hire: 'hire',
+  launch: 'launch',
+  financial: 'financial',
+  risk: 'risk',
+} as const;
+
 export interface BriefingResult {
   subject: string;
+  subjectType: BriefingResultSubjectType;
+  topics: BriefingResultTopicsItem[];
   meetingAt: string;
   generatedAt: string;
   windowStart: string;

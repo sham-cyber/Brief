@@ -133,6 +133,30 @@
 @keyframes fade-up { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 
 .briefing-prose { white-space: pre-line; }
+.voice-button {
+  background: radial-gradient(circle at 35% 28%, #f7fff8, #bce5c9 74%);
+  border: 1px solid #8ac69f;
+  box-shadow: 0 0 0 5px rgba(108, 185, 133, .13), 0 8px 25px rgba(71, 143, 95, .25);
+}
+.voice-button:hover { box-shadow: 0 0 0 7px rgba(108, 185, 133, .17), 0 10px 28px rgba(71, 143, 95, .3); }
+.voice-button:disabled { cursor: not-allowed; opacity: 1; }
+.source-video {
+  display: flex;
+  width: 1.5in;
+  height: 1in;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid hsl(39 20% 82%);
+  border-radius: .6rem;
+  background: hsl(224 30% 16%);
+}
+.source-video iframe, .source-video video { width: 100%; height: 100%; border: 0; object-fit: cover; }
+.source-video .video-link { color: #f6f1e8; font-size: 10px; text-decoration: underline; }
+.video-placeholder { gap: .45rem; padding: .5rem; color: #f6f1e8; font-size: 9px; line-height: 1.35; text-align: center; }
+@media (min-width: 768px) {
+  .source-video { width: 1in; height: 1.5in; }
+}
 .reference-pill {
   display: inline-flex;
   align-items: center;

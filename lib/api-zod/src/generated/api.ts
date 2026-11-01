@@ -27,10 +27,13 @@ export const createBriefingBodyContextMax = 1500;
 
 
 
+
 export const CreateBriefingBody = zod.object({
   "subject": zod.string().min(createBriefingBodySubjectMin).max(createBriefingBodySubjectMax),
+  "subjectType": zod.enum(['company', 'person']),
   "meetingAt": zod.coerce.date(),
-  "context": zod.string().max(createBriefingBodyContextMax).optional()
+  "context": zod.string().max(createBriefingBodyContextMax).optional(),
+  "topics": zod.array(zod.enum(['news', 'hire', 'launch', 'financial', 'risk'])).min(1)
 })
 
 
@@ -39,6 +42,8 @@ export const CreateBriefingBody = zod.object({
 
 export const CreateBriefingResponse = zod.object({
   "subject": zod.string(),
+  "subjectType": zod.enum(['company', 'person']),
+  "topics": zod.array(zod.enum(['news', 'hire', 'launch', 'financial', 'risk'])),
   "meetingAt": zod.coerce.date(),
   "generatedAt": zod.coerce.date(),
   "windowStart": zod.coerce.date(),
@@ -48,7 +53,7 @@ export const CreateBriefingResponse = zod.object({
   "sourceIds": zod.array(zod.string()).min(1)
 }),
   "highlights": zod.array(zod.object({
-  "category": zod.enum(['news', 'hire', 'launch']),
+  "category": zod.enum(['news', 'hire', 'launch', 'financial', 'risk']),
   "title": zod.string(),
   "summary": zod.string(),
   "sourceIds": zod.array(zod.string()).min(1)

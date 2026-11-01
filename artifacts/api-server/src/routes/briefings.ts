@@ -12,6 +12,9 @@ type NewsItem = {
   snippet: string;
 };
 
+type BriefingTopic = "news" | "hire" | "launch" | "financial" | "risk";
+type SearchResult = { source: NewsItem; searchedAs: BriefingTopic };
+
 function decodeXml(value: string): string {
   const decoded = value
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
@@ -40,18 +43,29 @@ function readTag(xml: string, tag: string): string {
 
 async function searchNews(
   subject: string,
+  subjectType: "company" | "person",
+  topics: BriefingTopic[],
   start: Date,
   end: Date,
-): Promise<NewsItem[]> {
+): Promise<SearchResult[]> {
   const startDate = start.toISOString().slice(0, 10);
   const endDate = new Date(end.getTime() + 86_400_000).toISOString().slice(0, 10);
-  const searchTerms = [
-    subject,
-    `${subject} (CEO OR leadership OR appointed OR joins OR hire)`,
-    `${subject} (launch OR launches OR product OR release)`,
-  ];
+  const searchTerms: { topic: BriefingTopic; term: string }[] = topics.map((topic) => {
+    const terms: Record<BriefingTopic, string> = {
+      news: `${subject} news`,
+      hire: subjectType === "person"
+        ? `${subject} (appointed OR appointment OR joins OR joined OR hired OR hiring OR promoted OR promotion)`
+        : `${subject} (appointed OR appointment OR joins OR joined OR hired OR hiring OR promoted OR promotion OR named CEO)`,
+      launch: `${subject} (launch OR launched OR launches OR release OR released OR unveiled OR debut OR introduced)`,
+      financial: subjectType === "company"
+        ? `${subject} (share price OR shares OR stock OR earnings OR profit OR loss OR revenue OR valuation OR funding)`
+        : `${subject} (financial results OR earnings OR investment OR profit OR loss OR valuation OR funding)`,
+      risk: `${subject} (risk OR lawsuit OR sues OR sued OR recall OR investigation OR regulator OR fine OR penalty OR restructuring OR breach)`,
+    };
+    return { topic, term: terms[topic] };
+  });
   const feeds = await Promise.all(
-    searchTerms.map(async (term) => {
+    searchTerms.map(async ({ topic, term }) => {
       const url = new URL("https://news.google.com/rss/search");
       url.searchParams.set("q", `${term} after:${startDate} before:${endDate}`);
       url.searchParams.set("hl", "en-US");
@@ -65,12 +79,12 @@ async function searchNews(
       if (!response.ok) {
         throw new Error(`News search returned ${response.status}`);
       }
-      return response.text();
+      return { topic, xml: await response.text() };
     }),
   );
 
-  const uniqueItems = new Map<string, Omit<NewsItem, "id">>();
-  for (const xml of feeds) {
+  const uniqueItems = new Map<string, { item: Omit<NewsItem, "id">; searchedAs: BriefingTopic }>();
+  for (const { topic, xml } of feeds) {
     const entries = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)].slice(0, 8);
     for (const entry of entries) {
       const item = entry[1] ?? "";
@@ -82,7 +96,7 @@ async function searchNews(
       const parsedDate = published ? new Date(published) : null;
       const validDate =
         parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate : null;
-      if (!title || !link || uniqueItems.has(link)) continue;
+      if (!title || !link || !validDate || uniqueItems.has(link)) continue;
 
       let publisher = source;
       try {
@@ -92,19 +106,19 @@ async function searchNews(
       } catch {
         continue;
       }
-      if (
-        validDate &&
-        (validDate.getTime() < start.getTime() || validDate.getTime() > end.getTime())
-      ) {
+      if (validDate.getTime() < start.getTime() || validDate.getTime() > end.getTime()) {
         continue;
       }
 
       uniqueItems.set(link, {
-        title,
-        url: link,
-        publisher,
-        publishedAt: validDate?.toISOString() ?? null,
-        snippet: description.slice(0, 700),
+        item: {
+          title,
+          url: link,
+          publisher,
+          publishedAt: validDate?.toISOString() ?? null,
+          snippet: description.slice(0, 700),
+        },
+        searchedAs: topic,
       });
     }
   }
@@ -112,65 +126,76 @@ async function searchNews(
   return [...uniqueItems.values()]
     .sort(
       (a, b) =>
-        new Date(b.publishedAt ?? 0).getTime() -
-        new Date(a.publishedAt ?? 0).getTime(),
+        new Date(b.item.publishedAt ?? 0).getTime() -
+        new Date(a.item.publishedAt ?? 0).getTime(),
     )
     .slice(0, 18)
-    .map((item, index) => ({ ...item, id: `S${index + 1}` }));
+    .map(({ item, searchedAs }, index) => ({
+      source: { ...item, id: `S${index + 1}` },
+      searchedAs,
+    }));
 }
 
-function classifySource(source: NewsItem): "news" | "hire" | "launch" {
+const TOPIC_MATCHERS: Record<Exclude<BriefingTopic, "news">, RegExp> = {
+  hire: /\b(?:appointed|appoints|appointment|joins?|joined|hired|hire|hiring|named\s+(?:as|to)|promoted|promotion|new\s+(?:CEO|CFO|CTO|chief executive|president|chair|director))\b/i,
+  launch: /\b(?:launch(?:es|ed)?|releas(?:e|es|ed)|introduc(?:e|es|ed|ing)|unveil(?:s|ed)?|debut(?:s|ed)?|roll(?:s)? out|now available)\b/i,
+  financial: /\b(?:profit|loss|earnings|revenue|stock|shares?|share price|financial results|quarterly results|valuation|funding|investment|IPO|cost savings)\b/i,
+  risk: /\b(?:risk|lawsuit|sues|sued|recall|investigation|probe|regulator|fine|penalty|restructuring|breach|complaint|layoff)\b/i,
+};
+
+function classifySource(
+  source: NewsItem,
+  fallback: BriefingTopic,
+  selectedTopics: BriefingTopic[],
+): BriefingTopic | null {
   const text = `${source.title} ${source.snippet}`;
-  if (
-    /\b(?:appointed|appointment|joins?|joined|hired|hire|hiring|named\s+(?:as|to)|new\s+(?:CEO|CFO|CTO|chief executive|president|chair|director)|promoted|promotion)\b/i.test(
-      text,
-    )
-  ) {
-    return "hire";
+  for (const topic of ["risk", "financial", "hire", "launch"] as const) {
+    if (selectedTopics.includes(topic) && TOPIC_MATCHERS[topic].test(text)) {
+      return topic;
+    }
   }
-  if (
-    /\b(?:launch(?:es|ed)?|releas(?:e|es|ed)|introduc(?:e|es|ed|ing)|unveil(?:s|ed)?|roll(?:s)? out|debut(?:s|ed)?)\b/i.test(
-      text,
-    )
-  ) {
-    return "launch";
-  }
-  return "news";
+  if (fallback === "news") return selectedTopics.includes("news") ? "news" : null;
+  return TOPIC_MATCHERS[fallback].test(text) ? fallback : null;
 }
 
 function buildBriefingContent(
   subject: string,
+  subjectType: "company" | "person",
   context: string | undefined,
-  sources: NewsItem[],
+  topics: BriefingTopic[],
+  sources: SearchResult[],
 ): {
   overview: { text: string; sourceIds: string[] };
   highlights: {
-    category: "news" | "hire" | "launch";
+    category: BriefingTopic;
     title: string;
     summary: string;
     sourceIds: string[];
   }[];
   questions: { text: string; sourceIds: string[] }[];
 } {
-  const highlights = sources.slice(0, 6).map((source) => ({
-    category: classifySource(source),
-    title: source.title,
-    summary:
-      source.snippet ||
-      `This report was published by ${source.publisher}${source.publishedAt ? ` on ${new Date(source.publishedAt).toLocaleDateString("en-US", { dateStyle: "medium" })}` : ""}.`,
-    sourceIds: [source.id],
-  }));
-  const latest = sources[0]!;
-  const questions = highlights.slice(0, 3).map((highlight, index) => ({
+  const highlights = sources.flatMap(({ source, searchedAs }) => {
+    const category = classifySource(source, searchedAs, topics);
+    return category ? [{
+      category,
+      title: source.title,
+      summary:
+        source.snippet ||
+        `This report was published by ${source.publisher}${source.publishedAt ? ` on ${new Date(source.publishedAt).toLocaleDateString("en-US", { dateStyle: "medium" })}` : ""}.`,
+      sourceIds: [source.id],
+    }] : [];
+  });
+  const latest = sources[0]!.source;
+  const questions = topics.includes("risk") ? highlights.slice(0, 3).map((highlight, index) => ({
     text: [
       `What has changed since “${highlight.title}” was reported, and what is the latest status?`,
       `What should we understand about the next steps related to “${highlight.title}”?`,
       `How does “${highlight.title}” affect the priorities for this conversation?`,
     ][index]!,
     sourceIds: highlight.sourceIds,
-  }));
+  })) : [];
 
-  if (context) {
+  if (topics.includes("risk") && context && !questions.some((question) => question.text.includes(context))) {
     questions.push({
       text: `How does the meeting context (“${context}”) connect to these recent developments?`,
       sourceIds: highlights.slice(0, 2).flatMap((highlight) => highlight.sourceIds),
@@ -179,7 +204,7 @@ function buildBriefingContent(
 
   return {
     overview: {
-      text: `Recent coverage of ${subject} includes ${sources.length} reports from the 30-day research window. The latest report is “${latest.title},” published by ${latest.publisher}.`,
+      text: `Recent public coverage for this ${subjectType} includes ${sources.length} reports from the 30-day research window. The latest report is “${latest.title},” published by ${latest.publisher}.`,
       sourceIds: [latest.id],
     },
     highlights,
@@ -190,32 +215,56 @@ function buildBriefingContent(
 router.post("/briefings", async (req, res): Promise<void> => {
   const input = CreateBriefingBody.safeParse(req.body);
   if (!input.success) {
-    res.status(400).json({ error: "Enter a subject and a valid meeting date." });
+    res.status(400).json({
+      error: "Enter a company or person, choose at least one topic, and set a meeting time.",
+    });
     return;
   }
 
   try {
     const now = new Date();
     const meetingAt = input.data.meetingAt;
-    const windowEnd = meetingAt < now ? meetingAt : now;
+    const windowEnd = now;
     const windowStart = new Date(windowEnd.getTime() - 30 * 86_400_000);
-    const sources = await searchNews(input.data.subject.trim(), windowStart, windowEnd);
+    const topics = input.data.topics as BriefingTopic[];
+    const collected = await searchNews(
+      input.data.subject.trim(),
+      input.data.subjectType,
+      topics,
+      windowStart,
+      windowEnd,
+    );
 
-    if (sources.length === 0) {
+    if (collected.length === 0) {
       res.status(502).json({
         error: "No recent articles were found. Try a more specific company or person name.",
       });
       return;
     }
 
+    const relevant = collected.filter(({ source, searchedAs }) =>
+      classifySource(source, searchedAs, topics) !== null,
+    );
+    if (relevant.length === 0) {
+      res.status(502).json({
+        error: "No clearly matching public reports were found for the selected topics in the last 30 days.",
+      });
+      return;
+    }
+
     const content = buildBriefingContent(
       input.data.subject.trim(),
+      input.data.subjectType,
       input.data.context?.trim() || undefined,
-      sources,
+      topics,
+      relevant,
     );
+    const sources = relevant.map(({ source }) => source);
 
     const result = CreateBriefingResponse.parse({
       subject: input.data.subject.trim(),
+      subjectType: input.data.subjectType,
+      topics,
       meetingAt: meetingAt.toISOString(),
       generatedAt: now.toISOString(),
       windowStart: windowStart.toISOString(),
