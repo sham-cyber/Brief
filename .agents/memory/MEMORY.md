@@ -1,0 +1,1 @@
+- [Existing briefing app](briefing-agent-target.md) — when the user says the briefing bot, they mean the existing Briefing Agent to extend.
