@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useCreateBriefing } from '@workspace/api-client-react';
 import type { BriefingResult, BriefSource } from '@workspace/api-client-react';
@@ -219,17 +219,81 @@ function Home() {
   const [subject, setSubject] = useState('');
   const [meetingAt, setMeetingAt] = useState('');
   const [context, setContext] = useState('');
-  const result = mutation.data;
+  const [resultKey, setResultKey] = useState('');
+  const [failedKey, setFailedKey] = useState('');
+  const lastAutoRequestKey = useRef('');
+  const activeRequestKey = useRef('');
+  const requestKey = JSON.stringify([subject.trim(), meetingAt]);
+  const meetingTimeIsValid = Boolean(meetingAt && !Number.isNaN(new Date(meetingAt).getTime()));
+  const hasValidSubject = subject.trim().length >= 2;
+  const hasCurrentResult = Boolean(mutation.data && resultKey === requestKey);
+  const result = hasCurrentResult ? mutation.data : undefined;
+  const currentRequestIsPending = mutation.isPending && activeRequestKey.current === requestKey;
+  const currentRequestFailed = mutation.isError && failedKey === requestKey;
+
+  const runBriefing = useCallback((key: string) => {
+    if (!hasValidSubject || !meetingTimeIsValid) return;
+    lastAutoRequestKey.current = key;
+    activeRequestKey.current = key;
+    setFailedKey('');
+    mutation.mutate(
+      { data: { subject: subject.trim(), meetingAt, ...(context.trim() ? { context: context.trim() } : {}) } },
+      {
+        onSuccess: () => {
+          if (activeRequestKey.current === key) setResultKey(key);
+        },
+        onError: () => {
+          if (activeRequestKey.current === key) setFailedKey(key);
+        },
+      },
+    );
+  }, [context, hasValidSubject, meetingAt, meetingTimeIsValid, mutation.mutate, subject]);
+
+  useEffect(() => {
+    if (!hasValidSubject || !meetingTimeIsValid || mutation.isPending) return;
+    if (lastAutoRequestKey.current === requestKey) return;
+
+    const timeout = window.setTimeout(() => {
+      if (lastAutoRequestKey.current !== requestKey && !mutation.isPending) {
+        runBriefing(requestKey);
+      }
+    }, 450);
+    return () => window.clearTimeout(timeout);
+  }, [hasValidSubject, meetingTimeIsValid, mutation.isPending, requestKey, runBriefing]);
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!subject.trim() || !meetingAt) return;
-    mutation.mutate({ data: { subject: subject.trim(), meetingAt, ...(context.trim() ? { context: context.trim() } : {}) } });
+    runBriefing(requestKey);
   };
 
   const errorMessage = mutation.error instanceof Error
     ? mutation.error.message
     : 'The briefing could not be generated. Check your connection and try again.';
+  const readinessState = !meetingTimeIsValid || !hasValidSubject
+    ? 'not-ready'
+    : currentRequestFailed
+      ? 'error'
+      : currentRequestIsPending
+        ? 'crawling'
+        : hasCurrentResult
+          ? 'ready'
+          : 'starting';
+  const readinessStyles = {
+    'not-ready': 'border-[#e5c5c0] bg-[#fbefed] text-[#8f4039]',
+    error: 'border-[#e5c5c0] bg-[#fbefed] text-[#8f4039]',
+    crawling: 'border-[#ddd6e8] bg-[#f4f1f8] text-[#554a70]',
+    starting: 'border-[#ddd6e8] bg-[#f4f1f8] text-[#554a70]',
+    ready: 'border-[#c7dfd2] bg-[#edf6f0] text-[#2f6d4c]',
+  }[readinessState];
+  const readinessMessage = readinessState === 'not-ready'
+    ? !meetingTimeIsValid ? 'Not ready — set a meeting time to start research.' : 'Not ready — add a company or person to start research.'
+    : readinessState === 'error'
+      ? 'Not ready — source collection failed. Try again.'
+      : readinessState === 'crawling'
+        ? 'Collecting sources — this may take up to 2 minutes.'
+        : readinessState === 'ready'
+          ? 'Data ready — sources collected for this meeting.'
+          : 'Starting source collection…';
 
   return (
     <main className="paper-grid min-h-[100dvh] overflow-hidden">
@@ -280,6 +344,20 @@ function Home() {
                 className="h-11 w-full rounded-lg border border-[#d9d4df] bg-[#fffefa] px-3 text-sm text-foreground focus:border-[#8c7dae] focus:outline-none"
                 data-testid="input-meeting-time"
               />
+              <div
+                className={`mt-2 flex min-h-9 items-center gap-2 rounded-lg border px-3 py-2 text-[11px] font-medium ${readinessStyles}`}
+                id="meeting-readiness"
+                role="status"
+                aria-live="polite"
+                data-testid="status-meeting-readiness"
+                data-state={readinessState}
+              >
+                <span
+                  className={`h-2 w-2 shrink-0 rounded-full ${readinessState === 'ready' ? 'bg-[#4c966f]' : readinessState === 'not-ready' || readinessState === 'error' ? 'bg-[#c45b50]' : 'animate-pulse bg-[#796a9d]'}`}
+                  aria-hidden="true"
+                />
+                <span>{readinessMessage}</span>
+              </div>
 
               <div className="mb-1.5 mt-4 flex items-center justify-between">
                 <label htmlFor="context" className="text-xs font-semibold text-[#35364a]">A little context</label>
@@ -297,8 +375,8 @@ function Home() {
               />
               <div className="mt-1 text-right font-mono text-[9px] text-[#aaa4af]">{context.length} / 1500</div>
 
-              <button type="submit" disabled={mutation.isPending || subject.trim().length < 2 || !meetingAt} className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#2b304a] px-4 text-sm font-semibold text-[#faf7f0] transition hover:bg-[#3c4160] disabled:opacity-55" data-testid="button-generate-briefing">
-                {mutation.isPending ? <><LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />Researching sources…</> : <><FileText className="h-4 w-4 text-[#c9b9ee]" aria-hidden="true" />Build my briefing<ArrowDown className="ml-auto h-4 w-4 opacity-60" aria-hidden="true" /></>}
+              <button type="submit" disabled={mutation.isPending || !hasValidSubject || !meetingTimeIsValid} className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#2b304a] px-4 text-sm font-semibold text-[#faf7f0] transition hover:bg-[#3c4160] disabled:opacity-55" data-testid="button-generate-briefing">
+                {mutation.isPending ? <><LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />Crawling sources…</> : <><FileText className="h-4 w-4 text-[#c9b9ee]" aria-hidden="true" />{hasCurrentResult ? 'Refresh briefing' : 'Crawl & prepare briefing'}<ArrowDown className="ml-auto h-4 w-4 opacity-60" aria-hidden="true" /></>}
               </button>
               <p id="form-note" className="mt-3 text-center text-[10px] leading-relaxed text-[#898392]">Your brief is built from traceable articles, not guesswork.</p>
             </form>
@@ -309,11 +387,11 @@ function Home() {
                 <div><p className="text-xs font-semibold text-[#49405e]">Reading the latest coverage</p><p className="mt-1 text-[11px] leading-relaxed text-[#777082]">Finding useful signals and checking every reference.</p></div>
               </div>
             )}
-            {mutation.isError && (
+            {currentRequestFailed && (
               <div className="mt-4 rounded-xl border border-[#e4c9c3] bg-[#fbf0ed] p-4" role="alert" data-testid="status-generation-error">
                 <p className="text-xs font-semibold text-[#8b4039]">Couldn’t prepare this briefing</p>
                 <p className="mt-1 text-xs leading-relaxed text-[#795750]">{errorMessage}</p>
-                <button type="button" onClick={() => mutation.mutate({ data: { subject: subject.trim(), meetingAt, ...(context.trim() ? { context: context.trim() } : {}) } })} disabled={mutation.isPending} className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-[#78443f] underline underline-offset-4 hover:text-[#4a2d2a]" data-testid="button-retry-briefing">
+                <button type="button" onClick={() => runBriefing(requestKey)} disabled={mutation.isPending} className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-[#78443f] underline underline-offset-4 hover:text-[#4a2d2a]" data-testid="button-retry-briefing">
                   <RefreshCw className="h-3 w-3" /> Try again
                 </button>
               </div>
@@ -326,7 +404,7 @@ function Home() {
           </aside>
 
           <section className="min-w-0" aria-live="polite" aria-label="Briefing">
-            {mutation.isPending && !result ? (
+            {(currentRequestIsPending || readinessState === 'starting') && !result ? (
               <LoadingBrief />
             ) : result ? (
               <BriefingDocument result={result} />
