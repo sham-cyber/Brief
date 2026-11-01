@@ -8,3 +8,9 @@ The user means the existing Briefing Agent in this workspace when referring to t
 **Why:** The user clarified the 30-day crawler brief, Company/Person differences, category buttons, voice/Q&A features, cost controls, and explicitly removed email automation.
 
 **How to apply:** Extend the existing Briefing Agent as a user-triggered web app. Prioritize only stated meeting context; do not infer private motives or finances, make investment recommendations, or add email integration unless the user changes direction. Each block should have a repeat action using browser-native speech for now. Crawling stays public-only and starts once for the selected topics when the user sets a valid meeting time; it is capped at 2 minutes and never continuous. Public financial facts may be included; private email, WhatsApp, or personal/family health data stays out of scope. If AI speech is explicitly requested later, keep the separate spoken-brief cap at 2 minutes and show word/character and cost estimates first.
+
+For print, use a compact one-page A4 summary with the overview, one sourced leading item per selected category, an open question, and citation links; keep the complete multi-item source view on screen.
+
+**Why:** The user explicitly requires the printed briefing to fit on one page.
+
+**How to apply:** Preserve a concise print-only layout instead of shrinking or clipping the full interactive research view.

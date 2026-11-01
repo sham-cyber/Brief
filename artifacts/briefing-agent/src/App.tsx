@@ -18,11 +18,17 @@ const TOPICS = [
   { value: 'risk', label: 'Risks & Open Questions' },
 ] as const;
 type Topic = typeof TOPICS[number]['value'];
+const SPEECH_WORD_LIMIT = 280;
 
 function speechText(value: string) {
   const words = value.trim().split(/\s+/).filter(Boolean);
-  const capped = words.slice(0, 280).join(' ');
-  return { text: capped, words: Math.min(words.length, 280), clipped: words.length > 280 };
+  const capped = words.slice(0, SPEECH_WORD_LIMIT).join(' ');
+  return {
+    text: capped,
+    words: Math.min(words.length, SPEECH_WORD_LIMIT),
+    totalWords: words.length,
+    clipped: words.length > SPEECH_WORD_LIMIT,
+  };
 }
 
 function isVideoSource(source: BriefSource) {
@@ -136,7 +142,7 @@ function SourceList({ sources }: { sources: BriefSource[] }) {
 function SourceColumn({ sources }: { sources: BriefSource[] }) {
   const hasVideo = sources.some(isVideoSource);
   return (
-    <aside className="space-y-4" aria-label="Source links and video" data-testid="source-column">
+    <aside className="source-column space-y-4" aria-label="Source links and video" data-testid="source-column">
       <section className="rounded-2xl border border-border bg-card px-5 py-5 sm:px-6" aria-labelledby="source-column-heading">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
@@ -211,8 +217,10 @@ function VoiceControls({ text }: { text: string }) {
         <p id="ai-voice-status" className="mt-2 max-w-52 text-[10px] leading-relaxed text-muted-foreground">
           AI voice is not connected.
         </p>
-        <p className="text-[9px] text-muted-foreground" data-testid="status-speech-estimate">
-          {hasText ? `Device voice · about ${seconds}s, ${estimate.words} words${estimate.clipped ? ' (capped)' : ''}` : 'Device read-aloud becomes available after the crawl.'}
+        <p className="mt-1 max-w-60 text-[10px] leading-relaxed text-muted-foreground" data-testid="status-speech-estimate">
+          {hasText
+            ? `Speech budget preview: ${estimate.words}/${SPEECH_WORD_LIMIT} words spoken; ${estimate.totalWords} words total${estimate.clipped ? ' — capped at 2 minutes' : ''}. Device voice estimate: about ${seconds}s.`
+            : `0/${SPEECH_WORD_LIMIT} speech words. AI voice is off; device read-aloud starts after the crawl.`}
         </p>
       </div>
     </div>
@@ -246,11 +254,11 @@ function TopicBlock({
           <SectionEyebrow>{TOPICS.find((item) => item.value === topic)?.label}</SectionEyebrow>
           <h3 id={`topic-${topic}`} className="mt-2 font-serif text-3xl text-foreground">{title}</h3>
         </div>
-        <button type="button" onClick={() => speakBlock(readable)} className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#cde0d4] bg-[#edf6f0] px-3 text-xs font-semibold text-[#32634a] hover:bg-[#e2f0e7]" data-testid={`button-repeat-${topic}`}>
+        <button type="button" onClick={() => speakBlock(readable)} className="no-print inline-flex h-9 items-center gap-2 rounded-lg border border-[#cde0d4] bg-[#edf6f0] px-3 text-xs font-semibold text-[#32634a] hover:bg-[#e2f0e7]" data-testid={`button-repeat-${topic}`}>
           <Volume2 className="h-3.5 w-3.5" aria-hidden="true" /> Repeat
         </button>
       </div>
-      <label className="relative mt-4 block max-w-sm">
+      <label className="no-print relative mt-4 block max-w-sm">
         <span className="sr-only">Filter {title}</span>
         <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#81788d]" aria-hidden="true" />
         <input
@@ -323,6 +331,7 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
 
   return (
     <article className="fade-up min-w-0" aria-label={`Briefing for ${result.subject}`} data-testid="briefing-result">
+      <div className="screen-brief">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3 no-print">
         <div className="flex items-center gap-2 text-xs font-medium text-[#5d5279]">
           <span className="h-2 w-2 rounded-full bg-[#4c9c7b]" aria-hidden="true" />
@@ -393,7 +402,7 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
         })}
       </nav>
 
-      <div className="mt-9 flex flex-wrap items-center justify-between gap-5 rounded-2xl border border-[#d8d2df] bg-[#f4f1e9] p-5 sm:p-6" data-testid="voice-summary">
+      <div className="no-print mt-9 flex flex-wrap items-center justify-between gap-5 rounded-2xl border border-[#d8d2df] bg-[#f4f1e9] p-5 sm:p-6" data-testid="voice-summary">
         <div className="max-w-md">
           <SectionEyebrow>Listen before you walk in</SectionEyebrow>
           <p className="mt-2 text-sm leading-relaxed text-[#65616d]">Read this brief aloud using your device’s built-in voice. No AI voice service is connected.</p>
@@ -422,13 +431,67 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
         </div>
         <SourceColumn sources={result.sources} />
       </div>
-      <p className="mt-5 text-right font-mono text-[10px] uppercase tracking-[.12em] text-muted-foreground">Generated {formatDate(result.generatedAt)}</p>
+      <p className="no-print mt-5 text-right font-mono text-[10px] uppercase tracking-[.12em] text-muted-foreground">Generated {formatDate(result.generatedAt)}</p>
+      </div>
+      <PrintOnePageBrief result={result} />
     </article>
   );
 }
 
 function SectionEyebrow({ children }: { children: ReactNode }) {
   return <p className="font-mono text-[10px] font-medium uppercase tracking-[.17em] text-[#71658e]">{children}</p>;
+}
+
+function PrintOnePageBrief({ result }: { result: BriefingResult }) {
+  const firstHighlights = result.topics.flatMap((topic) => result.highlights.filter((item) => item.category === topic).slice(0, 1));
+  const firstQuestion = result.topics.includes('risk') ? result.questions.slice(0, 1) : [];
+  const sourceIds = new Set([
+    ...result.overview.sourceIds,
+    ...firstHighlights.flatMap((item) => item.sourceIds),
+    ...firstQuestion.flatMap((item) => item.sourceIds),
+  ]);
+  const sources = result.sources.filter((source) => sourceIds.has(source.id));
+  const briefLine = (text: string, maxLength: number) => text.length > maxLength ? `${text.slice(0, maxLength).trimEnd()}…` : text;
+
+  return (
+    <section className="print-only print-one-page" aria-label="One-page printable briefing" data-testid="print-one-page-brief">
+      <header className="print-page-header">
+        <p>{result.subjectType} briefing · 30-day research window</p>
+        <h1>{result.subject}</h1>
+        <div>{formatDate(result.meetingAt)} <span aria-hidden="true">·</span> {formatWindow(result.windowStart, result.windowEnd)}</div>
+      </header>
+      <section className="print-page-overview">
+        <h2>Brief</h2>
+        <p>{briefLine(result.overview.text, 420)} <References sourceIds={result.overview.sourceIds} sources={result.sources} /></p>
+      </section>
+      <div className="print-topic-grid">
+        {result.topics.map((topic) => {
+          const topicInfo = TOPICS.find((item) => item.value === topic)!;
+          const highlight = result.highlights.find((item) => item.category === topic);
+          const question = topic === 'risk' ? result.questions[0] : undefined;
+          return (
+            <section key={topic} className="print-topic">
+              <h2>{topicInfo.label}</h2>
+              {highlight ? (
+                <p><strong>{briefLine(highlight.title, 90)}.</strong> {briefLine(highlight.summary, 190)} <References sourceIds={highlight.sourceIds} sources={result.sources} /></p>
+              ) : (
+                <p>No sourced items returned for this category.</p>
+              )}
+              {question && <p className="print-question"><strong>Open question:</strong> {briefLine(question.text, 150)} <References sourceIds={question.sourceIds} sources={result.sources} /></p>}
+            </section>
+          );
+        })}
+      </div>
+      <footer className="print-page-sources">
+        <h2>Sources</h2>
+        <ol>
+          {sources.map((source) => (
+            <li key={source.id}><span>[{source.id}]</span> <a href={source.url}>{briefLine(source.title, 100)}</a></li>
+          ))}
+        </ol>
+      </footer>
+    </section>
+  );
 }
 
 function Home() {
@@ -540,6 +603,24 @@ function Home() {
       : readinessState === 'ready'
           ? 'Data ready — sources collected for this meeting.'
           : 'Starting a one-time source collection…';
+  const briefStatusClass = readinessState === 'ready'
+    ? 'brief-status-ready'
+    : readinessState === 'crawling' || readinessState === 'starting'
+      ? 'brief-status-pending'
+      : 'brief-status-not-ready';
+  const handleBriefStatusClick = () => {
+    if (readinessState === 'ready') {
+      document.querySelector('[data-testid="briefing-result"]')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else if (readinessState === 'error') {
+      runBriefing(requestKey);
+    } else if (!hasValidSubject) {
+      document.querySelector<HTMLInputElement>('#subject')?.focus();
+    } else if (!hasTopics) {
+      document.querySelector<HTMLInputElement>('[data-testid^="checkbox-topic-"]')?.focus();
+    } else {
+      document.querySelector<HTMLInputElement>('#meetingAt')?.focus();
+    }
+  };
 
   return (
     <main className="paper-grid min-h-[100dvh] overflow-hidden">
@@ -565,7 +646,20 @@ function Home() {
             <form onSubmit={submit} className="rounded-2xl border border-[#d8d2df] bg-[#fbfaf6] p-5 shadow-[0_12px_35px_rgba(38,37,55,.06)] sm:p-6" aria-describedby="form-note">
               <div className="mb-5 flex items-center justify-between border-b border-[#e5e0e7] pb-3">
                 <span className="font-mono text-[10px] uppercase tracking-[.15em] text-[#6b6278]">New conversation</span>
-                <span className="font-mono text-[10px] text-[#968da0]">01 — 03</span>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleBriefStatusClick}
+                    disabled={readinessState === 'crawling' || readinessState === 'starting'}
+                    className={`brief-status-button ${briefStatusClass}`}
+                    aria-label={`Brief status: ${readinessMessage}`}
+                    title={readinessMessage}
+                    data-testid="button-brief-status"
+                  >
+                    Brief
+                  </button>
+                  <span className="font-mono text-[10px] text-[#968da0]">01 — 03</span>
+                </div>
               </div>
               <fieldset className="mt-4">
                 <legend className="mb-2 text-xs font-semibold text-[#35364a]">Briefing subject</legend>
