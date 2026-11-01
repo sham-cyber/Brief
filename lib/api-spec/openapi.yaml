@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: briefings
+    description: Source-grounded pre-meeting briefings
 paths:
   /healthz:
     get:
@@ -24,6 +26,36 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /briefings:
+    post:
+      operationId: createBriefing
+      tags: [briefings]
+      summary: Create a sourced pre-meeting briefing
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BriefingInput"
+      responses:
+        "200":
+          description: A briefing with source-linked claims
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BriefingResult"
+        "400":
+          description: Invalid briefing request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "502":
+          description: Research or briefing generation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +65,119 @@ components:
           type: string
       required:
         - status
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+    BriefingInput:
+      type: object
+      properties:
+        subject:
+          type: string
+          minLength: 2
+          maxLength: 200
+        meetingAt:
+          type: string
+          format: date-time
+        context:
+          type: string
+          maxLength: 1500
+      required: [subject, meetingAt]
+    BriefSource:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        url:
+          type: string
+          format: uri
+        publisher:
+          type: string
+        publishedAt:
+          type: ["string", "null"]
+        snippet:
+          type: string
+      required: [id, title, url, publisher, publishedAt, snippet]
+    BriefingHighlight:
+      type: object
+      properties:
+        category:
+          type: string
+          enum: [news, hire, launch]
+        title:
+          type: string
+        summary:
+          type: string
+        sourceIds:
+          type: array
+          items:
+            type: string
+          minItems: 1
+      required: [category, title, summary, sourceIds]
+    BriefingOverview:
+      type: object
+      properties:
+        text:
+          type: string
+        sourceIds:
+          type: array
+          items:
+            type: string
+          minItems: 1
+      required: [text, sourceIds]
+    BriefingQuestion:
+      type: object
+      properties:
+        text:
+          type: string
+        sourceIds:
+          type: array
+          items:
+            type: string
+      required: [text, sourceIds]
+    BriefingResult:
+      type: object
+      properties:
+        subject:
+          type: string
+        meetingAt:
+          type: string
+          format: date-time
+        generatedAt:
+          type: string
+          format: date-time
+        windowStart:
+          type: string
+          format: date-time
+        windowEnd:
+          type: string
+          format: date-time
+        overview:
+          $ref: "#/components/schemas/BriefingOverview"
+        highlights:
+          type: array
+          items:
+            $ref: "#/components/schemas/BriefingHighlight"
+        questions:
+          type: array
+          items:
+            $ref: "#/components/schemas/BriefingQuestion"
+        sources:
+          type: array
+          items:
+            $ref: "#/components/schemas/BriefSource"
+      required:
+        - subject
+        - meetingAt
+        - generatedAt
+        - windowStart
+        - windowEnd
+        - overview
+        - highlights
+        - questions
+        - sources
 
