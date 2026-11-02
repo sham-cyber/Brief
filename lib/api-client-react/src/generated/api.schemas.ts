@@ -132,6 +132,21 @@ export interface BriefingSourceStatus {
   searchDepth: BriefingSourceStatusSearchDepth;
 }
 
+export interface TavilyCredentialStatus {
+  connected: boolean;
+  storageReady: boolean;
+  /** @nullable */
+  updatedAt: string | null;
+}
+
+export interface TavilyCredentialInput {
+  /**
+     * @minLength 20
+     * @maxLength 4096
+     */
+  apiKey: string;
+}
+
 export type BriefingHighlightCategory = typeof BriefingHighlightCategory[keyof typeof BriefingHighlightCategory];
 
 

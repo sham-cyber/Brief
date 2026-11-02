@@ -71,17 +71,17 @@ For print, use a compact one-page A4 summary with the overview, one sourced lead
 
 **How to apply:** Preserve a concise print-only layout instead of shrinking or clipping the full interactive research view.
 
-The project-level Tavily secret is a pilot-only search credential; it charges the project owner's Tavily balance and must not be presented as per-user billing.
+Each signed-in user must connect a personal Tavily key; searches use only that user's key and charge its Tavily account. Never fall back to the project-level key. AI keys and model calls remain off until separately approved.
 
-**Why:** The user wants to use their Tavily trial credits now, while the intended multi-tenant product must keep each user's provider charges on that user's account.
+**Why:** The user selected per-user Tavily credentials only so provider charges remain with each key owner, while keeping AI integration off.
 
-**How to apply:** Keep the shared key server-side and disclose its project-wide billing during the pilot. Before public multi-tenant use, require securely isolated user-owned Tavily credentials or another explicit billing model.
+**How to apply:** Encrypt each key at rest with a stable server-only master secret, scope every lookup to the authenticated account, and never return the key. Preserve the configured-owner crawl restriction unless the user changes it; do not use the shared project secret as a fallback.
 
-The user clarified that all accounts share one 120-second rolling 24-hour crawl-time allowance, with a three-minute backup hard stop. Creating a new account does not reset the shared limit.
+The app still has one shared 120-second crawl-runtime allowance per Asia/Kolkata calendar day, one active crawl at a time, and a three-minute backup hard stop, even though provider billing now follows each user's Tavily key.
 
-**Why:** The user clarified that the whole app, rather than each account, must stop after two minutes because all accounts spend the same Tavily balance.
+**Why:** The user previously chose an app-wide runtime guardrail; switching to personal keys changed provider billing, not this separate usage limit.
 
-**How to apply:** Keep the global budget persistent across restarts and reserve it atomically so accounts cannot exceed the combined limit through overlapping crawls. Continue to disclose that all accounts share the project-level provider bill.
+**How to apply:** Keep the daily runtime and request-rate caps app-wide unless the user explicitly changes them. Tell users provider credits bill their own Tavily account, while the runtime allowance remains shared.
 
 The Brief status indicator glows green only when a successful briefing still matches the currently selected subject, meeting, and topics; entering meeting details alone does not mean the brief is ready.
 

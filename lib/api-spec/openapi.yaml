@@ -15,6 +15,88 @@ tags:
   - name: person-profiles
     description: Optional account-scoped person details
 paths:
+  /tavily-credentials:
+    get:
+      operationId: getTavilyCredential
+      tags: [briefings]
+      summary: Get the signed-in user's Tavily connection status
+      responses:
+        "200":
+          description: Connection status without returning the credential
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TavilyCredentialStatus"
+        "401":
+          description: Sign-in is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    put:
+      operationId: saveTavilyCredential
+      tags: [briefings]
+      summary: Save the signed-in user's Tavily API key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TavilyCredentialInput"
+      responses:
+        "200":
+          description: Saved status without returning the credential
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TavilyCredentialStatus"
+        "400":
+          description: Invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Sign-in is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Request did not come from this app
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: Encrypted credential storage is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: deleteTavilyCredential
+      tags: [briefings]
+      summary: Remove the signed-in user's Tavily API key
+      responses:
+        "200":
+          description: Disconnected status without returning the credential
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TavilyCredentialStatus"
+        "401":
+          description: Sign-in is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Request did not come from this app
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /healthz:
     get:
       operationId: healthCheck
@@ -32,10 +114,10 @@ paths:
     get:
       operationId: getBriefingSourceStatus
       tags: [briefings]
-      summary: Get public-source configuration and shared crawl allowance
+      summary: Get the signed-in user's source configuration and app-wide crawl allowance
       responses:
         "200":
-          description: Shared Tavily settings and the app-wide rolling crawl allowance without exposing credentials
+          description: Per-user Tavily connection status and app-wide crawl allowance without exposing credentials
           content:
             application/json:
               schema:
@@ -297,6 +379,25 @@ components:
         - dailyCrawlResetsAt
         - maxSearchesPerBriefing
         - searchDepth
+    TavilyCredentialStatus:
+      type: object
+      properties:
+        connected:
+          type: boolean
+        storageReady:
+          type: boolean
+        updatedAt:
+          type: ["string", "null"]
+          format: date-time
+      required: [connected, storageReady, updatedAt]
+    TavilyCredentialInput:
+      type: object
+      properties:
+        apiKey:
+          type: string
+          minLength: 20
+          maxLength: 4096
+      required: [apiKey]
     BriefingHighlight:
       type: object
       properties:

@@ -118,6 +118,132 @@ async function sendGuardrailRequest(path: string, method: string, body?: unknown
   return payload;
 }
 
+type TavilyCredentialStatus = {
+  connected: boolean;
+  storageReady: boolean;
+  updatedAt: string | null;
+};
+
+function TavilyKeySettings({ onChanged }: { onChanged: () => void }) {
+  const { isLoaded, isSignedIn } = useUser();
+  const [status, setStatus] = useState<TavilyCredentialStatus | null>(null);
+  const [apiKey, setApiKey] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+
+  const refreshStatus = useCallback(async () => {
+    const payload = await sendAccountRequest('tavily-credentials', 'GET') as TavilyCredentialStatus;
+    setStatus(payload);
+  }, []);
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) {
+      setStatus(null);
+      setApiKey('');
+      setMessage('');
+      return;
+    }
+    void refreshStatus().catch((error: unknown) => {
+      setMessage(error instanceof Error ? error.message : 'Tavily connection status could not be loaded.');
+    });
+  }, [isLoaded, isSignedIn, refreshStatus]);
+
+  const saveKey = async () => {
+    setMessage('');
+    if (apiKey.trim().length < 20 || apiKey.trim().length > 4096) {
+      setMessage('Enter a valid Tavily API key.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await sendAccountRequest('tavily-credentials', 'PUT', { apiKey: apiKey.trim() });
+      setApiKey('');
+      setMessage('Your Tavily key is saved securely for this account.');
+      await refreshStatus();
+      onChanged();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'The Tavily key could not be saved.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removeKey = async () => {
+    setMessage('');
+    setBusy(true);
+    try {
+      await sendAccountRequest('tavily-credentials', 'DELETE');
+      setApiKey('');
+      setMessage('Your Tavily key has been removed from this account.');
+      await refreshStatus();
+      onChanged();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'The Tavily key could not be removed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!isLoaded || !isSignedIn) return null;
+
+  return (
+    <section className="mb-5 rounded-xl border border-[#ded9e2] bg-[#f8f6fb] p-4" aria-label="Tavily account key" data-testid="tavily-key-settings">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h3 className="text-xs font-semibold text-[#35364a]">Your Tavily key</h3>
+          <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-[#777280]">
+            This key is encrypted and used only for your account’s searches. Tavily bills the account that owns the key. The key is never shown again after saving.
+          </p>
+        </div>
+        <span className={`rounded-full px-2 py-1 font-mono text-[9px] uppercase tracking-wide ${status?.connected ? 'bg-[#e8f3eb] text-[#32634a]' : 'bg-[#f3eee3] text-[#7b6338]'}`} data-testid="tavily-key-status">
+          {status?.connected ? 'Connected' : 'Not connected'}
+        </span>
+      </div>
+      {!status?.storageReady && (
+        <p className="mt-3 rounded-lg border border-[#e5c5c0] bg-[#fbefed] px-3 py-2 text-[10px] text-[#7f413b]" role="status">
+          Secure key storage is not configured on the server yet. You cannot save a key until the app owner configures it.
+        </p>
+      )}
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+        <input
+          type="password"
+          autoComplete="new-password"
+          spellCheck={false}
+          value={apiKey}
+          onChange={(event) => setApiKey(event.target.value)}
+          minLength={20}
+          maxLength={4096}
+          placeholder={status?.connected ? 'Enter a replacement key' : 'Paste your Tavily API key'}
+          aria-label="Your Tavily API key"
+          className="h-10 min-w-0 flex-1 rounded-lg border border-[#d9d4df] bg-white px-3 text-xs text-foreground placeholder:text-[#aaa4af] focus:border-[#8c7dae] focus:outline-none"
+          data-testid="input-user-tavily-key"
+        />
+        <button
+          type="button"
+          onClick={() => void saveKey()}
+          disabled={busy || !status?.storageReady || apiKey.trim().length < 20}
+          className="h-10 rounded-lg bg-[#292e46] px-4 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+          data-testid="button-save-user-tavily-key"
+        >
+          {busy ? 'Saving…' : 'Save key'}
+        </button>
+        {status?.connected && (
+          <button
+            type="button"
+            onClick={() => void removeKey()}
+            disabled={busy}
+            className="h-10 rounded-lg border border-[#e4b7b2] bg-white px-4 text-xs font-semibold text-[#98453e] disabled:cursor-not-allowed disabled:opacity-50"
+            data-testid="button-remove-user-tavily-key"
+          >
+            Remove
+          </button>
+        )}
+      </div>
+      {message && <p className="mt-2 text-[10px] text-[#625d69]" role="status" aria-live="polite">{message}</p>}
+    </section>
+  );
+}
+
 function AuthActions() {
   const { isLoaded, isSignedIn, user } = useUser();
   const { signOut } = useClerk();
@@ -894,9 +1020,13 @@ function Home() {
     query: {
       queryKey: getGetBriefingSourceStatusQueryKey(),
       refetchInterval: 15_000,
+      refetchOnWindowFocus: true,
       retry: false,
     },
   });
+  useEffect(() => {
+    if (accountLoaded) void sourceStatusQuery.refetch();
+  }, [accountLoaded, isSignedIn, sourceStatusQuery.refetch]);
   const abortControllerRef = useRef<AbortController | null>(null);
   const mutation = useCreateBriefing({ request: { get signal() { return abortControllerRef.current?.signal; } } });
   const [subject, setSubject] = useState('');
@@ -1152,7 +1282,7 @@ function Home() {
       : sourceStatusQuery.isError
       ? 'Not ready — the server could not confirm Tavily status. Check the API Server workflow.'
       : !tavilyConfigured
-        ? 'Not ready — add TAVILY_API_KEY in Replit Secrets, then restart API Server.'
+        ? 'Not ready — save your Tavily key in the account settings above.'
         : !startPinConfigured
           ? 'Not ready — configure the briefing start PIN in API Server Secrets.'
         : !ownerAccountConfigured
@@ -1260,7 +1390,7 @@ function Home() {
                 <section className="rounded-xl border border-[#d8d2df] bg-[#f4f1f8] px-5 py-6 sm:px-7" aria-label="Sign in before starting a briefing" data-testid="signin-before-briefing">
                   <p className="font-mono text-[10px] uppercase tracking-[.15em] text-[#766a93]">Account required</p>
                   <h2 className="mt-2 font-serif text-2xl text-[#292e46]">Sign in before you brief.</h2>
-                  <p className="mt-2 max-w-xl text-sm leading-relaxed text-[#625d69]">Sign-in is required before a crawl. All accounts share one 120-second Tavily runtime allowance per calendar day in IST; it resets at midnight, and creating another account does not reset it. Searches still use the project owner’s Tavily credits.</p>
+                  <p className="mt-2 max-w-xl text-sm leading-relaxed text-[#625d69]">Sign-in is required to save a personal Tavily key. Each key is used for that account’s searches and billed by its Tavily provider. Crawl starts remain limited to the configured owner account. The app-wide 120-second runtime limit resets at midnight IST.</p>
                   <div className="mt-5 flex flex-wrap items-center gap-3">
                     <a href={`${basePath}/sign-in`} className="inline-flex h-10 items-center justify-center rounded-lg bg-[#292e46] px-4 text-sm font-semibold text-white transition hover:bg-[#3c4160]" data-testid="button-sign-in-before-briefing">Sign in to use the briefing</a>
                     <a href={`${basePath}/sign-up`} className="text-sm font-semibold text-[#594b87] underline underline-offset-4" data-testid="button-create-account-before-briefing">Create an account</a>
@@ -1284,6 +1414,7 @@ function Home() {
                   <span className="font-mono text-[10px] text-[#968da0]">30 DAYS</span>
                 </div>
               </div>
+              <TavilyKeySettings onChanged={() => { void sourceStatusQuery.refetch(); }} />
               <fieldset className="mt-4">
                 <legend className="mb-2 text-xs font-semibold text-[#35364a]">Briefing subject</legend>
                 <div className="grid max-w-md grid-cols-2 gap-2">
@@ -1601,9 +1732,9 @@ function Home() {
                 {sourceStatusQuery.isLoading
                   ? 'Checking Tavily source-search connection…'
                   : tavilyConfigured
-                    ? 'Tavily basic search is connected. Each selected tab sends one separate search request (up to 5 per crawl, with up to 8 results per tab). The shared app-wide rate limit is 10 requests per rolling five minutes; each tab counts once. Positive and negative signals are scored locally from cited source text; fragmentation adds no API request. AI stays off. Results include dates, titles, snippets and links—not full-page crawls. The pilot key uses the project owner’s shared credit balance.'
-                    : 'Tavily is not connected. Add the TAVILY_API_KEY secret to the API Server, then restart that workflow. This app does not expose the key.'}
-                {' '}Shared across the whole app: 120 seconds of Tavily runtime per calendar day in IST, resetting at midnight. New accounts do not reset the allowance. A crawl has a three-minute backup hard stop. The pilot key still uses the project owner’s shared credit balance.
+                    ? 'Your Tavily key is connected. Each selected tab sends one separate basic search request (up to 5 per crawl, with up to 8 results per tab), billed to the Tavily account for your key. The app-wide rate limit is 10 requests per rolling five minutes; each tab counts once. Positive and negative signals are scored locally from cited source text; fragmentation adds no API request. AI stays off. Results include dates, titles, snippets and links—not full-page crawls.'
+                    : 'Add your Tavily API key in the account settings above. The key is encrypted and is not shared with other accounts.'}
+                {' '}The app-wide safety limit remains 120 seconds of crawl runtime per calendar day in IST, resetting at midnight, with a three-minute backup hard stop. Only the configured owner account can currently start crawls.
                 {dailyCrawlRemainingMs !== null && ` ${Math.ceil(dailyCrawlRemainingMs / 1000)} seconds remain in the shared allowance.`}
               </p>
               </>

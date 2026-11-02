@@ -9,6 +9,45 @@ import * as zod from 'zod';
 
 
 /**
+ * @summary Get the signed-in user's Tavily connection status
+ */
+export const GetTavilyCredentialResponse = zod.object({
+  "connected": zod.boolean(),
+  "storageReady": zod.boolean(),
+  "updatedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Save the signed-in user's Tavily API key
+ */
+export const saveTavilyCredentialBodyApiKeyMin = 20;
+export const saveTavilyCredentialBodyApiKeyMax = 4096;
+
+
+
+export const SaveTavilyCredentialBody = zod.object({
+  "apiKey": zod.string().min(saveTavilyCredentialBodyApiKeyMin).max(saveTavilyCredentialBodyApiKeyMax)
+})
+
+export const SaveTavilyCredentialResponse = zod.object({
+  "connected": zod.boolean(),
+  "storageReady": zod.boolean(),
+  "updatedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Remove the signed-in user's Tavily API key
+ */
+export const DeleteTavilyCredentialResponse = zod.object({
+  "connected": zod.boolean(),
+  "storageReady": zod.boolean(),
+  "updatedAt": zod.coerce.date().nullable()
+})
+
+
+/**
  * Returns server health status
  * @summary Health check
  */
@@ -18,7 +57,7 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
- * @summary Get public-source configuration and shared crawl allowance
+ * @summary Get the signed-in user's source configuration and app-wide crawl allowance
  */
 export const getBriefingSourceStatusResponseDailyCrawlLimitMsMin = 0;
 

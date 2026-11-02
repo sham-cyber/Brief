@@ -35,3 +35,5 @@ export * from './personProfileInput';
 export * from './personProfileInputPersonRole';
 export * from './personProfileList';
 export * from './personProfilePersonRole';
+export * from './tavilyCredentialInput';
+export * from './tavilyCredentialStatus';

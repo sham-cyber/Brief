@@ -19,6 +19,10 @@ import {
   TAVILY_REQUEST_LIMIT,
 } from "../lib/tavily-rate-limit";
 import { searchTavily, TavilySearchError } from "../lib/tavily";
+import {
+  getTavilyCredentialStatus,
+  getUserTavilyApiKey,
+} from "../lib/user-tavily-credentials";
 
 const router: IRouter = Router();
 const START_PIN_MAX_ATTEMPTS = 5;
@@ -227,6 +231,7 @@ async function searchNews(
   subjectType: "company" | "person",
   personRole: PersonRole | null,
   topics: BriefingTopic[],
+  apiKey: string,
   start: Date,
   end: Date,
   context?: string,
@@ -234,11 +239,6 @@ async function searchNews(
   companyName: string | null = null,
   signal?: AbortSignal,
 ): Promise<SearchNewsResult> {
-  const apiKey = process.env.TAVILY_API_KEY?.trim();
-  if (!apiKey) {
-    throw new Error("Tavily is not configured. Add TAVILY_API_KEY in Replit Secrets.");
-  }
-
   const startDate = start.toISOString().slice(0, 10);
   const endDate = end.toISOString().slice(0, 10);
   const roleTerms = subjectType === "person" && personRole
@@ -396,10 +396,13 @@ const NEGATIVE_SIGNAL_PATTERNS = [
 ];
 
 router.get("/briefings", async (req, res): Promise<void> => {
+  const credentialStatus = await getTavilyCredentialStatus(
+    getAuth(req).userId ?? null,
+  );
   const quota = await getTavilyQuotaStatus();
   res.json(GetBriefingSourceStatusResponse.parse({
     provider: "tavily",
-    configured: Boolean(process.env.TAVILY_API_KEY?.trim()),
+    configured: credentialStatus.connected,
     startPinConfigured: /^\d{4}$/.test(process.env.BRIEFING_START_PIN?.trim() ?? ""),
     ownerAccountConfigured: Boolean(process.env.BRIEFING_OWNER_EMAIL?.trim()),
     dailyCrawlLimitMs: TAVILY_DAILY_LIMIT_MS,
@@ -765,9 +768,19 @@ router.post("/briefings", async (req, res): Promise<void> => {
     return;
   }
 
-  if (!process.env.TAVILY_API_KEY?.trim()) {
+  let apiKey: string | null;
+  try {
+    apiKey = await getUserTavilyApiKey(userId);
+  } catch {
+    req.log.error({}, "User Tavily credential is unavailable or cannot be decrypted");
     res.status(503).json({
-      error: "Tavily is not connected. Add TAVILY_API_KEY in Replit Secrets, then restart the API Server workflow.",
+      error: "Secure Tavily key storage is unavailable. No search request was sent.",
+    });
+    return;
+  }
+  if (!apiKey) {
+    res.status(503).json({
+      error: "Add your own Tavily API key in your account's Tavily settings before starting a crawl.",
     });
     return;
   }
@@ -845,6 +858,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
       input.data.subjectType,
       input.data.personRole,
       topics,
+      apiKey,
       windowStart,
       windowEnd,
       input.data.context?.trim() || undefined,
@@ -919,13 +933,6 @@ router.post("/briefings", async (req, res): Promise<void> => {
     if (stopReason === "hard-stop") {
       res.status(504).json({
         error: "The crawl reached its three-minute backup hard stop.",
-      });
-      return;
-    }
-    if (error instanceof Error && error.message.startsWith("Tavily is not configured.")) {
-      req.log.warn("Tavily source search is not configured");
-      res.status(503).json({
-        error: "Tavily is not connected. Add TAVILY_API_KEY in Replit Secrets, then restart the API Server workflow.",
       });
       return;
     }
