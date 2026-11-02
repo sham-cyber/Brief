@@ -20,6 +20,7 @@ export * from './briefingResultPersonRole';
 export * from './briefingResultSourceMode';
 export * from './briefingResultSubjectType';
 export * from './briefingResultTopicsItem';
+export * from './briefingSignal';
 export * from './briefSource';
 export * from './error';
 export * from './healthStatus';

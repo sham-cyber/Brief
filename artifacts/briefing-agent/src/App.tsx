@@ -558,6 +558,8 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
       '',
       'OVERVIEW',
       `${result.overview.text}${result.overview.sourceIds.length ? ` [${result.overview.sourceIds.join(', ')}]` : ''}`,
+      `TOP POSITIVE: ${result.overview.topPositive.text}${result.overview.topPositive.sourceIds.length ? ` [${result.overview.topPositive.sourceIds.join(', ')}]` : ''}`,
+      `TOP NEGATIVE: ${result.overview.topNegative.text}${result.overview.topNegative.sourceIds.length ? ` [${result.overview.topNegative.sourceIds.join(', ')}]` : ''}`,
       '',
       'HIGHLIGHTS',
       ...result.highlights.flatMap((item) => [`${item.category.toUpperCase()}: ${item.title}`, `${item.summary}${item.sourceIds.length ? ` [${item.sourceIds.join(', ')}]` : ''}`, '']),
@@ -619,6 +621,8 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
         </div>
         <VoiceControls text={[
           result.overview.text,
+          `Top positive: ${result.overview.topPositive.text}`,
+          `Top negative: ${result.overview.topNegative.text}`,
           ...result.highlights.flatMap((item) => [item.title, item.summary]),
           ...result.questions.map((question) => question.text),
         ].join('. ')} />
@@ -632,6 +636,16 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
           {result.overview.text}
           <References sourceIds={result.overview.sourceIds} sources={result.sources} />
         </p>
+        <div className="mt-4 grid gap-2 md:grid-cols-2" aria-label="Top positive and negative signals">
+          <p className="rounded-lg border border-[#cfe2d3] bg-[#f0f7f1] px-3 py-2 text-sm leading-relaxed text-[#315d43]">
+            <strong>Top positive:</strong> {result.overview.topPositive.text}
+            <References sourceIds={result.overview.topPositive.sourceIds} sources={result.sources} />
+          </p>
+          <p className="rounded-lg border border-[#e8cfcc] bg-[#fbf1ef] px-3 py-2 text-sm leading-relaxed text-[#864941]">
+            <strong>Top negative:</strong> {result.overview.topNegative.text}
+            <References sourceIds={result.overview.topNegative.sourceIds} sources={result.sources} />
+          </p>
+        </div>
       </section>
 
       <nav className="no-print mt-6 flex flex-wrap gap-2" aria-label="Filter briefing by topic" data-testid="topic-filters">
@@ -693,6 +707,8 @@ function PrintOnePageBrief({ result }: { result: BriefingResult }) {
   const firstQuestion = result.topics.includes('risk') ? result.questions.slice(0, 1) : [];
   const sourceIds = new Set([
     ...result.overview.sourceIds,
+    ...result.overview.topPositive.sourceIds,
+    ...result.overview.topNegative.sourceIds,
     ...firstHighlights.flatMap((item) => item.sourceIds),
     ...firstQuestion.flatMap((item) => item.sourceIds),
   ]);
@@ -709,6 +725,8 @@ function PrintOnePageBrief({ result }: { result: BriefingResult }) {
       <section className="print-page-overview">
         <h2>Brief</h2>
         <p>{briefLine(result.overview.text, 420)} <PrintReferences sourceIds={result.overview.sourceIds} sources={result.sources} /></p>
+        <p><strong>Top positive:</strong> {briefLine(result.overview.topPositive.text, 130)} <PrintReferences sourceIds={result.overview.topPositive.sourceIds} sources={result.sources} /></p>
+        <p><strong>Top negative:</strong> {briefLine(result.overview.topNegative.text, 130)} <PrintReferences sourceIds={result.overview.topNegative.sourceIds} sources={result.sources} /></p>
       </section>
       <div className="print-topic-grid">
         {result.topics.map((topic) => {

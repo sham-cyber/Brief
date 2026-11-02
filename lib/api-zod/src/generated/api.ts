@@ -56,7 +56,15 @@ export const CreateBriefingResponse = zod.object({
   "windowEnd": zod.coerce.date(),
   "overview": zod.object({
   "text": zod.string(),
-  "sourceIds": zod.array(zod.string()).min(1)
+  "sourceIds": zod.array(zod.string()).min(1),
+  "topPositive": zod.object({
+  "text": zod.string(),
+  "sourceIds": zod.array(zod.string())
+}),
+  "topNegative": zod.object({
+  "text": zod.string(),
+  "sourceIds": zod.array(zod.string())
+})
 }),
   "highlights": zod.array(zod.object({
   "category": zod.enum(['news', 'hire', 'launch', 'financial', 'risk']),

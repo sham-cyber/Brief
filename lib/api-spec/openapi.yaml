@@ -151,6 +151,20 @@ components:
           items:
             type: string
           minItems: 1
+        topPositive:
+          $ref: "#/components/schemas/BriefingSignal"
+        topNegative:
+          $ref: "#/components/schemas/BriefingSignal"
+      required: [text, sourceIds, topPositive, topNegative]
+    BriefingSignal:
+      type: object
+      properties:
+        text:
+          type: string
+        sourceIds:
+          type: array
+          items:
+            type: string
       required: [text, sourceIds]
     BriefingQuestion:
       type: object

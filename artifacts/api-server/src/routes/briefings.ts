@@ -233,6 +233,87 @@ function classifySource(
   return TOPIC_MATCHERS[fallback].test(text) ? fallback : null;
 }
 
+type BriefingSignal = { text: string; sourceIds: string[] };
+
+const POSITIVE_SIGNAL_PATTERNS = [
+  /\b(?:surges?|surged|soars?|soared|rises?|rose|gains?|gained|increases?|increased|grew|growth|higher|up|rebound(?:s|ed)?)\b/i,
+  /\b(?:record|beat(?:s)? estimates?|stronger|improves?|improvement|profitability)\b/i,
+  /\b(?:launch(?:es|ed)?|unveil(?:s|ed)?|award(?:ed)?|wins?|won|approved|approval|expansion|expands?|appointed|appointment)\b/i,
+];
+
+const NEGATIVE_SIGNAL_PATTERNS = [
+  /\b(?:declines?|declined|falls?|fell|drops?|dropped|down|loss(?:es)?|weak(?:ness)?|lower|shortfall)\b/i,
+  /\b(?:risk(?:s)?|lawsuit|sues?|sued|investigation|probe|recall|fine|penalt(?:y|ies)|breach|fraud)\b/i,
+  /\b(?:layoffs?|cuts?|miss(?:es|ed)? estimates?|debt|delay(?:s|ed)?|slowdown|warning|concern|pressure|closure|shutdown|restructur(?:e|ing))\b/i,
+];
+
+function countSignalMatches(text: string, patterns: RegExp[]): number {
+  return patterns.reduce((count, pattern) => count + Number(pattern.test(text)), 0);
+}
+
+function cleanSourceTitle(source: NewsItem): string {
+  const publisher = source.publisher.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return source.title.replace(
+    new RegExp(`\\s*(?:-|–|—|\\|)\\s*${publisher}\\s*$`, "i"),
+    "",
+  );
+}
+
+function buildTopSignal(
+  sources: SearchResult[],
+  contextTerms: string[],
+  polarity: "positive" | "negative",
+): BriefingSignal {
+  const patterns = polarity === "positive"
+    ? POSITIVE_SIGNAL_PATTERNS
+    : NEGATIVE_SIGNAL_PATTERNS;
+  const candidates = sources
+    .map((entry, index) => ({
+      entry,
+      index,
+      signalScore: countSignalMatches(
+        `${entry.source.title} ${entry.source.snippet}`,
+        patterns,
+      ),
+      contextScore: contextRelevanceScore(entry.source, contextTerms),
+      publishedAt: new Date(entry.source.publishedAt ?? 0).getTime(),
+    }))
+    .filter((candidate) => candidate.signalScore > 0)
+    .sort((a, b) =>
+      b.signalScore - a.signalScore ||
+      b.contextScore - a.contextScore ||
+      b.publishedAt - a.publishedAt ||
+      a.index - b.index,
+    );
+
+  const selected = candidates[0]?.entry.source;
+  if (!selected) {
+    return {
+      text: `No clear ${polarity} signal was found in the selected public reports.`,
+      sourceIds: [],
+    };
+  }
+
+  const title = cleanSourceTitle(selected);
+  const phrases = [
+    ...title.split(/\b(?:despite|but|while|although|however)\b/i),
+    ...selected.snippet.split(/(?<=[.!?])\s+/),
+  ]
+    .map((phrase) => phrase.trim().replace(/^[\s,;:–—-]+|[\s,;:–—-]+$/g, ""))
+    .filter(Boolean)
+    .map((phrase) => ({
+      phrase,
+      score: countSignalMatches(phrase, patterns),
+    }))
+    .filter((candidate) => candidate.score > 0)
+    .sort((a, b) => b.score - a.score);
+  const line = phrases[0]?.phrase || title;
+  return {
+    text: line.length > 130 ? `${line.slice(0, 127).trimEnd()}…` : line,
+    sourceIds: [selected.id],
+  };
+}
+
 function buildBriefingContent(
   subject: string,
   subjectType: "company" | "person",
@@ -240,7 +321,12 @@ function buildBriefingContent(
   topics: BriefingTopic[],
   sources: SearchResult[],
 ): {
-  overview: { text: string; sourceIds: string[] };
+  overview: {
+    text: string;
+    sourceIds: string[];
+    topPositive: BriefingSignal;
+    topNegative: BriefingSignal;
+  };
   highlights: {
     category: BriefingTopic;
     title: string;
@@ -272,6 +358,8 @@ function buildBriefingContent(
       .filter(({ source }) => contextRelevanceScore(source, contextTerms) > 0)
       .slice(0, 2)
     : [];
+  const topPositive = buildTopSignal(sources, contextTerms, "positive");
+  const topNegative = buildTopSignal(sources, contextTerms, "negative");
   const normalizedContext = context?.replace(/\s+/g, " ").trim();
   const shortContext = normalizedContext && normalizedContext.length > 100
     ? `${normalizedContext.slice(0, 97)}…`
@@ -318,6 +406,8 @@ function buildBriefingContent(
       sourceIds: context
         ? answerSources.map(({ source }) => source.id)
         : [latest.id],
+      topPositive,
+      topNegative,
     },
     highlights,
     questions,

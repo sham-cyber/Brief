@@ -21,6 +21,12 @@ When the user enters a direct public question (for example, â€œmarket conditionâ
 
 **How to apply:** Build the answer from recent collected source titles/excerpts, attach the original links, and do not imply AI-generated synthesis while AI remains disabled.
 
+Include one concise top-positive signal and one top-negative signal in each brief, each with its own source citation. These are source signals, not an AI sentiment judgment or investment recommendation; state when the selected reports do not support a clear signal.
+
+**Why:** The user wants both sides of a company briefing visible at a glance, with one sourced line each.
+
+**How to apply:** Use collected source headlines/excerpts and link each line to its supporting source; do not invent or infer missing positives or risks.
+
 For print, use a compact one-page A4 summary with the overview, one sourced leading item per selected category, an open question, and citation links; keep the complete multi-item source view on screen.
 
 **Why:** The user explicitly requires the printed briefing to fit on one page.

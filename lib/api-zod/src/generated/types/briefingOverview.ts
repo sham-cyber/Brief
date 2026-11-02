@@ -5,9 +5,12 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { BriefingSignal } from './briefingSignal';
 
 export interface BriefingOverview {
   text: string;
   /** @minItems 1 */
   sourceIds: string[];
+  topPositive: BriefingSignal;
+  topNegative: BriefingSignal;
 }

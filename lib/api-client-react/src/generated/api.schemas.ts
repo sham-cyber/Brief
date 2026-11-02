@@ -98,10 +98,17 @@ export interface BriefingHighlight {
   sourceIds: string[];
 }
 
+export interface BriefingSignal {
+  text: string;
+  sourceIds: string[];
+}
+
 export interface BriefingOverview {
   text: string;
   /** @minItems 1 */
   sourceIds: string[];
+  topPositive: BriefingSignal;
+  topNegative: BriefingSignal;
 }
 
 export interface BriefingQuestion {
