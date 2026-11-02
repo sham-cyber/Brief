@@ -249,6 +249,7 @@ function buildBriefingContent(
   }[];
   questions: { text: string; sourceIds: string[] }[];
 } {
+  const contextTerms = getContextTerms(context);
   const highlights = sources.flatMap(({ source, searchedAs }) => {
     const category = classifySource(source, searchedAs, topics);
     return category ? [{
@@ -266,6 +267,35 @@ function buildBriefingContent(
       ? candidate
       : newest,
   ).source;
+  const matchingSources = context
+    ? sources
+      .filter(({ source }) => contextRelevanceScore(source, contextTerms) > 0)
+      .slice(0, 2)
+    : [];
+  const normalizedContext = context?.replace(/\s+/g, " ").trim();
+  const shortContext = normalizedContext && normalizedContext.length > 100
+    ? `${normalizedContext.slice(0, 97)}…`
+    : normalizedContext;
+  const sourceExcerpt = (source: NewsItem) => {
+    const publisher = source.publisher.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const cleanTitle = source.title.replace(
+      new RegExp(`\\s*(?:-|–|—|\\|)\\s*${publisher}\\s*$`, "i"),
+      "",
+    );
+    const snippet = source.snippet.replace(/\s+/g, " ").trim();
+    const duplicateSnippet =
+      snippet.toLocaleLowerCase().includes(cleanTitle.toLocaleLowerCase()) ||
+      snippet.toLocaleLowerCase().endsWith(source.publisher.toLocaleLowerCase());
+    const excerpt = snippet && !duplicateSnippet ? snippet : cleanTitle;
+    if (excerpt.length <= 125) return excerpt;
+    return `${excerpt.slice(0, 122).trimEnd()}…`;
+  };
+  const answerSources = matchingSources.length ? matchingSources : sources.slice(0, 2);
+  const overviewText = context
+    ? matchingSources.length
+      ? `For “${shortContext}” about ${subject}, the closest recent public ${answerSources.length === 1 ? "report is" : "reports are"}: ${answerSources.map(({ source }) => `“${sourceExcerpt(source)}”`).join(" ")}`
+      : `No recent public report directly matched “${shortContext}” about ${subject}. These are the closest selected-topic reports found in the 30-day window.`
+    : `Recent public coverage for this ${subjectType} includes ${sources.length} reports from the 30-day research window. The latest report is “${latest.title},” published by ${latest.publisher}.`;
   const questions = topics.includes("risk") ? highlights.slice(0, 3).map((highlight, index) => ({
     text: [
       `What has changed since “${highlight.title}” was reported, and what is the latest status?`,
@@ -284,8 +314,10 @@ function buildBriefingContent(
 
   return {
     overview: {
-      text: `Recent public coverage for this ${subjectType} includes ${sources.length} reports from the 30-day research window. The latest report is “${latest.title},” published by ${latest.publisher}.`,
-      sourceIds: [latest.id],
+      text: overviewText,
+      sourceIds: context
+        ? answerSources.map(({ source }) => source.id)
+        : [latest.id],
     },
     highlights,
     questions,

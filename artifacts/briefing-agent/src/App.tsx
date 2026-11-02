@@ -1123,17 +1123,17 @@ function Home() {
               </div>
 
               <div className="mb-1.5 mt-4 flex items-center justify-between">
-                <label htmlFor="context" className="text-xs font-semibold text-[#35364a]">Meeting context to prioritize results</label>
+                <label htmlFor="context" className="text-xs font-semibold text-[#35364a]">Question or meeting context</label>
                 <span className="font-mono text-[10px] text-[#9992a0]">Optional</span>
               </div>
-              <p className="mb-1.5 text-[10px] leading-relaxed text-[#777280]">A short priority such as “new cable plant” ranks matching collected results higher. It does not change the 30-day window.</p>
+              <p className="mb-1.5 text-[10px] leading-relaxed text-[#777280]">Ask a public question or add a priority, such as “market condition” or “new cable plant.” Matching source excerpts appear first with links; the 30-day window stays the same.</p>
               <textarea
                 id="context"
                 value={context}
                 onChange={(event) => setContext(event.target.value)}
                 maxLength={1500}
                 rows={3}
-                placeholder="For example: new cable plant, supplier delivery issue"
+                placeholder="For example: market condition, new cable plant"
                 className="w-full resize-y rounded-lg border border-[#d9d4df] bg-[#fffefa] px-3 py-2.5 text-sm leading-relaxed text-foreground placeholder:text-[#aaa4af] focus:border-[#8c7dae] focus:outline-none"
                 data-testid="input-context"
               />

@@ -15,6 +15,12 @@ The optional meeting-context note should prioritize matching public results (for
 
 **How to apply:** Use context for local relevance ranking; do not append raw free-text context to third-party search queries unless the user is clearly informed and consents.
 
+When the user enters a direct public question (for example, “market condition” for Finolex Cables), the brief should give a concise source-based answer with clickable citations; if no report directly matches, say so rather than guessing.
+
+**Why:** The user expects a CEO’s question to receive an answer with a source link.
+
+**How to apply:** Build the answer from recent collected source titles/excerpts, attach the original links, and do not imply AI-generated synthesis while AI remains disabled.
+
 For print, use a compact one-page A4 summary with the overview, one sourced leading item per selected category, an open question, and citation links; keep the complete multi-item source view on screen.
 
 **Why:** The user explicitly requires the printed briefing to fit on one page.
