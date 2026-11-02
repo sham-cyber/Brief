@@ -1171,10 +1171,51 @@ function Home() {
         <div className="mt-8 space-y-8 lg:mt-12">
           <section className="no-print fade-up" aria-labelledby="create-heading">
             <div className="mb-5">
-              <p className="font-mono text-[10px] uppercase tracking-[.17em] text-[#766a93]">Your research desk</p>
-              <h1 id="create-heading" className="mt-2 font-serif text-[38px] leading-[1.02] tracking-[-.02em] text-[#282d43]">Walk in<br /><em className="font-normal text-[#655487]">well briefed.</em></h1>
-              <p className="mt-3 max-w-sm text-[13px] leading-[1.7] text-[#666675]">Get the context that matters before the conversation does.</p>
+              <p className="font-mono text-[10px] uppercase tracking-[.17em] text-[#766a93]">Your source-first briefing assistant</p>
+              <h1 id="create-heading" className="mt-2 font-serif text-[38px] leading-[1.02] tracking-[-.02em] text-[#282d43]">Know what changed<br /><em className="font-normal text-[#655487]">before you meet.</em></h1>
+              <p className="mt-3 max-w-2xl text-[13px] leading-[1.7] text-[#666675]">Choose a company or person for a user-triggered, rolling 30-day brief: news, hires, launches, financial facts, risks and open questions—with links to the reporting behind each item.</p>
             </div>
+
+            <section className="mb-5" aria-label="How the briefing assistant supports each role" data-testid="trust-and-role-guide">
+              <div className="grid gap-2 sm:grid-cols-3">
+                <article className="rounded-xl border border-[#d8d2df] bg-[#fbfaf6] p-3">
+                  <p className="font-mono text-[9px] uppercase tracking-[.14em] text-[#766a93]">Chairman / CEO</p>
+                  <p className="mt-2 text-[11px] leading-relaxed text-[#555463]">Add the company. Review reported share-price and profit/loss facts, hires, launches and risks before plant, board or partner discussions.</p>
+                </article>
+                <article className="rounded-xl border border-[#d8d2df] bg-[#fbfaf6] p-3">
+                  <p className="font-mono text-[9px] uppercase tracking-[.14em] text-[#766a93]">MP / public office</p>
+                  <p className="mt-2 text-[11px] leading-relaxed text-[#555463]">Choose MP and enter the public-office title, such as Corporator. Review sourced reporting tied to the person and prepare questions.</p>
+                </article>
+                <article className="rounded-xl border border-[#d8d2df] bg-[#fbfaf6] p-3">
+                  <p className="font-mono text-[9px] uppercase tracking-[.14em] text-[#766a93]">Corporate person</p>
+                  <p className="mt-2 text-[11px] leading-relaxed text-[#555463]">For a private-entity person: scan role-related reporting, hires, launches and risks before client or leadership conversations.</p>
+                </article>
+              </div>
+
+              <div className="mt-3 rounded-xl border border-[#d8d2df] bg-[#f3f0f7] p-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <p className="font-mono text-[9px] uppercase tracking-[.14em] text-[#766a93]">The 30-day method</p>
+                    <ol className="mt-2 space-y-1.5 text-[10px] leading-relaxed text-[#555463]">
+                      <li><strong>1.</strong> Choose a company or person and set the meeting time.</li>
+                      <li><strong>2.</strong> Press Crawl to collect public reports from the 30 days ending now. It does not run automatically.</li>
+                      <li><strong>3.</strong> Review five focused blocks, then print a one-page brief or use the capped read-aloud.</li>
+                    </ol>
+                  </div>
+                  <div>
+                    <p className="font-mono text-[9px] uppercase tracking-[.14em] text-[#766a93]">What makes it checkable</p>
+                    <ul className="mt-2 space-y-1.5 text-[10px] leading-relaxed text-[#555463]">
+                      <li>Every reported item links to its source; you can check the original context.</li>
+                      <li>Financial facts and positive/negative signals appear only when reporting supports them.</li>
+                      <li>Missing evidence is shown as not found or an open question—not filled in by guesswork.</li>
+                    </ul>
+                  </div>
+                </div>
+                <p className="mt-3 border-t border-[#ddd6e8] pt-3 text-[10px] leading-relaxed text-[#625d69]">
+                  AI is currently off. This assistant does not generate or invent claims; the crawl starts only when you request it.
+                </p>
+              </div>
+            </section>
 
             <form onSubmit={submit} className="rounded-2xl border border-[#d8d2df] bg-[#fbfaf6] p-5 shadow-[0_12px_35px_rgba(38,37,55,.06)] sm:p-6" aria-describedby="form-note">
               <div className="mb-5 flex items-center justify-between border-b border-[#e5e0e7] pb-3">
