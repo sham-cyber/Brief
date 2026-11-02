@@ -33,6 +33,7 @@ export const getBriefingSourceStatusResponseMaxSearchesPerBriefingMax = 5;
 export const GetBriefingSourceStatusResponse = zod.object({
   "provider": zod.enum(['tavily']),
   "configured": zod.boolean(),
+  "startPinConfigured": zod.boolean(),
   "dailyCrawlLimitMs": zod.number().int().min(getBriefingSourceStatusResponseDailyCrawlLimitMsMin),
   "dailyCrawlUsedMs": zod.number().int().min(getBriefingSourceStatusResponseDailyCrawlUsedMsMin).nullable(),
   "dailyCrawlRemainingMs": zod.number().int().min(getBriefingSourceStatusResponseDailyCrawlRemainingMsMin).nullable(),
@@ -46,6 +47,11 @@ export const GetBriefingSourceStatusResponse = zod.object({
 /**
  * @summary Create a sourced pre-meeting briefing
  */
+export const createBriefingBodyStartPinMin = 4;
+export const createBriefingBodyStartPinMax = 4;
+
+
+export const createBriefingBodyStartPinRegExp = new RegExp('^[0-9]{4}$');
 export const createBriefingBodySubjectMin = 2;
 export const createBriefingBodySubjectMax = 200;
 
@@ -60,6 +66,7 @@ export const createBriefingBodyContextMax = 1500;
 
 
 export const CreateBriefingBody = zod.object({
+  "startPin": zod.string().min(createBriefingBodyStartPinMin).max(createBriefingBodyStartPinMax).regex(createBriefingBodyStartPinRegExp),
   "subject": zod.string().min(createBriefingBodySubjectMin).max(createBriefingBodySubjectMax),
   "subjectType": zod.enum(['company', 'person']),
   "personRole": zod.union([zod.literal('business_owner'),zod.literal('mp'),zod.literal('corporate'),zod.literal(null)]).nullable(),

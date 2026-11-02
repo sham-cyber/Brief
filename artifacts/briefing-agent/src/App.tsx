@@ -915,6 +915,9 @@ function Home() {
   const [resultKey, setResultKey] = useState('');
   const [failedKey, setFailedKey] = useState('');
   const [timedOutKey, setTimedOutKey] = useState('');
+  const [pinPromptOpen, setPinPromptOpen] = useState(false);
+  const [startPin, setStartPin] = useState('');
+  const [pinDialogError, setPinDialogError] = useState('');
   const activeRequestKey = useRef('');
   const timeoutRef = useRef<number | undefined>(undefined);
   const requestKey = JSON.stringify([subject.trim(), subjectType, personRole, publicRoleTitle.trim(), companyName.trim(), sourceMode, meetingAt, topics, context.trim()]);
@@ -931,6 +934,7 @@ function Home() {
   const hasValidRole = hasValidRoleSelection && hasValidPersonDetails;
   const hasTopics = topics.length > 0;
   const tavilyConfigured = sourceStatusQuery.data?.configured === true;
+  const startPinConfigured = sourceStatusQuery.data?.startPinConfigured === true;
   const dailyCrawlRemainingMs = sourceStatusQuery.data?.dailyCrawlRemainingMs ?? null;
   const dailyCrawlActive = sourceStatusQuery.data?.dailyCrawlActive === true;
   const dailyCrawlResetsAt = sourceStatusQuery.data?.dailyCrawlResetsAt ?? null;
@@ -1047,11 +1051,12 @@ function Home() {
     return `${formatDate(start.toISOString(), { dateStyle: 'medium' })} — ${formatDate(end.toISOString(), { dateStyle: 'medium' })}`;
   }, [meetingAt, meetingTimeIsValid]);
 
-  const runBriefing = useCallback((key: string) => {
-    if (!isSignedIn || crawlBudgetExhausted || crawlAlreadyActive || !tavilyConfigured || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || sourceMode !== 'public' || mutation.isPending) return;
+  const runBriefing = useCallback((key: string, pin: string) => {
+    if (!/^\d{4}$/.test(pin) || !isSignedIn || crawlBudgetExhausted || crawlAlreadyActive || !tavilyConfigured || !startPinConfigured || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || sourceMode !== 'public' || mutation.isPending) return;
     activeRequestKey.current = key;
     setFailedKey('');
     setTimedOutKey('');
+    setPinDialogError('');
     if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
     abortControllerRef.current = new AbortController();
     timeoutRef.current = window.setTimeout(() => {
@@ -1064,6 +1069,7 @@ function Home() {
     mutation.mutate(
       {
         data: {
+          startPin: pin,
           subject: subject.trim(),
           subjectType,
           personRole: subjectType === 'person' ? personRole : null,
@@ -1082,22 +1088,44 @@ function Home() {
           if (activeRequestKey.current === key) {
             setResultKey(key);
             setFailedKey('');
+            setPinPromptOpen(false);
+            setStartPin('');
           }
         },
-        onError: () => {
+        onError: (error) => {
           if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
           abortControllerRef.current = null;
-          if (activeRequestKey.current === key) setFailedKey(key);
+          if (activeRequestKey.current === key) {
+            setFailedKey(key);
+            setStartPin('');
+            setPinDialogError(
+              error instanceof Error ? error.message : 'The PIN could not be verified.',
+            );
+          }
         },
         onSettled: () => {
           void sourceStatusQuery.refetch();
         },
       },
     );
-  }, [companyName, context, crawlAlreadyActive, crawlBudgetExhausted, hasTopics, hasValidRole, hasValidSubject, isSignedIn, meetingAt, meetingTimeIsValid, mutation.isPending, mutation.mutate, personRole, publicRoleTitle, sourceMode, sourceStatusQuery.refetch, subject, subjectType, tavilyConfigured, topics]);
+  }, [companyName, context, crawlAlreadyActive, crawlBudgetExhausted, hasTopics, hasValidRole, hasValidSubject, isSignedIn, meetingAt, meetingTimeIsValid, mutation.isPending, mutation.mutate, personRole, publicRoleTitle, sourceMode, sourceStatusQuery.refetch, startPinConfigured, subject, subjectType, tavilyConfigured, topics]);
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+  };
+  const submitStartPin = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!/^\d{4}$/.test(startPin)) {
+      setPinDialogError('Enter the four-digit start PIN.');
+      return;
+    }
+    runBriefing(requestKey, startPin);
+  };
+  const closePinPrompt = () => {
+    if (mutation.isPending) return;
+    setPinPromptOpen(false);
+    setStartPin('');
+    setPinDialogError('');
   };
 
   const apiError = mutation.error as (Error & { data?: { error?: string } }) | null;
@@ -1124,6 +1152,8 @@ function Home() {
       ? 'Not ready — the server could not confirm Tavily status. Check the API Server workflow.'
       : !tavilyConfigured
         ? 'Not ready — add TAVILY_API_KEY in Replit Secrets, then restart API Server.'
+        : !startPinConfigured
+          ? 'Not ready — configure the briefing start PIN in API Server Secrets.'
         : crawlAlreadyActive
           ? 'Not ready — a Tavily crawl is already running against the shared app allowance.'
         : crawlBudgetExhausted
@@ -1561,7 +1591,7 @@ function Home() {
               />
               <div className="mt-1 text-right font-mono text-[9px] text-[#aaa4af]">{context.length} / 1500</div>
 
-              <button type="button" onClick={() => runBriefing(requestKey)} disabled={mutation.isPending || !tavilyConfigured || crawlBudgetExhausted || crawlAlreadyActive || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || sourceMode === 'private'} className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#2b304a] px-4 text-sm font-semibold text-[#faf7f0] transition hover:bg-[#3c4160] disabled:opacity-55" data-testid="button-generate-briefing">
+              <button type="button" onClick={() => { setPinDialogError(''); setStartPin(''); setPinPromptOpen(true); }} disabled={mutation.isPending || !tavilyConfigured || !startPinConfigured || crawlBudgetExhausted || crawlAlreadyActive || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || sourceMode === 'private'} className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#2b304a] px-4 text-sm font-semibold text-[#faf7f0] transition hover:bg-[#3c4160] disabled:opacity-55" data-testid="button-generate-briefing">
                 {mutation.isPending ? <><LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />Crawling sources…</> : sourceMode === 'private' ? <><FileText className="h-4 w-4 text-[#c9b9ee]" aria-hidden="true" />Private mode unavailable</> : <><FileText className="h-4 w-4 text-[#c9b9ee]" aria-hidden="true" />{currentRequestFailed ? 'Start again' : hasCurrentResult ? 'Refresh briefing' : 'Start briefing'}<ArrowDown className="ml-auto h-4 w-4 opacity-60" aria-hidden="true" /></>}
               </button>
               <p id="form-note" className="mt-3 text-center text-[10px] leading-relaxed text-[#898392]" data-testid="text-tavily-setup">
@@ -1577,13 +1607,84 @@ function Home() {
               )}
             </form>
 
+            {pinPromptOpen && (
+              <div
+                className="no-print fixed inset-0 z-[100] flex items-center justify-center bg-[#171827]/60 p-4 backdrop-blur-[2px]"
+                role="presentation"
+                onClick={(event) => {
+                  if (event.target === event.currentTarget) closePinPrompt();
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') closePinPrompt();
+                }}
+              >
+                <section
+                  className="w-full max-w-md rounded-2xl border border-[#d8d2df] bg-[#fffefa] p-6 shadow-[0_24px_80px_rgba(22,22,36,.3)]"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="start-pin-title"
+                  aria-describedby="start-pin-description"
+                  data-testid="dialog-start-pin"
+                >
+                  <p className="font-mono text-[10px] uppercase tracking-[.16em] text-[#766a93]">Protected crawl</p>
+                  <h2 id="start-pin-title" className="mt-2 font-serif text-2xl text-[#292e46]">Enter the start PIN</h2>
+                  <p id="start-pin-description" className="mt-2 text-sm leading-relaxed text-[#625d69]">
+                    The API Server checks this PIN for each crawl. It is not saved on this device.
+                  </p>
+                  <form onSubmit={submitStartPin} className="mt-5">
+                    <label htmlFor="briefing-start-pin" className="mb-1.5 block text-xs font-semibold text-[#35364a]">Four-digit PIN</label>
+                    <input
+                      id="briefing-start-pin"
+                      type="password"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      pattern="[0-9]{4}"
+                      maxLength={4}
+                      autoFocus
+                      required
+                      value={startPin}
+                      onChange={(event) => {
+                        setStartPin(event.target.value.replace(/\D/g, '').slice(0, 4));
+                        setPinDialogError('');
+                      }}
+                      className="w-full rounded-lg border border-[#d9d4df] bg-white px-3 py-3 font-mono text-lg tracking-[.35em] text-[#292e46] focus:border-[#8c7dae] focus:outline-none"
+                      aria-label="Four-digit briefing start PIN"
+                      data-testid="input-start-pin"
+                    />
+                    {pinDialogError && (
+                      <p className="mt-2 text-xs leading-relaxed text-[#8b4039]" role="alert" data-testid="text-start-pin-error">{pinDialogError}</p>
+                    )}
+                    <div className="mt-5 flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={closePinPrompt}
+                        disabled={mutation.isPending}
+                        className="h-10 rounded-lg border border-[#d9d4df] px-4 text-sm font-semibold text-[#49405e] disabled:opacity-50"
+                        data-testid="button-cancel-start-pin"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={mutation.isPending || startPin.length !== 4}
+                        className="h-10 rounded-lg bg-[#292e46] px-4 text-sm font-semibold text-white disabled:opacity-50"
+                        data-testid="button-confirm-start-pin"
+                      >
+                        {mutation.isPending ? 'Starting crawl…' : 'Verify PIN & start'}
+                      </button>
+                    </div>
+                  </form>
+                </section>
+              </div>
+            )}
+
             {mutation.isPending && (
               <div className="mt-4 flex items-start gap-3 rounded-xl border border-[#ddd6e8] bg-[#f4f1f8] px-4 py-3" role="status" aria-live="polite" data-testid="status-generating">
                 <span className="mt-1 flex h-4 w-4 shrink-0 items-center justify-center"><span className="h-2 w-2 animate-pulse rounded-full bg-[#796a9d]" /></span>
                 <div><p className="text-xs font-semibold text-[#49405e]">Reading the latest coverage</p><p className="mt-1 text-[11px] leading-relaxed text-[#777082]">Finding useful signals and checking every reference.</p></div>
               </div>
             )}
-            {currentRequestFailed && (
+            {currentRequestFailed && !pinPromptOpen && (
               <div className="mt-4 rounded-xl border border-[#e4c9c3] bg-[#fbf0ed] p-4" role="alert" data-testid="status-generation-error">
                 <p className="text-xs font-semibold text-[#8b4039]">Couldn’t prepare this briefing</p>
                 <p className="mt-1 text-xs leading-relaxed text-[#795750]">{errorMessage}</p>

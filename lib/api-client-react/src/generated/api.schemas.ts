@@ -54,6 +54,12 @@ export const BriefingInputTopicsItem = {
 
 export interface BriefingInput {
   /**
+     * @minLength 4
+     * @maxLength 4
+     * @pattern ^[0-9]{4}$
+     */
+  startPin: string;
+  /**
      * @minLength 2
      * @maxLength 200
      */
@@ -100,6 +106,7 @@ export const BriefingSourceStatusSearchDepth = {
 export interface BriefingSourceStatus {
   provider: BriefingSourceStatusProvider;
   configured: boolean;
+  startPinConfigured: boolean;
   /** @minimum 0 */
   dailyCrawlLimitMs: number;
   /**

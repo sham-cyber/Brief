@@ -12,6 +12,12 @@ import type { BriefingInputTopicsItem } from './briefingInputTopicsItem';
 
 export interface BriefingInput {
   /**
+     * @minLength 4
+     * @maxLength 4
+     * @pattern ^[0-9]{4}$
+     */
+  startPin: string;
+  /**
      * @minLength 2
      * @maxLength 200
      */

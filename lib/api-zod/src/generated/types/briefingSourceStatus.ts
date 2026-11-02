@@ -11,6 +11,7 @@ import type { BriefingSourceStatusSearchDepth } from './briefingSourceStatusSear
 export interface BriefingSourceStatus {
   provider: BriefingSourceStatusProvider;
   configured: boolean;
+  startPinConfigured: boolean;
   /** @minimum 0 */
   dailyCrawlLimitMs: number;
   /**

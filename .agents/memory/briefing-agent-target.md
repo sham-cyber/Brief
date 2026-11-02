@@ -80,3 +80,9 @@ The Brief status indicator glows green only when a successful briefing still mat
 **Why:** The user wants the green Brief indicator to mean the requested brief is ready for its selected goals.
 
 **How to apply:** Derive green status from a completed result matching the current form, not from valid inputs or available crawl time alone.
+
+The Start action asks for a four-digit PIN on every crawl and validates it only on the API server. The PIN supplements sign-in; it is not owner identity verification when multiple accounts can sign up.
+
+**Why:** The user requested a PIN gate before Tavily can start, while the app still allows account self-signup.
+
+**How to apply:** Store the PIN only as a Replit Secret, never in source or client storage. Keep the crawl endpoint protected by authentication and explain that strict owner-only access also requires an account allowlist.
