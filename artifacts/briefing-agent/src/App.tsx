@@ -525,6 +525,26 @@ function SourceList({ sources }: { sources: BriefSource[] }) {
                   )}
                 </div>
               )}
+              {source.images?.[0] && (
+                <a
+                  className="source-photo-link mt-3"
+                  href={source.images[0].url}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={`Open photo related to ${source.title}`}
+                  data-testid={`link-source-photo-${index + 1}`}
+                >
+                  <img
+                    className="source-photo"
+                    src={source.images[0].url}
+                    alt={source.images[0].description || `Photo related to ${source.title}`}
+                    loading="lazy"
+                    decoding="async"
+                    referrerPolicy="no-referrer"
+                    onError={(event) => { event.currentTarget.hidden = true; }}
+                  />
+                </a>
+              )}
               <div className="mt-1.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
                 <span className="font-medium text-[#655b7a]">{source.publisher}</span>
                 <span aria-hidden="true">·</span>

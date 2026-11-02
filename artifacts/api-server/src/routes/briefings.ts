@@ -104,6 +104,7 @@ type NewsItem = {
   publisher: string;
   publishedAt: string | null;
   snippet: string;
+  images: { url: string; description: string }[];
   affiliatedCompanyReport: boolean;
 };
 
@@ -252,6 +253,35 @@ function quoteSearchPhrase(value: string | null): string {
   return phrase ? ` "${phrase}"` : "";
 }
 
+function sourceImages(value: unknown, title: string): { url: string; description: string }[] {
+  if (!Array.isArray(value)) return [];
+  const images: { url: string; description: string }[] = [];
+  const seen = new Set<string>();
+
+  for (const candidate of value) {
+    if (!candidate || typeof candidate !== "object") continue;
+    const image = candidate as { url?: unknown; description?: unknown };
+    if (typeof image.url !== "string") continue;
+
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(image.url);
+    } catch {
+      continue;
+    }
+    if (parsedUrl.protocol !== "https:" || seen.has(parsedUrl.href)) continue;
+
+    seen.add(parsedUrl.href);
+    const description =
+      typeof image.description === "string" && image.description.trim()
+        ? image.description.trim().slice(0, 240)
+        : `Photo related to ${title}`.slice(0, 240);
+    images.push({ url: parsedUrl.href, description });
+    if (images.length === 1) break;
+  }
+  return images;
+}
+
 async function searchNews(
   subject: string,
   subjectType: "company" | "person",
@@ -356,6 +386,7 @@ async function searchNews(
           publisher,
           publishedAt: validDate.toISOString(),
           snippet: snippet.slice(0, 700),
+          images: sourceImages(result.images, title),
         },
         searchedAs: topic,
       });

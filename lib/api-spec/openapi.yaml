@@ -335,6 +335,18 @@ components:
         affiliatedCompanyReport:
           type: boolean
           description: True when this source is about the selected person's associated company rather than the person.
+        images:
+          type: array
+          description: Images extracted from this accepted source. Images remain optional when none are available.
+          items:
+            type: object
+            properties:
+              url:
+                type: string
+                format: uri
+              description:
+                type: string
+            required: [url, description]
       required: [id, title, url, publisher, publishedAt, snippet, affiliatedCompanyReport]
     BriefingSourceStatus:
       type: object

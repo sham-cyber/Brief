@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { BriefSourceImagesItem } from './briefSourceImagesItem';
 
 export interface BriefSource {
   id: string;
@@ -16,4 +17,6 @@ export interface BriefSource {
   snippet: string;
   /** True when this source is about the selected person's associated company rather than the person. */
   affiliatedCompanyReport: boolean;
+  /** Images extracted from this accepted source. Images remain optional when none are available. */
+  images?: BriefSourceImagesItem[];
 }

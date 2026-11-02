@@ -83,6 +83,12 @@ The configured developer may use the existing project-level Tavily key only on t
 
 **How to apply:** Verify the signed-in account is the configured owner before selecting the project key. Keep personal keys encrypted, account-scoped, and hidden from the browser. Preserve the owner-only crawl restriction unless the user changes it.
 
+Add relevant photos alongside video previews within existing topic results; do not create a media tab or extra Tavily search. Media must come from an accepted source for the selected topic, and the user chooses whether to open or play it.
+
+**Why:** The user wants photos and videos to make the short briefing faster to scan while keeping media relevant to the selected topic.
+
+**How to apply:** Request source-associated images in the existing per-topic Tavily call, keep source citations visible, and avoid adding separate media searches.
+
 The app still has one shared 120-second crawl-runtime allowance per Asia/Kolkata calendar day, one active crawl at a time, and a three-minute backup hard stop, even though provider billing now follows each user's Tavily key.
 
 **Why:** The user previously chose an app-wide runtime guardrail; switching to personal keys changed provider billing, not this separate usage limit.

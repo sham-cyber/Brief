@@ -28,6 +28,7 @@ export * from './briefingSourceStatusSearchDepth';
 export * from './briefingTopicBrief';
 export * from './briefingTopicBriefCategory';
 export * from './briefSource';
+export * from './briefSourceImagesItem';
 export * from './error';
 export * from './healthStatus';
 export * from './personProfile';

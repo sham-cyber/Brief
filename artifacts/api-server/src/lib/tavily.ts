@@ -3,6 +3,7 @@ export type TavilyResult = {
   url?: unknown;
   content?: unknown;
   published_date?: unknown;
+  images?: unknown;
 };
 
 export type TavilySearchResponse = {
@@ -44,7 +45,8 @@ export async function searchTavily(
       filter_by_published_date: true,
       include_answer: false,
       include_raw_content: false,
-      include_images: false,
+      include_images: true,
+      include_image_descriptions: true,
       include_usage: true,
       language: "en",
     }),

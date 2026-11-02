@@ -211,7 +211,11 @@ export const CreateBriefingResponse = zod.object({
   "publisher": zod.string(),
   "publishedAt": zod.string().nullable(),
   "snippet": zod.string(),
-  "affiliatedCompanyReport": zod.boolean().describe('True when this source is about the selected person\'s associated company rather than the person.')
+  "affiliatedCompanyReport": zod.boolean().describe('True when this source is about the selected person\'s associated company rather than the person.'),
+  "images": zod.array(zod.object({
+  "url": zod.string().url(),
+  "description": zod.string()
+})).optional().describe('Images extracted from this accepted source. Images remain optional when none are available.')
 }))
 })
 
