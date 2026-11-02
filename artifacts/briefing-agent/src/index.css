@@ -196,7 +196,12 @@
 .source-photo-link { display: inline-block; max-width: 100%; }
 .source-photo { display: block; width: min(100%, 240px); height: 120px; border: 1px solid hsl(39 20% 82%); border-radius: .6rem; object-fit: cover; background: hsl(224 30% 16%); }
 @media (min-width: 768px) {
-  .source-video { width: 1in; height: 1.5in; }
+  .source-video {
+    width: clamp(12rem, 20vw, 18rem);
+    max-width: 100%;
+    height: auto;
+    aspect-ratio: 2 / 3;
+  }
 }
 .reference-pill {
   display: inline-flex;
