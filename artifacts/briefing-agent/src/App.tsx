@@ -935,6 +935,7 @@ function Home() {
   const hasTopics = topics.length > 0;
   const tavilyConfigured = sourceStatusQuery.data?.configured === true;
   const startPinConfigured = sourceStatusQuery.data?.startPinConfigured === true;
+  const ownerAccountConfigured = sourceStatusQuery.data?.ownerAccountConfigured === true;
   const dailyCrawlRemainingMs = sourceStatusQuery.data?.dailyCrawlRemainingMs ?? null;
   const dailyCrawlActive = sourceStatusQuery.data?.dailyCrawlActive === true;
   const dailyCrawlResetsAt = sourceStatusQuery.data?.dailyCrawlResetsAt ?? null;
@@ -1052,7 +1053,7 @@ function Home() {
   }, [meetingAt, meetingTimeIsValid]);
 
   const runBriefing = useCallback((key: string, pin: string) => {
-    if (!/^\d{4}$/.test(pin) || !isSignedIn || crawlBudgetExhausted || crawlAlreadyActive || !tavilyConfigured || !startPinConfigured || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || sourceMode !== 'public' || mutation.isPending) return;
+    if (!/^\d{4}$/.test(pin) || !isSignedIn || crawlBudgetExhausted || crawlAlreadyActive || !tavilyConfigured || !startPinConfigured || !ownerAccountConfigured || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || sourceMode !== 'public' || mutation.isPending) return;
     activeRequestKey.current = key;
     setFailedKey('');
     setTimedOutKey('');
@@ -1108,7 +1109,7 @@ function Home() {
         },
       },
     );
-  }, [companyName, context, crawlAlreadyActive, crawlBudgetExhausted, hasTopics, hasValidRole, hasValidSubject, isSignedIn, meetingAt, meetingTimeIsValid, mutation.isPending, mutation.mutate, personRole, publicRoleTitle, sourceMode, sourceStatusQuery.refetch, startPinConfigured, subject, subjectType, tavilyConfigured, topics]);
+  }, [companyName, context, crawlAlreadyActive, crawlBudgetExhausted, hasTopics, hasValidRole, hasValidSubject, isSignedIn, meetingAt, meetingTimeIsValid, mutation.isPending, mutation.mutate, ownerAccountConfigured, personRole, publicRoleTitle, sourceMode, sourceStatusQuery.refetch, startPinConfigured, subject, subjectType, tavilyConfigured, topics]);
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1154,6 +1155,8 @@ function Home() {
         ? 'Not ready — add TAVILY_API_KEY in Replit Secrets, then restart API Server.'
         : !startPinConfigured
           ? 'Not ready — configure the briefing start PIN in API Server Secrets.'
+        : !ownerAccountConfigured
+          ? 'Not ready — configure the approved account in API Server Secrets.'
         : crawlAlreadyActive
           ? 'Not ready — a Tavily crawl is already running against the shared app allowance.'
         : crawlBudgetExhausted
@@ -1591,7 +1594,7 @@ function Home() {
               />
               <div className="mt-1 text-right font-mono text-[9px] text-[#aaa4af]">{context.length} / 1500</div>
 
-              <button type="button" onClick={() => { setPinDialogError(''); setStartPin(''); setPinPromptOpen(true); }} disabled={mutation.isPending || !tavilyConfigured || !startPinConfigured || crawlBudgetExhausted || crawlAlreadyActive || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || sourceMode === 'private'} className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#2b304a] px-4 text-sm font-semibold text-[#faf7f0] transition hover:bg-[#3c4160] disabled:opacity-55" data-testid="button-generate-briefing">
+              <button type="button" onClick={() => { setPinDialogError(''); setStartPin(''); setPinPromptOpen(true); }} disabled={mutation.isPending || !tavilyConfigured || !startPinConfigured || !ownerAccountConfigured || crawlBudgetExhausted || crawlAlreadyActive || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || sourceMode === 'private'} className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#2b304a] px-4 text-sm font-semibold text-[#faf7f0] transition hover:bg-[#3c4160] disabled:opacity-55" data-testid="button-generate-briefing">
                 {mutation.isPending ? <><LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />Crawling sources…</> : sourceMode === 'private' ? <><FileText className="h-4 w-4 text-[#c9b9ee]" aria-hidden="true" />Private mode unavailable</> : <><FileText className="h-4 w-4 text-[#c9b9ee]" aria-hidden="true" />{currentRequestFailed ? 'Start again' : hasCurrentResult ? 'Refresh briefing' : 'Start briefing'}<ArrowDown className="ml-auto h-4 w-4 opacity-60" aria-hidden="true" /></>}
               </button>
               <p id="form-note" className="mt-3 text-center text-[10px] leading-relaxed text-[#898392]" data-testid="text-tavily-setup">

@@ -34,6 +34,7 @@ export const GetBriefingSourceStatusResponse = zod.object({
   "provider": zod.enum(['tavily']),
   "configured": zod.boolean(),
   "startPinConfigured": zod.boolean(),
+  "ownerAccountConfigured": zod.boolean(),
   "dailyCrawlLimitMs": zod.number().int().min(getBriefingSourceStatusResponseDailyCrawlLimitMsMin),
   "dailyCrawlUsedMs": zod.number().int().min(getBriefingSourceStatusResponseDailyCrawlUsedMsMin).nullable(),
   "dailyCrawlRemainingMs": zod.number().int().min(getBriefingSourceStatusResponseDailyCrawlRemainingMsMin).nullable(),

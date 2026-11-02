@@ -81,8 +81,8 @@ The Brief status indicator glows green only when a successful briefing still mat
 
 **How to apply:** Derive green status from a completed result matching the current form, not from valid inputs or available crawl time alone.
 
-The Start action asks for a four-digit PIN on every crawl and validates it only on the API server. The PIN supplements sign-in; it is not owner identity verification when multiple accounts can sign up.
+The Start action requires both the approved owner account and a four-digit PIN on every crawl. The API resolves the configured owner email in the active Clerk environment and compares its user ID before any Tavily work.
 
-**Why:** The user requested a PIN gate before Tavily can start, while the app still allows account self-signup.
+**Why:** The user requested that only their account can start crawls, in addition to the per-crawl PIN gate, while the app still allows account self-signup.
 
-**How to apply:** Store the PIN only as a Replit Secret, never in source or client storage. Keep the crawl endpoint protected by authentication and explain that strict owner-only access also requires an account allowlist.
+**How to apply:** Store the PIN and approved owner email only as Replit Secrets; never put either in source, client storage, logs, or responses. Keep owner and PIN checks server-side before reserving Tavily quota.

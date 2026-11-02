@@ -5,7 +5,7 @@ import {
   CreateBriefingResponse,
   GetBriefingSourceStatusResponse,
 } from "@workspace/api-zod";
-import { getAuth } from "@clerk/express";
+import { clerkClient, getAuth } from "@clerk/express";
 import {
   finishTavilyQuotaReservation,
   getTavilyQuotaStatus,
@@ -23,6 +23,34 @@ const startPinFailures = new Map<
   string,
   { attempts: number; windowStartedAt: number; lockedUntil: number }
 >();
+let ownerIdentityCache:
+  | { email: string; userId: string; expiresAt: number }
+  | null = null;
+
+async function resolveOwnerUserId(email: string): Promise<string | null> {
+  if (
+    ownerIdentityCache?.email === email &&
+    ownerIdentityCache.expiresAt > Date.now()
+  ) {
+    return ownerIdentityCache.userId;
+  }
+  const result = await clerkClient.users.getUserList({
+    emailAddress: [email],
+    limit: 1,
+  });
+  const owner = result.data.find((user) =>
+    user.emailAddresses.some(
+      (address) => address.emailAddress.trim().toLowerCase() === email,
+    ),
+  );
+  if (!owner) return null;
+  ownerIdentityCache = {
+    email,
+    userId: owner.id,
+    expiresAt: Date.now() + 5 * 60_000,
+  };
+  return owner.id;
+}
 
 function startPinLockSeconds(userId: string): number {
   const now = Date.now();
@@ -368,6 +396,7 @@ router.get("/briefings", async (req, res): Promise<void> => {
     provider: "tavily",
     configured: Boolean(process.env.TAVILY_API_KEY?.trim()),
     startPinConfigured: /^\d{4}$/.test(process.env.BRIEFING_START_PIN?.trim() ?? ""),
+    ownerAccountConfigured: Boolean(process.env.BRIEFING_OWNER_EMAIL?.trim()),
     dailyCrawlLimitMs: TAVILY_DAILY_LIMIT_MS,
     dailyCrawlUsedMs: quota.usedMs,
     dailyCrawlRemainingMs: quota.remainingMs,
@@ -618,7 +647,37 @@ router.post("/briefings", async (req, res): Promise<void> => {
   const input = CreateBriefingBody.safeParse(req.body);
   if (!input.success) {
     res.status(400).json({
-      error: "Enter a company or person, choose a person role when needed, select a source mode and at least one topic, and set a meeting time.",
+      error: "Enter a four-digit PIN, company or person, required person details, at least one topic, and meeting time.",
+    });
+    return;
+  }
+
+  const ownerEmail = process.env.BRIEFING_OWNER_EMAIL?.trim().toLowerCase();
+  if (!ownerEmail) {
+    res.status(503).json({
+      error: "The allowed briefing owner is not configured in API Server Secrets.",
+    });
+    return;
+  }
+  let ownerUserId: string | null;
+  try {
+    ownerUserId = await resolveOwnerUserId(ownerEmail);
+  } catch (error) {
+    req.log.error({ error }, "Failed to verify the briefing owner account");
+    res.status(503).json({
+      error: "The briefing owner account could not be verified with Clerk.",
+    });
+    return;
+  }
+  if (!ownerUserId) {
+    res.status(503).json({
+      error: "The configured briefing owner was not found in this Clerk environment.",
+    });
+    return;
+  }
+  if (userId !== ownerUserId) {
+    res.status(403).json({
+      error: "Only the configured briefing owner can start a crawl.",
     });
     return;
   }

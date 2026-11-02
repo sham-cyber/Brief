@@ -12,6 +12,7 @@ export interface BriefingSourceStatus {
   provider: BriefingSourceStatusProvider;
   configured: boolean;
   startPinConfigured: boolean;
+  ownerAccountConfigured: boolean;
   /** @minimum 0 */
   dailyCrawlLimitMs: number;
   /**
