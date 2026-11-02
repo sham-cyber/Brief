@@ -215,7 +215,7 @@ function AiGuardrailPanel() {
     }
   };
 
-  if (!isLoaded) return null;
+  if (!isLoaded || !isSignedIn) return null;
   return (
     <section className="no-print mt-4 rounded-xl border border-[#ded9e5] bg-[#f8f6fb] p-3 text-[11px]" aria-label="AI activation guardrails" data-testid="ai-guardrails">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -227,9 +227,7 @@ function AiGuardrailPanel() {
       <p className="mt-2 leading-relaxed text-muted-foreground">
         Server switch: {status?.serverEnabled ? 'ON' : 'OFF'} · {status?.requestsPerBriefing ?? AI_REQUESTS_PER_BRIEFING} AI request per briefing. Your phone number is not used as a password.
       </p>
-      {!isSignedIn ? (
-        <p className="mt-2 text-muted-foreground">Sign in to set your separate activation passcode. <a href={`${basePath}/sign-in`} className="font-semibold text-[#594b87] underline underline-offset-2">Sign in</a></p>
-      ) : status ? (
+      {status ? (
         <>
           <form className="mt-3 grid gap-2 sm:grid-cols-[1fr_1fr_auto]" onSubmit={savePasscode}>
             <input
@@ -1711,7 +1709,7 @@ function Home() {
             ) : result ? (
               <BriefingDocument result={result} />
             ) : (
-              <EmptyBriefing />
+              <EmptyBriefing isSignedIn={isSignedIn === true} />
             )}
           </section>
         </div>
@@ -1741,17 +1739,19 @@ function LoadingBrief() {
   );
 }
 
-function EmptyBriefing() {
+function EmptyBriefing({ isSignedIn }: { isSignedIn: boolean }) {
   return (
     <div className="fade-up space-y-5" data-testid="empty-briefing">
-      <section className="flex flex-wrap items-center justify-between gap-5 rounded-2xl border border-border bg-card px-5 py-5 sm:px-6" aria-labelledby="voice-empty-heading">
-        <div className="max-w-md">
-          <SectionEyebrow>Voice controls</SectionEyebrow>
-          <h3 id="voice-empty-heading" className="mt-2 font-serif text-2xl text-foreground">AI and device speech</h3>
-          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">The AI voice button is shown but disabled. Device read-aloud becomes available after a briefing is collected.</p>
-        </div>
-        <VoiceControls text="" />
-      </section>
+      {isSignedIn && (
+        <section className="flex flex-wrap items-center justify-between gap-5 rounded-2xl border border-border bg-card px-5 py-5 sm:px-6" aria-labelledby="voice-empty-heading">
+          <div className="max-w-md">
+            <SectionEyebrow>Voice controls</SectionEyebrow>
+            <h3 id="voice-empty-heading" className="mt-2 font-serif text-2xl text-foreground">AI and device speech</h3>
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">The AI voice button is shown but disabled. Device read-aloud becomes available after a briefing is collected.</p>
+          </div>
+          <VoiceControls text="" />
+        </section>
+      )}
       <div className="flex min-h-[420px] flex-col items-center justify-center rounded-2xl border border-dashed border-[#d1cad9] bg-[#f8f6f2]/80 px-6 py-12 text-center">
         <div className="relative flex h-24 w-24 items-center justify-center">
           <span className="absolute inset-1 rounded-full border border-[#ded8e5]" aria-hidden="true" />
