@@ -95,12 +95,42 @@ function contextRelevanceScore(source: NewsItem, terms: string[]): number {
   return score;
 }
 
-function sourceMentionsSubject(source: NewsItem, subject: string): boolean {
+function sourceMentionsSubject(
+  source: NewsItem,
+  subject: string,
+  subjectType: "company" | "person",
+): boolean {
   const normalize = (value: string) =>
     (value.match(/[\p{L}\p{N}]+/gu) ?? []).join(" ").toLocaleLowerCase();
   const target = normalize(subject);
+  const title = normalize(source.title);
   const content = normalize(`${source.title} ${source.snippet}`);
-  return target.length > 0 && ` ${content} `.includes(` ${target} `);
+  if (!target || !` ${content} `.includes(` ${target} `)) return false;
+
+  const companyQualifiers = new Set([
+    "automotive", "automobiles", "bank", "cables", "cement", "chemicals",
+    "electronics", "energy", "finance", "foods", "industries", "infrastructure",
+    "logistics", "motors", "pharma", "pharmaceuticals", "power", "software",
+    "steel", "systems", "technology", "technologies", "telecom",
+  ]);
+  const targetWords = target.split(" ");
+  const titleWords = title.split(" ");
+  const targetQualifier = targetWords.find((word) => companyQualifiers.has(word));
+  const titleQualifier = titleWords.find((word) => companyQualifiers.has(word));
+  const sharesLeadingName = targetWords[0] && titleWords[0] === targetWords[0];
+
+  // A headline that names a different company in the same brand family outranks
+  // a passing mention of the requested company in the search-result snippet.
+  if (
+    subjectType === "company" &&
+    sharesLeadingName &&
+    targetQualifier &&
+    titleQualifier &&
+    targetQualifier !== titleQualifier
+  ) {
+    return false;
+  }
+  return true;
 }
 
 function quoteSearchPhrase(value: string | null): string {
@@ -229,7 +259,7 @@ async function searchNews(
       ),
     }))
     .filter(({ item, searchedAs }) =>
-      sourceMentionsSubject({ ...item, id: "" }, subject) &&
+      sourceMentionsSubject({ ...item, id: "" }, subject, subjectType) &&
       classifySource({ ...item, id: "" }, searchedAs, topics) !== null,
     )
     .sort((a, b) =>
