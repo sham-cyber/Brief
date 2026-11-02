@@ -15,11 +15,17 @@ The optional meeting-context note should prioritize matching public results (for
 
 **How to apply:** Use context for local relevance ranking; do not append raw free-text context to third-party search queries unless the user is clearly informed and consents.
 
-The user chose to keep the Person role options at Chairman / CEO, MP, and Corporate; do not add Corporator or treat Corporate as Corporator.
+Keep the Person role options at Chairman / CEO, MP, and Corporate. MP is the government/public-office path with an editable title such as Corporator; Chairman / CEO requires a company affiliation; Corporate means a private-entity person. Do not add Corporator as a separate role.
 
-**Why:** The user explicitly declined adding a Corporator role.
+**Why:** The user confirmed the role flow and clarified that Corporator belongs under the existing MP/public-office choice.
 
-**How to apply:** Preserve the current role choices. If the subject is a corporator, explain that there is no exact role option rather than applying a misleading label.
+**How to apply:** Preserve the three role choices. For MP, pass the entered public-office title into the search and show it in the brief. Require the associated company for Chairman / CEO briefs.
+
+Person details may be saved for reuse only after the user explicitly presses Save. Keep saved profiles scoped to the signed-in account; briefing remains usable without saving or signing in.
+
+**Why:** The user asked for a Save option so person details are not lost, but did not want automatic saving.
+
+**How to apply:** Derive ownership from the signed-in Clerk user on the server, never from client-supplied IDs. Let the owner reload, update, and remove saved details; clear user-scoped UI state on sign-out.
 
 When the user enters a direct public question (for example, “market condition” for Finolex Cables), the brief should give a concise source-based answer with clickable citations; if no report directly matches, say so rather than guessing.
 

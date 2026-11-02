@@ -21,6 +21,16 @@ export interface BriefingResult {
   subjectType: BriefingResultSubjectType;
   /** @nullable */
   personRole: BriefingResultPersonRole;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  publicRoleTitle: string | null;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  companyName: string | null;
   sourceMode: BriefingResultSourceMode;
   topics: BriefingResultTopicsItem[];
   meetingAt: Date;

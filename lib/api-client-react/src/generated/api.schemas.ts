@@ -61,6 +61,10 @@ export interface BriefingInput {
   subjectType: BriefingInputSubjectType;
   /** @nullable */
   personRole: BriefingInputPersonRole;
+  /** @maxLength 80 */
+  publicRoleTitle?: string;
+  /** @maxLength 200 */
+  companyName?: string;
   sourceMode: BriefingInputSourceMode;
   meetingAt: string;
   /** @maxLength 1500 */
@@ -179,6 +183,16 @@ export interface BriefingResult {
   subjectType: BriefingResultSubjectType;
   /** @nullable */
   personRole: BriefingResultPersonRole;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  publicRoleTitle: string | null;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  companyName: string | null;
   sourceMode: BriefingResultSourceMode;
   topics: BriefingResultTopicsItem[];
   meetingAt: string;
@@ -190,5 +204,61 @@ export interface BriefingResult {
   questions: BriefingQuestion[];
   topicBriefs: BriefingTopicBrief[];
   sources: BriefSource[];
+}
+
+export type PersonProfileInputPersonRole = typeof PersonProfileInputPersonRole[keyof typeof PersonProfileInputPersonRole];
+
+
+export const PersonProfileInputPersonRole = {
+  business_owner: 'business_owner',
+  mp: 'mp',
+  corporate: 'corporate',
+} as const;
+
+export interface PersonProfileInput {
+  /**
+     * @minLength 2
+     * @maxLength 200
+     */
+  personName: string;
+  personRole: PersonProfileInputPersonRole;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  publicRoleTitle?: string | null;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  companyName?: string | null;
+}
+
+export type PersonProfilePersonRole = typeof PersonProfilePersonRole[keyof typeof PersonProfilePersonRole];
+
+
+export const PersonProfilePersonRole = {
+  business_owner: 'business_owner',
+  mp: 'mp',
+  corporate: 'corporate',
+} as const;
+
+export interface PersonProfile {
+  id: string;
+  personName: string;
+  personRole: PersonProfilePersonRole;
+  /** @nullable */
+  publicRoleTitle: string | null;
+  /** @nullable */
+  companyName: string | null;
+  updatedAt: string;
+}
+
+export interface PersonProfileList {
+  profiles: PersonProfile[];
+}
+
+export interface PersonProfileDeleteResult {
+  deleted: boolean;
 }
 

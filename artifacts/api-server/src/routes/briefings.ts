@@ -108,6 +108,16 @@ function sourceMentionsSubject(source: NewsItem, subject: string): boolean {
   return target.length > 0 && ` ${content} `.includes(` ${target} `);
 }
 
+function quoteSearchPhrase(value: string | null): string {
+  if (!value) return "";
+  const phrase = value
+    .replace(/["\\]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 80);
+  return phrase ? ` "${phrase}"` : "";
+}
+
 async function searchNews(
   subject: string,
   subjectType: "company" | "person",
@@ -116,23 +126,34 @@ async function searchNews(
   start: Date,
   end: Date,
   context?: string,
+  publicRoleTitle: string | null = null,
+  companyName: string | null = null,
 ): Promise<SearchResult[]> {
   const startDate = start.toISOString().slice(0, 10);
   const endDate = new Date(end.getTime() + 86_400_000).toISOString().slice(0, 10);
   const roleTerms = subjectType === "person" && personRole
     ? ` ${ROLE_SEARCH_TERMS[personRole]}`
     : "";
+  const publicOfficeTerm =
+    subjectType === "person" && personRole === "mp"
+      ? quoteSearchPhrase(publicRoleTitle)
+      : "";
+  const companyTerm =
+    subjectType === "person" && personRole === "business_owner"
+      ? quoteSearchPhrase(companyName)
+      : "";
+  const personTerms = `${roleTerms}${publicOfficeTerm}${companyTerm}`;
   const searchTerms: { topic: BriefingTopic; term: string }[] = topics.map((topic) => {
     const terms: Record<BriefingTopic, string> = {
-      news: `${subject}${roleTerms} news`,
+      news: `${subject}${personTerms} news`,
       hire: subjectType === "person"
-        ? `${subject}${roleTerms} (appointed OR appointment OR joins OR joined OR hired OR hiring OR promoted OR promotion)`
+        ? `${subject}${personTerms} (appointed OR appointment OR joins OR joined OR hired OR hiring OR promoted OR promotion)`
         : `${subject} (appointed OR appointment OR joins OR joined OR hired OR hiring OR promoted OR promotion OR named CEO)`,
-      launch: `${subject}${roleTerms} (launch OR launched OR launches OR release OR released OR unveiled OR debut OR introduced)`,
+      launch: `${subject}${personTerms} (launch OR launched OR launches OR release OR released OR unveiled OR debut OR introduced)`,
       financial: subjectType === "company"
         ? `${subject} (share price OR shares OR stock OR earnings OR profit OR loss OR revenue OR valuation OR funding)`
-        : `${subject}${roleTerms} (financial results OR earnings OR investment OR profit OR loss OR valuation OR funding)`,
-      risk: `${subject}${roleTerms} (risk OR lawsuit OR sues OR sued OR recall OR investigation OR regulator OR fine OR penalty OR restructuring OR breach)`,
+        : `${subject}${personTerms} (financial results OR earnings OR investment OR profit OR loss OR valuation OR funding)`,
+      risk: `${subject}${personTerms} (risk OR lawsuit OR sues OR sued OR recall OR investigation OR regulator OR fine OR penalty OR restructuring OR breach)`,
     };
     return { topic, term: terms[topic] };
   });
@@ -503,6 +524,25 @@ router.post("/briefings", async (req, res): Promise<void> => {
     res.status(400).json({ error: "Person briefing context is only available for Person briefs." });
     return;
   }
+  if (
+    input.data.subjectType === "company" &&
+    (input.data.publicRoleTitle || input.data.companyName)
+  ) {
+    res.status(400).json({ error: "Person role details are only available for Person briefs." });
+    return;
+  }
+  const companyName =
+    input.data.subjectType === "person" && input.data.personRole === "business_owner"
+      ? input.data.companyName?.trim() || null
+      : null;
+  const publicRoleTitle =
+    input.data.subjectType === "person" && input.data.personRole === "mp"
+      ? input.data.publicRoleTitle?.trim() || "MP"
+      : null;
+  if (input.data.personRole === "business_owner" && !companyName) {
+    res.status(400).json({ error: "Enter the Chairman / CEO's company." });
+    return;
+  }
   if (input.data.subjectType === "company" && input.data.sourceMode === "private") {
     res.status(400).json({ error: "Company briefs use public sources only." });
     return;
@@ -528,6 +568,8 @@ router.post("/briefings", async (req, res): Promise<void> => {
       windowStart,
       windowEnd,
       input.data.context?.trim() || undefined,
+      publicRoleTitle,
+      companyName,
     );
 
     const relevant = collected.filter(({ source, searchedAs }) =>
@@ -548,6 +590,8 @@ router.post("/briefings", async (req, res): Promise<void> => {
       subject: input.data.subject.trim(),
       subjectType: input.data.subjectType,
       personRole: input.data.personRole,
+      publicRoleTitle,
+      companyName,
       sourceMode: "public",
       topics,
       meetingAt: meetingAt.toISOString(),

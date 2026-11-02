@@ -19,6 +19,10 @@ export interface BriefingInput {
   subjectType: BriefingInputSubjectType;
   /** @nullable */
   personRole: BriefingInputPersonRole;
+  /** @maxLength 80 */
+  publicRoleTitle?: string;
+  /** @maxLength 200 */
+  companyName?: string;
   sourceMode: BriefingInputSourceMode;
   meetingAt: Date;
   /** @maxLength 1500 */

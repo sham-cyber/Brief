@@ -18,3 +18,4 @@
 //   export type Post = typeof postsTable.$inferSelect;
 
 export * from "./ai-guardrails";
+export * from "./person-profiles";

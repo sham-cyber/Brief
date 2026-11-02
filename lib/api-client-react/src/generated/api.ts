@@ -23,7 +23,11 @@ import type {
   BriefingInput,
   BriefingResult,
   Error,
-  HealthStatus
+  HealthStatus,
+  PersonProfile,
+  PersonProfileDeleteResult,
+  PersonProfileInput,
+  PersonProfileList
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -217,5 +221,244 @@ export const useCreateBriefing = <TError = ErrorType<Error>,
         TContext
       > => {
       return useMutation(getCreateBriefingMutationOptions(options));
+    }
+
+export const getListPersonProfilesUrl = () => {
+
+
+
+
+  return `/api/person-profiles`
+}
+
+/**
+ * @summary List saved person profiles for the signed-in user
+ */
+export const listPersonProfiles = async ( options?: Parameters<typeof customFetch>[1]): Promise<PersonProfileList> => {
+
+  return customFetch<PersonProfileList>(getListPersonProfilesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListPersonProfilesQueryKey = () => {
+    return [
+    `/api/person-profiles`
+    ] as const;
+    }
+
+
+export const getListPersonProfilesQueryOptions = <TData = Awaited<ReturnType<typeof listPersonProfiles>>, TError = ErrorType<Error>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPersonProfiles>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListPersonProfilesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPersonProfiles>>> = ({ signal }) => listPersonProfiles({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listPersonProfiles>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListPersonProfilesQueryResult = NonNullable<Awaited<ReturnType<typeof listPersonProfiles>>>
+export type ListPersonProfilesQueryError = ErrorType<Error>
+
+
+/**
+ * @summary List saved person profiles for the signed-in user
+ */
+
+export function useListPersonProfiles<TData = Awaited<ReturnType<typeof listPersonProfiles>>, TError = ErrorType<Error>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPersonProfiles>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListPersonProfilesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSavePersonProfileUrl = () => {
+
+
+
+
+  return `/api/person-profiles`
+}
+
+/**
+ * @summary Save person details to the signed-in user's account
+ */
+export const savePersonProfile = async (personProfileInput: PersonProfileInput, options?: Parameters<typeof customFetch>[1]): Promise<PersonProfile> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<PersonProfile>(getSavePersonProfileUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(personProfileInput)
+  }
+);}
+
+
+
+
+
+export const getSavePersonProfileMutationKey = () => ['savePersonProfile'] as const;
+
+export const getSavePersonProfileMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof savePersonProfile>>, TError,SavePersonProfileMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof savePersonProfile>>, TError,SavePersonProfileMutationVariables, TContext> => {
+
+const mutationKey = getSavePersonProfileMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof savePersonProfile>>, SavePersonProfileMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  savePersonProfile(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SavePersonProfileMutationResult = NonNullable<Awaited<ReturnType<typeof savePersonProfile>>>
+    export type SavePersonProfileMutationBody = BodyType<PersonProfileInput>
+    export type SavePersonProfileMutationError = ErrorType<Error>
+    export type SavePersonProfileMutationVariables = {data: BodyType<PersonProfileInput>}
+
+    /**
+ * @summary Save person details to the signed-in user's account
+ */
+export const useSavePersonProfile = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof savePersonProfile>>, TError,SavePersonProfileMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof savePersonProfile>>,
+        TError,
+        SavePersonProfileMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSavePersonProfileMutationOptions(options));
+    }
+
+export const getDeletePersonProfileUrl = (profileId: string,) => {
+
+
+
+
+  return `/api/person-profiles/${profileId}`
+}
+
+/**
+ * @summary Remove a saved person profile from the signed-in user's account
+ */
+export const deletePersonProfile = async (profileId: string, options?: Parameters<typeof customFetch>[1]): Promise<PersonProfileDeleteResult> => {
+
+  return customFetch<PersonProfileDeleteResult>(getDeletePersonProfileUrl(profileId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeletePersonProfileMutationKey = () => ['deletePersonProfile'] as const;
+
+export const getDeletePersonProfileMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePersonProfile>>, TError,DeletePersonProfileMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deletePersonProfile>>, TError,DeletePersonProfileMutationVariables, TContext> => {
+
+const mutationKey = getDeletePersonProfileMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deletePersonProfile>>, DeletePersonProfileMutationVariables> = (props) => {
+          const {profileId} = props ?? {};
+
+          return  deletePersonProfile(profileId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeletePersonProfileMutationResult = NonNullable<Awaited<ReturnType<typeof deletePersonProfile>>>
+
+    export type DeletePersonProfileMutationError = ErrorType<Error>
+    export type DeletePersonProfileMutationVariables = {profileId: string}
+
+    /**
+ * @summary Remove a saved person profile from the signed-in user's account
+ */
+export const useDeletePersonProfile = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePersonProfile>>, TError,DeletePersonProfileMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deletePersonProfile>>,
+        TError,
+        DeletePersonProfileMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeletePersonProfileMutationOptions(options));
     }
 

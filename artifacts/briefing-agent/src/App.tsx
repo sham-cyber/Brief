@@ -79,8 +79,29 @@ type AiGuardrailsStatus = {
   aiProviderConnected: boolean;
 };
 
+type SavedPersonProfile = {
+  id: string;
+  personName: string;
+  personRole: PersonRole;
+  publicRoleTitle: string | null;
+  companyName: string | null;
+  updatedAt: string;
+};
+
 function apiUrl(path: string) {
   return `${basePath}/api/${path}`;
+}
+
+async function sendAccountRequest(path: string, method: string, body?: unknown) {
+  const response = await fetch(apiUrl(path), {
+    method,
+    credentials: 'include',
+    headers: body ? { 'content-type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const payload = await response.json().catch(() => ({})) as { error?: string };
+  if (!response.ok) throw new Error(payload.error ?? 'The account request failed.');
+  return payload;
 }
 
 async function sendGuardrailRequest(path: string, method: string, body?: unknown) {
@@ -252,6 +273,17 @@ function AiGuardrailPanel() {
 
 function personRoleLabel(role: PersonRole | null | undefined) {
   return PERSON_ROLES.find((option) => option.value === role)?.label ?? '';
+}
+
+function personContextLabel(
+  role: PersonRole | null | undefined,
+  publicRoleTitle?: string | null,
+  companyName?: string | null,
+) {
+  if (role === 'mp') return `Government · ${publicRoleTitle || 'MP'}`;
+  if (role === 'business_owner') return `${personRoleLabel(role)} · ${companyName || 'Company not set'}`;
+  if (role === 'corporate') return 'Corporate · Private entity';
+  return '';
 }
 
 function speechText(value: string) {
@@ -608,7 +640,7 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
       `${result.subject} — ${activeTopic === 'all' ? 'meeting briefing' : `${TOPICS.find((topic) => topic.value === activeTopic)?.label ?? 'Topic'} briefing`}`,
       `Meeting: ${formatDate(result.meetingAt)}`,
       `Research window: ${formatWindow(result.windowStart, result.windowEnd)}`,
-      ...(result.personRole ? [`Briefing context: ${personRoleLabel(result.personRole)}`] : []),
+      ...(result.personRole ? [`Briefing context: ${personContextLabel(result.personRole, result.publicRoleTitle, result.companyName)}`] : []),
       '',
       'OVERVIEW',
       `${visibleOverview.text}${visibleOverview.sourceIds.length ? ` [${visibleOverview.sourceIds.join(', ')}]` : ''}`,
@@ -666,7 +698,7 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
         <div className="absolute -right-2 -top-12 h-44 w-44 rounded-full border border-white/10" aria-hidden="true" />
         <div className="relative">
           <p className="font-mono text-[10px] uppercase tracking-[.2em] text-[#c5b9e8]">
-            {result.subjectType === 'person' && result.personRole ? `${personRoleLabel(result.personRole)} · ` : ''}{result.subjectType} briefing
+            {result.subjectType === 'person' && result.personRole ? `${personContextLabel(result.personRole, result.publicRoleTitle, result.companyName)} · ` : ''}{result.subjectType} briefing
           </p>
           <h2 className="mt-4 max-w-3xl font-serif text-4xl leading-[.98] tracking-[-.02em] sm:text-5xl">{result.subject}</h2>
           <div className="mt-6 flex flex-wrap gap-x-6 gap-y-3 text-xs text-[#d2d0da]">
@@ -792,7 +824,7 @@ function PrintOnePageBrief({ result, activeTopic }: { result: BriefingResult; ac
   return (
     <section className="print-only print-one-page" aria-label="One-page printable briefing" data-testid="print-one-page-brief">
       <header className="print-page-header">
-        <p>{result.subjectType === 'person' && result.personRole ? `${personRoleLabel(result.personRole)} · ` : ''}{result.subjectType} briefing · {activeTopic === 'all' ? 'all selected topics' : `${TOPICS.find((topic) => topic.value === activeTopic)?.label} tab`} · 30-day research window</p>
+        <p>{result.subjectType === 'person' && result.personRole ? `${personContextLabel(result.personRole, result.publicRoleTitle, result.companyName)} · ` : ''}{result.subjectType} briefing · {activeTopic === 'all' ? 'all selected topics' : `${TOPICS.find((topic) => topic.value === activeTopic)?.label} tab`} · 30-day research window</p>
         <h1>{result.subject}</h1>
         <div>{formatDate(result.meetingAt)} <span aria-hidden="true">·</span> {formatWindow(result.windowStart, result.windowEnd)}</div>
       </header>
@@ -854,11 +886,18 @@ function PrintReferences({ sourceIds, sources }: { sourceIds: string[]; sources:
 }
 
 function Home() {
+  const { isLoaded: accountLoaded, isSignedIn } = useUser();
   const abortControllerRef = useRef<AbortController | null>(null);
   const mutation = useCreateBriefing({ request: { get signal() { return abortControllerRef.current?.signal; } } });
   const [subject, setSubject] = useState('');
   const [subjectType, setSubjectType] = useState<'company' | 'person'>('company');
   const [personRole, setPersonRole] = useState<PersonRole | null>(null);
+  const [publicRoleTitle, setPublicRoleTitle] = useState('');
+  const [companyName, setCompanyName] = useState('');
+  const [savedPersonProfiles, setSavedPersonProfiles] = useState<SavedPersonProfile[]>([]);
+  const [selectedSavedProfileId, setSelectedSavedProfileId] = useState('');
+  const [profileRequestPending, setProfileRequestPending] = useState(false);
+  const [profileMessage, setProfileMessage] = useState('');
   const [sourceMode, setSourceMode] = useState<SourceMode>('public');
   const [topics, setTopics] = useState<Topic[]>(TOPICS.map((topic) => topic.value));
   const [meetingAt, setMeetingAt] = useState('');
@@ -868,15 +907,123 @@ function Home() {
   const [timedOutKey, setTimedOutKey] = useState('');
   const activeRequestKey = useRef('');
   const timeoutRef = useRef<number | undefined>(undefined);
-  const requestKey = JSON.stringify([subject.trim(), subjectType, personRole, sourceMode, meetingAt, topics, context.trim()]);
+  const requestKey = JSON.stringify([subject.trim(), subjectType, personRole, publicRoleTitle.trim(), companyName.trim(), sourceMode, meetingAt, topics, context.trim()]);
   const meetingTimeIsValid = Boolean(meetingAt && !Number.isNaN(new Date(meetingAt).getTime()));
   const hasValidSubject = subject.trim().length >= 2;
-  const hasValidRole = subjectType !== 'person' || Boolean(personRole);
+  const hasValidRoleSelection = subjectType !== 'person' || Boolean(personRole);
+  const hasValidPersonDetails = subjectType !== 'person' || (
+    personRole === 'business_owner'
+      ? companyName.trim().length >= 2
+      : personRole === 'mp'
+        ? publicRoleTitle.trim().length >= 2
+        : personRole === 'corporate'
+  );
+  const hasValidRole = hasValidRoleSelection && hasValidPersonDetails;
   const hasTopics = topics.length > 0;
   const hasCurrentResult = Boolean(mutation.data && resultKey === requestKey);
   const result = hasCurrentResult ? mutation.data : undefined;
   const currentRequestIsPending = mutation.isPending && activeRequestKey.current === requestKey;
   const currentRequestFailed = (mutation.isError && failedKey === requestKey) || timedOutKey === requestKey;
+  const selectedSavedProfile = savedPersonProfiles.find((profile) => profile.id === selectedSavedProfileId);
+  const selectedProfileMatchesForm = Boolean(
+    selectedSavedProfile &&
+    selectedSavedProfile.personName.trim().toLocaleLowerCase() === subject.trim().toLocaleLowerCase() &&
+    selectedSavedProfile.personRole === personRole,
+  );
+
+  useEffect(() => {
+    if (!accountLoaded) return;
+    if (!isSignedIn) {
+      setSavedPersonProfiles([]);
+      setSelectedSavedProfileId('');
+      setProfileRequestPending(false);
+      setProfileMessage('');
+      return;
+    }
+
+    let cancelled = false;
+    setProfileRequestPending(true);
+    void sendAccountRequest('person-profiles', 'GET')
+      .then((payload) => {
+        if (!cancelled) {
+          const profiles = (payload as { profiles?: SavedPersonProfile[] }).profiles;
+          setSavedPersonProfiles(Array.isArray(profiles) ? profiles : []);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setProfileMessage(error instanceof Error ? error.message : 'Saved details could not be loaded.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setProfileRequestPending(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accountLoaded, isSignedIn]);
+
+  const loadSavedPersonProfile = (profileId: string) => {
+    setSelectedSavedProfileId(profileId);
+    const profile = savedPersonProfiles.find((item) => item.id === profileId);
+    if (!profile) return;
+    setSubjectType('person');
+    setSourceMode('public');
+    setPersonRole(profile.personRole);
+    setPublicRoleTitle(profile.publicRoleTitle ?? (profile.personRole === 'mp' ? 'MP' : ''));
+    setCompanyName(profile.companyName ?? '');
+    setSubject(profile.personName);
+    setProfileMessage(`Loaded ${profile.personName}.`);
+  };
+
+  const savePersonProfile = async () => {
+    if (!isSignedIn || !personRole || !hasValidSubject || !hasValidPersonDetails) return;
+    setProfileRequestPending(true);
+    setProfileMessage('');
+    try {
+      const saved = await sendAccountRequest('person-profiles', 'PUT', {
+        personName: subject.trim(),
+        personRole,
+        publicRoleTitle: personRole === 'mp' ? publicRoleTitle.trim() : null,
+        companyName: personRole === 'business_owner' ? companyName.trim() : null,
+      }) as SavedPersonProfile;
+      setSavedPersonProfiles((profiles) => [
+        saved,
+        ...profiles.filter((profile) =>
+          profile.id !== saved.id &&
+          !(profile.personName.trim().toLocaleLowerCase() === saved.personName.trim().toLocaleLowerCase() && profile.personRole === saved.personRole),
+        ),
+      ].slice(0, 50));
+      setSelectedSavedProfileId(saved.id);
+      setProfileMessage(`Saved ${saved.personName} to your account.`);
+    } catch (error) {
+      setProfileMessage(error instanceof Error ? error.message : 'Person details could not be saved.');
+    } finally {
+      setProfileRequestPending(false);
+    }
+  };
+
+  const forgetSavedPersonProfile = async () => {
+    if (!isSignedIn || !selectedProfileMatchesForm || !selectedSavedProfile) return;
+    const confirmed = window.confirm(
+      `Remove ${selectedSavedProfile.personName} from your saved person details? This will not remove a briefing already generated.`,
+    );
+    if (!confirmed) return;
+
+    setProfileRequestPending(true);
+    setProfileMessage('');
+    try {
+      await sendAccountRequest(`person-profiles/${selectedSavedProfile.id}`, 'DELETE');
+      setSavedPersonProfiles((profiles) => profiles.filter((profile) => profile.id !== selectedSavedProfile.id));
+      setSelectedSavedProfileId('');
+      setProfileMessage(`Removed ${selectedSavedProfile.personName} from your saved details.`);
+    } catch (error) {
+      setProfileMessage(error instanceof Error ? error.message : 'Saved details could not be removed.');
+    } finally {
+      setProfileRequestPending(false);
+    }
+  };
   const researchWindow = useMemo(() => {
     if (!meetingTimeIsValid) return '';
     const end = new Date();
@@ -904,6 +1051,8 @@ function Home() {
           subject: subject.trim(),
           subjectType,
           personRole: subjectType === 'person' ? personRole : null,
+          ...(subjectType === 'person' && personRole === 'mp' ? { publicRoleTitle: publicRoleTitle.trim() } : {}),
+          ...(subjectType === 'person' && personRole === 'business_owner' ? { companyName: companyName.trim() } : {}),
           sourceMode,
           meetingAt: new Date(meetingAt).toISOString(),
           topics,
@@ -926,7 +1075,7 @@ function Home() {
         },
       },
     );
-  }, [context, hasTopics, hasValidRole, hasValidSubject, meetingAt, meetingTimeIsValid, mutation.isPending, mutation.mutate, personRole, sourceMode, subject, subjectType, topics]);
+  }, [companyName, context, hasTopics, hasValidRole, hasValidSubject, meetingAt, meetingTimeIsValid, mutation.isPending, mutation.mutate, personRole, publicRoleTitle, sourceMode, subject, subjectType, topics]);
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -955,7 +1104,13 @@ function Home() {
     ? !hasValidSubject
       ? 'Not ready — enter a company or person.'
       : !hasValidRole
-        ? 'Not ready — choose Chairman / CEO, MP, or Corporate.'
+        ? !hasValidRoleSelection
+          ? 'Not ready — choose Chairman / CEO, MP, or Corporate.'
+          : personRole === 'business_owner'
+            ? 'Not ready — enter the Chairman / CEO’s company.'
+            : personRole === 'mp'
+              ? 'Not ready — enter the public office or title.'
+              : 'Not ready — complete the person context.'
         : !meetingTimeIsValid
           ? 'Not ready — set a meeting time.'
           : !hasTopics
@@ -982,8 +1137,12 @@ function Home() {
       runBriefing(requestKey);
     } else if (!hasValidSubject) {
       document.querySelector<HTMLInputElement>('#subject')?.focus();
-    } else if (!hasValidRole) {
+    } else if (!hasValidRoleSelection) {
       document.querySelector<HTMLInputElement>('[data-testid^="radio-person-role-"]')?.focus();
+    } else if (subjectType === 'person' && personRole === 'business_owner' && !hasValidPersonDetails) {
+      document.querySelector<HTMLInputElement>('#person-company')?.focus();
+    } else if (subjectType === 'person' && personRole === 'mp' && !hasValidPersonDetails) {
+      document.querySelector<HTMLInputElement>('#person-public-role')?.focus();
     } else if (!hasTopics) {
       document.querySelector<HTMLInputElement>('[data-testid^="checkbox-topic-"]')?.focus();
     } else if (sourceMode === 'private') {
@@ -1064,7 +1223,7 @@ function Home() {
                   <fieldset className="mt-5" aria-describedby="person-role-note">
                     <legend className="mb-2 text-xs font-semibold text-[#35364a]">Person’s briefing context</legend>
                     <p id="person-role-note" className="mb-2 text-[10px] leading-relaxed text-[#777280]">
-                      Choose the field to focus the public search. This does not grant access to private accounts.
+                      MP is the government/public-office path; Corporate means a private-entity person. These choices only focus public-source research.
                     </p>
                     <div className="grid grid-cols-3 gap-2">
                       {PERSON_ROLES.map((role) => (
@@ -1081,7 +1240,11 @@ function Home() {
                             name="personRole"
                             value={role.value}
                             checked={personRole === role.value}
-                            onChange={() => setPersonRole(role.value)}
+                            onChange={() => {
+                              setPersonRole(role.value);
+                              setPublicRoleTitle(role.value === 'mp' ? 'MP' : '');
+                              if (role.value !== 'business_owner') setCompanyName('');
+                            }}
                             className="accent-[#655487]"
                             data-testid={`radio-person-role-${role.value}`}
                           />
@@ -1090,6 +1253,107 @@ function Home() {
                       ))}
                     </div>
                   </fieldset>
+                  {personRole === 'business_owner' && (
+                    <label htmlFor="person-company" className="mt-4 block">
+                      <span className="mb-1.5 block text-xs font-semibold text-[#35364a]">Chairman / CEO company</span>
+                      <input
+                        id="person-company"
+                        value={companyName}
+                        onChange={(event) => setCompanyName(event.target.value)}
+                        required
+                        minLength={2}
+                        maxLength={200}
+                        placeholder="For example, Finolex Cables"
+                        className="h-11 w-full rounded-lg border border-[#d9d4df] bg-[#fffefa] px-3 text-sm text-foreground placeholder:text-[#aaa4af] focus:border-[#8c7dae] focus:outline-none"
+                        data-testid="input-person-company"
+                      />
+                    </label>
+                  )}
+                  {personRole === 'mp' && (
+                    <label htmlFor="person-public-role" className="mt-4 block">
+                      <span className="mb-1.5 block text-xs font-semibold text-[#35364a]">Government office or title</span>
+                      <input
+                        id="person-public-role"
+                        value={publicRoleTitle}
+                        onChange={(event) => setPublicRoleTitle(event.target.value)}
+                        required
+                        minLength={2}
+                        maxLength={80}
+                        placeholder="MP or Corporator"
+                        className="h-11 w-full rounded-lg border border-[#d9d4df] bg-[#fffefa] px-3 text-sm text-foreground placeholder:text-[#aaa4af] focus:border-[#8c7dae] focus:outline-none"
+                        data-testid="input-person-public-role"
+                      />
+                    </label>
+                  )}
+                  <section className="mt-4 rounded-xl border border-[#e2dde8] bg-white/70 p-3" aria-label="Saved person details">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <h3 className="text-xs font-semibold text-[#35364a]">Saved person details</h3>
+                        <p className="mt-1 text-[10px] leading-relaxed text-[#777280]">Optional. Saved only to your signed-in account when you choose Save.</p>
+                      </div>
+                      {accountLoaded && !isSignedIn && (
+                        <a href={`${basePath}/sign-in`} className="font-mono text-[9px] uppercase tracking-wide text-[#655487] underline underline-offset-4">
+                          Sign in to save
+                        </a>
+                      )}
+                    </div>
+                    {accountLoaded && isSignedIn && (
+                      <>
+                        {savedPersonProfiles.length > 0 ? (
+                          <label className="mt-3 block">
+                            <span className="mb-1 block text-[10px] font-semibold text-[#625d69]">Load a saved person</span>
+                            <select
+                              value={selectedSavedProfileId}
+                              onChange={(event) => loadSavedPersonProfile(event.target.value)}
+                              className="h-10 w-full rounded-lg border border-[#d9d4df] bg-[#fffefa] px-3 text-xs text-foreground focus:border-[#8c7dae] focus:outline-none"
+                              data-testid="select-saved-person-profile"
+                            >
+                              <option value="">Choose saved person details</option>
+                              {savedPersonProfiles.map((profile) => {
+                                const extra = profile.personRole === 'business_owner'
+                                  ? profile.companyName
+                                  : profile.personRole === 'mp'
+                                    ? profile.publicRoleTitle
+                                    : 'Private entity';
+                                return (
+                                  <option key={profile.id} value={profile.id}>
+                                    {profile.personName} · {personRoleLabel(profile.personRole)}{extra ? ` · ${extra}` : ''}
+                                  </option>
+                                );
+                              })}
+                            </select>
+                          </label>
+                        ) : (
+                          <p className="mt-2 text-[10px] text-[#777280]">
+                            {profileRequestPending ? 'Loading saved details…' : 'No saved person details yet.'}
+                          </p>
+                        )}
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void savePersonProfile()}
+                            disabled={profileRequestPending || !personRole || !hasValidSubject || !hasValidPersonDetails}
+                            className="h-9 rounded-lg bg-[#292e46] px-3 text-[10px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                            data-testid="button-save-person-profile"
+                          >
+                            {profileRequestPending ? 'Saving…' : selectedProfileMatchesForm ? 'Update saved details' : 'Save person details'}
+                          </button>
+                          {selectedProfileMatchesForm && (
+                            <button
+                              type="button"
+                              onClick={() => void forgetSavedPersonProfile()}
+                              disabled={profileRequestPending}
+                              className="h-9 rounded-lg border border-[#e5c5c0] px-3 text-[10px] font-semibold text-[#8f4039] disabled:cursor-not-allowed disabled:opacity-50"
+                              data-testid="button-remove-person-profile"
+                            >
+                              Remove saved details
+                            </button>
+                          )}
+                        </div>
+                      </>
+                    )}
+                    {profileMessage && <p className="mt-2 text-[10px] text-[#625d69]" role="status" aria-live="polite">{profileMessage}</p>}
+                  </section>
                   <fieldset className="mt-5">
                     <legend className="mb-2 text-xs font-semibold text-[#35364a]">Source mode</legend>
                     <div className="grid max-w-md grid-cols-2 gap-2">
