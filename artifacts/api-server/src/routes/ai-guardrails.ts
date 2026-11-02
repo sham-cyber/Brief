@@ -9,7 +9,9 @@ const router: IRouter = Router();
 const scryptAsync = promisify(scrypt);
 const PASSCODE_MIN_LENGTH = 8;
 const PASSCODE_MAX_LENGTH = 128;
-const AI_REQUESTS_PER_BRIEFING = 1;
+const AI_REQUESTS_PER_TAB = 1;
+const AI_SPEECH_LIMIT_SECONDS = 120;
+const aiRequestTab = z.enum(["news", "hire", "launch", "financial", "risk"]);
 
 const passcodeBody = z.object({
   passcode: z.string().min(PASSCODE_MIN_LENGTH).max(PASSCODE_MAX_LENGTH),
@@ -17,6 +19,7 @@ const passcodeBody = z.object({
 
 const briefingRequestBody = z.object({
   briefingId: z.string().uuid(),
+  tab: aiRequestTab,
 });
 
 function aiServerEnabled() {
@@ -66,7 +69,8 @@ router.get("/ai/guardrails", async (req, res): Promise<void> => {
         result.rows[0]?.is_activated === true &&
         aiServerEnabled() &&
         aiProviderAvailableForUser(userId),
-      requestsPerBriefing: AI_REQUESTS_PER_BRIEFING,
+      requestsPerTab: AI_REQUESTS_PER_TAB,
+      speechLimitSeconds: AI_SPEECH_LIMIT_SECONDS,
       aiProviderConnected: aiProviderAvailableForUser(userId),
     });
   } catch {
@@ -175,7 +179,11 @@ router.post("/ai/guardrails/activate", async (req, res): Promise<void> => {
       "UPDATE user_ai_guardrails SET is_activated = true, failed_attempts = 0, locked_until = NULL, updated_at = NOW() WHERE user_id = $1",
       [userId],
     );
-    res.json({ activated: true, requestsPerBriefing: AI_REQUESTS_PER_BRIEFING });
+    res.json({
+      activated: true,
+      requestsPerTab: AI_REQUESTS_PER_TAB,
+      speechLimitSeconds: AI_SPEECH_LIMIT_SECONDS,
+    });
   } catch {
     res.status(503).json({ error: "AI activation is temporarily unavailable." });
   }
@@ -202,6 +210,7 @@ router.post("/ai/guardrails/deactivate", async (req, res): Promise<void> => {
 export async function reserveAiBriefingRequest(
   userId: string,
   briefingId: string,
+  tab: z.infer<typeof aiRequestTab>,
 ): Promise<boolean> {
   if (!aiServerEnabled()) return false;
 
@@ -211,15 +220,17 @@ export async function reserveAiBriefingRequest(
   );
   if (state.rows[0]?.is_activated !== true) return false;
 
-  const input = briefingRequestBody.safeParse({ briefingId });
+  const input = briefingRequestBody.safeParse({ briefingId, tab });
   if (!input.success) return false;
 
+  // Reuse the existing unique (user_id, briefing_id) key as a tab-scoped reservation.
+  const tabScopedBriefingId = `${input.data.briefingId}:${input.data.tab}`;
   const reservation = await pool.query(
     `INSERT INTO ai_briefing_requests (user_id, briefing_id)
      VALUES ($1, $2)
      ON CONFLICT (user_id, briefing_id) DO NOTHING
      RETURNING briefing_id`,
-    [userId, input.data.briefingId],
+    [userId, tabScopedBriefingId],
   );
   return reservation.rowCount === 1;
 }

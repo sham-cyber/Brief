@@ -69,13 +69,15 @@ const PERSON_ROLES = [
 type PersonRole = typeof PERSON_ROLES[number]['value'];
 type SourceMode = 'public' | 'private';
 const SPEECH_WORD_LIMIT = 280;
-const AI_REQUESTS_PER_BRIEFING = 1;
+const AI_REQUESTS_PER_TAB = 1;
+const AI_SPEECH_LIMIT_SECONDS = 120;
 
 type AiGuardrailsStatus = {
   serverEnabled: boolean;
   passcodeConfigured: boolean;
   activated: boolean;
-  requestsPerBriefing: number;
+  requestsPerTab: number;
+  speechLimitSeconds: number;
   aiProviderConnected: boolean;
 };
 
@@ -225,7 +227,7 @@ function AiGuardrailPanel() {
         </span>
       </div>
       <p className="mt-2 leading-relaxed text-muted-foreground">
-        Server switch: {status?.serverEnabled ? 'ON' : 'OFF'} · {status?.requestsPerBriefing ?? AI_REQUESTS_PER_BRIEFING} AI request per briefing. Your phone number is not used as a password.
+        Server switch: {status?.serverEnabled ? 'ON' : 'OFF'} · {status?.requestsPerTab ?? AI_REQUESTS_PER_TAB} AI request per selected tab · {Math.floor((status?.speechLimitSeconds ?? AI_SPEECH_LIMIT_SECONDS) / 60)}-minute total speech cap across the briefing. Your phone number is not used as a password.
       </p>
       {status ? (
         <>
