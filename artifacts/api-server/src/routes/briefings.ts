@@ -5,6 +5,7 @@ import {
   CreateBriefingResponse,
   GetBriefingSourceStatusResponse,
 } from "@workspace/api-zod";
+import { getAuth } from "@clerk/express";
 import { searchTavily, TavilySearchError } from "../lib/tavily";
 
 const router: IRouter = Router();
@@ -555,6 +556,11 @@ function buildBriefingContent(
 }
 
 router.post("/briefings", async (req, res): Promise<void> => {
+  if (!getAuth(req).userId) {
+    res.status(401).json({ error: "Sign in before using the briefing search." });
+    return;
+  }
+
   const input = CreateBriefingBody.safeParse(req.body);
   if (!input.success) {
     res.status(400).json({

@@ -1043,7 +1043,7 @@ function Home() {
   }, [meetingAt, meetingTimeIsValid]);
 
   const runBriefing = useCallback((key: string) => {
-    if (!tavilyConfigured || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || sourceMode !== 'public' || mutation.isPending) return;
+    if (!isSignedIn || !tavilyConfigured || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || sourceMode !== 'public' || mutation.isPending) return;
     activeRequestKey.current = key;
     setFailedKey('');
     setTimedOutKey('');
@@ -1086,7 +1086,7 @@ function Home() {
         },
       },
     );
-  }, [companyName, context, hasTopics, hasValidRole, hasValidSubject, meetingAt, meetingTimeIsValid, mutation.isPending, mutation.mutate, personRole, publicRoleTitle, sourceMode, subject, subjectType, tavilyConfigured, topics]);
+  }, [companyName, context, hasTopics, hasValidRole, hasValidSubject, isSignedIn, meetingAt, meetingTimeIsValid, mutation.isPending, mutation.mutate, personRole, publicRoleTitle, sourceMode, subject, subjectType, tavilyConfigured, topics]);
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1095,7 +1095,7 @@ function Home() {
 
   const apiError = mutation.error as (Error & { data?: { error?: string } }) | null;
   const errorMessage = apiError?.data?.error ?? apiError?.message ?? 'The briefing could not be generated. Check your connection and try again.';
-  const readinessState = !tavilyConfigured || !meetingTimeIsValid || !hasValidSubject || !hasValidRole || !hasTopics || sourceMode === 'private'
+  const readinessState = !isSignedIn || !tavilyConfigured || !meetingTimeIsValid || !hasValidSubject || !hasValidRole || !hasTopics || sourceMode === 'private'
     ? 'not-ready'
     : currentRequestFailed
       ? 'error'
@@ -1111,7 +1111,9 @@ function Home() {
     ready: 'border-[#c7dfd2] bg-[#edf6f0] text-[#2f6d4c]',
   }[readinessState];
   const readinessMessage = readinessState === 'not-ready'
-    ? sourceStatusQuery.isError
+    ? !isSignedIn
+      ? 'Sign in before using the briefing.'
+      : sourceStatusQuery.isError
       ? 'Not ready — the server could not confirm Tavily status. Check the API Server workflow.'
       : !tavilyConfigured
         ? 'Not ready — add TAVILY_API_KEY in Replit Secrets, then restart API Server.'
@@ -1145,7 +1147,9 @@ function Home() {
       ? 'brief-status-pending'
       : 'brief-status-not-ready';
   const handleBriefStatusClick = () => {
-    if (readinessState === 'ready') {
+    if (!isSignedIn) {
+      window.location.assign(`${basePath}/sign-in`);
+    } else if (readinessState === 'ready') {
       document.querySelector('[data-testid="briefing-result"]')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } else if (readinessState === 'error') {
       runBriefing(requestKey);
@@ -1231,7 +1235,19 @@ function Home() {
               </div>
             </section>
 
-            <form onSubmit={submit} className="rounded-2xl border border-[#d8d2df] bg-[#fbfaf6] p-5 shadow-[0_12px_35px_rgba(38,37,55,.06)] sm:p-6" aria-describedby="form-note">
+            <form onSubmit={submit} className="rounded-2xl border border-[#d8d2df] bg-[#fbfaf6] p-5 shadow-[0_12px_35px_rgba(38,37,55,.06)] sm:p-6" aria-describedby={isSignedIn ? 'form-note' : undefined}>
+              {!isSignedIn ? (
+                <section className="rounded-xl border border-[#d8d2df] bg-[#f4f1f8] px-5 py-6 sm:px-7" aria-label="Sign in before starting a briefing" data-testid="signin-before-briefing">
+                  <p className="font-mono text-[10px] uppercase tracking-[.15em] text-[#766a93]">Account required</p>
+                  <h2 className="mt-2 font-serif text-2xl text-[#292e46]">Sign in before you brief.</h2>
+                  <p className="mt-2 max-w-xl text-sm leading-relaxed text-[#625d69]">Only signed-in users can start a source search. The pilot uses this project’s Tavily credits, so every crawl is tied to an account instead of being open to anonymous visitors.</p>
+                  <div className="mt-5 flex flex-wrap items-center gap-3">
+                    <a href={`${basePath}/sign-in`} className="inline-flex h-10 items-center justify-center rounded-lg bg-[#292e46] px-4 text-sm font-semibold text-white transition hover:bg-[#3c4160]" data-testid="button-sign-in-before-briefing">Sign in to use the briefing</a>
+                    <a href={`${basePath}/sign-up`} className="text-sm font-semibold text-[#594b87] underline underline-offset-4" data-testid="button-create-account-before-briefing">Create an account</a>
+                  </div>
+                </section>
+              ) : (
+              <>
               <div className="mb-5 flex items-center justify-between border-b border-[#e5e0e7] pb-3">
                 <span className="font-mono text-[10px] uppercase tracking-[.15em] text-[#6b6278]">New conversation</span>
                 <div className="flex items-center gap-3">
@@ -1570,6 +1586,8 @@ function Home() {
                     : 'Tavily is not connected. Add the TAVILY_API_KEY secret to the API Server, then restart that workflow. This app does not expose the key.'}
                 {' '}One manual crawl only; no scheduled or meeting-time searches. Maximum crawl time: two minutes.
               </p>
+              </>
+              )}
             </form>
 
             {mutation.isPending && (
