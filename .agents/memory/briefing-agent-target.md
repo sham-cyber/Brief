@@ -11,6 +11,10 @@ The user means the existing Briefing Agent in this workspace when referring to t
 
 The optional meeting-context note should prioritize matching public results (for example, “new cable plant”) without changing the 30-day window or selected categories.
 
+**Why:** The user set an app-wide limit of 10 Tavily requests per rolling five minutes.
+
+**How to apply:** Count each selected topic tab as one request and reserve the full set atomically before sending any Tavily calls.
+
 **Why:** The user confirmed that meeting context should guide which collected results appear first.
 
 **How to apply:** Use context for local relevance ranking; do not append raw free-text context to third-party search queries unless the user is clearly informed and consents.

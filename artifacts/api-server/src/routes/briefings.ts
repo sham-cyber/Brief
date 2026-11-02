@@ -13,6 +13,10 @@ import {
   TAVILY_CRAWL_HARD_STOP_MS,
   TAVILY_DAILY_LIMIT_MS,
 } from "../lib/tavily-quota";
+import {
+  reserveTavilyRequestSlots,
+  TAVILY_REQUEST_LIMIT,
+} from "../lib/tavily-rate-limit";
 import { searchTavily, TavilySearchError } from "../lib/tavily";
 
 const router: IRouter = Router();
@@ -780,6 +784,32 @@ router.post("/briefings", async (req, res): Promise<void> => {
       : "";
     res.status(429).json({
       error: `The shared two-minute Tavily crawl allowance for the rolling 24-hour period is used.${resetNote}`,
+    });
+    return;
+  }
+
+  let requestRateLimit: Awaited<ReturnType<typeof reserveTavilyRequestSlots>>;
+  try {
+    requestRateLimit = await reserveTavilyRequestSlots(input.data.topics.length);
+  } catch (error) {
+    req.log.error({ error }, "Failed to reserve Tavily request rate-limit slots");
+    await finishTavilyQuotaReservation(userId, quota.reservationId, 0)
+      .catch((finishError) => {
+        req.log.error({ error: finishError }, "Failed to release Tavily crawl quota");
+      });
+    res.status(503).json({
+      error: "The Tavily request limit could not be checked. No search request was sent.",
+    });
+    return;
+  }
+  if (!requestRateLimit.allowed) {
+    await finishTavilyQuotaReservation(userId, quota.reservationId, 0)
+      .catch((error) => {
+        req.log.error({ error }, "Failed to release Tavily crawl quota");
+      });
+    res.setHeader("Retry-After", String(requestRateLimit.retryAfterSeconds));
+    res.status(429).json({
+      error: `Tavily is limited to ${TAVILY_REQUEST_LIMIT} requests per rolling five minutes across the app. Each selected tab counts once. Try again in ${requestRateLimit.retryAfterSeconds} seconds.`,
     });
     return;
   }

@@ -1601,7 +1601,7 @@ function Home() {
                 {sourceStatusQuery.isLoading
                   ? 'Checking Tavily source-search connection…'
                   : tavilyConfigured
-                    ? 'Tavily basic search is connected. Each selected tab sends one separate search request (up to 5 per crawl, with up to 8 results per tab). Positive and negative signals are scored locally from cited source text; fragmentation adds no API request. AI stays off. Results include dates, titles, snippets and links—not full-page crawls. The pilot key uses the project owner’s shared credit balance.'
+                    ? 'Tavily basic search is connected. Each selected tab sends one separate search request (up to 5 per crawl, with up to 8 results per tab). The shared app-wide rate limit is 10 requests per rolling five minutes; each tab counts once. Positive and negative signals are scored locally from cited source text; fragmentation adds no API request. AI stays off. Results include dates, titles, snippets and links—not full-page crawls. The pilot key uses the project owner’s shared credit balance.'
                     : 'Tavily is not connected. Add the TAVILY_API_KEY secret to the API Server, then restart that workflow. This app does not expose the key.'}
                 {' '}Shared across the whole app: 120 seconds of Tavily runtime in a rolling 24 hours. New accounts do not reset the allowance. A crawl has a three-minute backup hard stop. The pilot key still uses the project owner’s shared credit balance.
                 {dailyCrawlRemainingMs !== null && ` ${Math.ceil(dailyCrawlRemainingMs / 1000)} seconds remain in the shared allowance.`}
