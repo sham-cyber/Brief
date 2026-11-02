@@ -19,7 +19,7 @@ const TOPICS = [
 ] as const;
 type Topic = typeof TOPICS[number]['value'];
 const PERSON_ROLES = [
-  { value: 'business_owner', label: 'Business Owner' },
+  { value: 'business_owner', label: 'Chairman / CEO' },
   { value: 'mp', label: 'MP' },
   { value: 'corporate', label: 'Corporate' },
 ] as const;
@@ -809,7 +809,7 @@ function Home() {
                           <span className="mt-2 inline-block font-mono text-[9px] uppercase tracking-wide">Not connected</span>
                         </div>
                       </div>
-                      <p className="mt-3">Both connection methods are planned where the provider supports them. User-specific sign-in and secure credential storage must be ready before any private crawl is enabled. The account owner or authorized PA must approve access.</p>
+                      <p className="mt-3">Each signed-in user will use their own provider connection or credentials, and provider charges stay on that user’s provider account. Both connection methods are planned where supported. Secure per-user sign-in and credential storage must be ready before any private crawl is enabled. The account owner or authorized PA must approve access.</p>
                     </div>
                   )}
                 </>
