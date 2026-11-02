@@ -1160,7 +1160,7 @@ function Home() {
         : crawlAlreadyActive
           ? 'Not ready — a Tavily crawl is already running against the shared app allowance.'
         : crawlBudgetExhausted
-          ? `Not ready — the app-wide rolling 24-hour Tavily allowance is used${dailyCrawlResetsAt ? `; it resets ${new Date(dailyCrawlResetsAt).toLocaleString()}` : ''}.`
+          ? `Not ready — today's app-wide Tavily allowance is used${dailyCrawlResetsAt ? `; it resets at ${new Date(dailyCrawlResetsAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST` : ''}.`
     : !hasValidSubject
       ? 'Not ready — enter a company or person.'
       : !hasValidRole
@@ -1260,7 +1260,7 @@ function Home() {
                 <section className="rounded-xl border border-[#d8d2df] bg-[#f4f1f8] px-5 py-6 sm:px-7" aria-label="Sign in before starting a briefing" data-testid="signin-before-briefing">
                   <p className="font-mono text-[10px] uppercase tracking-[.15em] text-[#766a93]">Account required</p>
                   <h2 className="mt-2 font-serif text-2xl text-[#292e46]">Sign in before you brief.</h2>
-                  <p className="mt-2 max-w-xl text-sm leading-relaxed text-[#625d69]">Sign-in is required before a crawl. All accounts share one 120-second Tavily runtime allowance per rolling 24 hours; creating another account does not reset it. Searches still use the project owner’s Tavily credits.</p>
+                  <p className="mt-2 max-w-xl text-sm leading-relaxed text-[#625d69]">Sign-in is required before a crawl. All accounts share one 120-second Tavily runtime allowance per calendar day in IST; it resets at midnight, and creating another account does not reset it. Searches still use the project owner’s Tavily credits.</p>
                   <div className="mt-5 flex flex-wrap items-center gap-3">
                     <a href={`${basePath}/sign-in`} className="inline-flex h-10 items-center justify-center rounded-lg bg-[#292e46] px-4 text-sm font-semibold text-white transition hover:bg-[#3c4160]" data-testid="button-sign-in-before-briefing">Sign in to use the briefing</a>
                     <a href={`${basePath}/sign-up`} className="text-sm font-semibold text-[#594b87] underline underline-offset-4" data-testid="button-create-account-before-briefing">Create an account</a>
@@ -1603,7 +1603,7 @@ function Home() {
                   : tavilyConfigured
                     ? 'Tavily basic search is connected. Each selected tab sends one separate search request (up to 5 per crawl, with up to 8 results per tab). The shared app-wide rate limit is 10 requests per rolling five minutes; each tab counts once. Positive and negative signals are scored locally from cited source text; fragmentation adds no API request. AI stays off. Results include dates, titles, snippets and links—not full-page crawls. The pilot key uses the project owner’s shared credit balance.'
                     : 'Tavily is not connected. Add the TAVILY_API_KEY secret to the API Server, then restart that workflow. This app does not expose the key.'}
-                {' '}Shared across the whole app: 120 seconds of Tavily runtime in a rolling 24 hours. New accounts do not reset the allowance. A crawl has a three-minute backup hard stop. The pilot key still uses the project owner’s shared credit balance.
+                {' '}Shared across the whole app: 120 seconds of Tavily runtime per calendar day in IST, resetting at midnight. New accounts do not reset the allowance. A crawl has a three-minute backup hard stop. The pilot key still uses the project owner’s shared credit balance.
                 {dailyCrawlRemainingMs !== null && ` ${Math.ceil(dailyCrawlRemainingMs / 1000)} seconds remain in the shared allowance.`}
               </p>
               </>

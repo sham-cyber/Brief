@@ -12,6 +12,7 @@ import {
   reserveTavilyQuota,
   TAVILY_CRAWL_HARD_STOP_MS,
   TAVILY_DAILY_LIMIT_MS,
+  TAVILY_QUOTA_TIME_ZONE,
 } from "../lib/tavily-quota";
 import {
   reserveTavilyRequestSlots,
@@ -780,10 +781,10 @@ router.post("/briefings", async (req, res): Promise<void> => {
       return;
     }
     const resetNote = quota.resetsAt
-      ? ` It resets after ${quota.resetsAt.toISOString()}.`
-      : "";
+      ? ` It resets at ${quota.resetsAt.toLocaleString("en-IN", { timeZone: TAVILY_QUOTA_TIME_ZONE })} IST.`
+      : " It resets at midnight IST.";
     res.status(429).json({
-      error: `The shared two-minute Tavily crawl allowance for the rolling 24-hour period is used.${resetNote}`,
+      error: `The shared two-minute Tavily allowance for today's calendar day is used.${resetNote}`,
     });
     return;
   }
@@ -855,7 +856,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
       await settleQuota();
       if (stopReason === "daily-budget") {
         res.status(429).json({
-          error: "This crawl used the remaining two-minute Tavily allowance and was stopped.",
+          error: "This crawl used today's remaining two-minute Tavily allowance and was stopped.",
         });
       } else {
         res.status(504).json({
@@ -911,7 +912,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
     }
     if (stopReason === "daily-budget") {
       res.status(429).json({
-        error: "This crawl used the remaining two-minute Tavily allowance and was stopped.",
+        error: "This crawl used today's remaining two-minute Tavily allowance and was stopped.",
       });
       return;
     }
