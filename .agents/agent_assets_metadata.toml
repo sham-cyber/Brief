@@ -1,0 +1,16 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "L02sPxVk_kBZBqtJ8rzSY"
+uri = "file://CEO.pdf"
+type = "pdf"
+title = "CEO.pdf"
+description = "One-page Briefing Agent pitch for a Chairman / CEO, prepared by Sham Mohite · FCL URSE DT."
+logical_id = "cce49f37-da79-4c43-8320-3168a3767472"
+content_hash = "sha256:e7b2186fa4bd543a23a2088d825abc665166c1a0cf3e2188d4c0678c32e256b3"
+size = 69853
+mtime_ms = 1793606604137
+storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:742d8fb7-8455-444c-89a0-21c32e2418fa/cce49f37-da79-4c43-8320-3168a3767472/aa0fd5f9-0fa5-433c-9e37-dfc92ed6cef9"
+storage_version_token = "1793606625894689"
+content_type = "application/pdf"
