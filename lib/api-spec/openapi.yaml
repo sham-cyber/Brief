@@ -332,7 +332,10 @@ components:
           type: ["string", "null"]
         snippet:
           type: string
-      required: [id, title, url, publisher, publishedAt, snippet]
+        affiliatedCompanyReport:
+          type: boolean
+          description: True when this source is about the selected person's associated company rather than the person.
+      required: [id, title, url, publisher, publishedAt, snippet, affiliatedCompanyReport]
     BriefingSourceStatus:
       type: object
       properties:

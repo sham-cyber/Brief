@@ -501,6 +501,11 @@ function SourceList({ sources }: { sources: BriefSource[] }) {
               <a href={source.url} target="_blank" rel="noreferrer" className="group inline-flex items-start gap-1.5 text-[15px] font-semibold leading-snug text-foreground decoration-[#8a7bb0] underline-offset-4 hover:underline" data-testid={`link-source-title-${index + 1}`}>
                 <span>{source.title}</span><ArrowUpRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground group-hover:text-primary" aria-hidden="true" />
               </a>
+              {source.affiliatedCompanyReport && (
+                <p className="mt-1 font-mono text-[9px] uppercase tracking-[.12em] text-[#655b7a]" data-testid={`source-affiliated-company-${index + 1}`}>
+                  Company-level report
+                </p>
+              )}
               {isVideoSource(source) && (
                 <div className="source-video mt-4" data-testid={`source-video-${index + 1}`}>
                   {playableVideoUrl(source.url) ? (
@@ -1000,7 +1005,7 @@ function PrintOnePageBrief({ result, activeTopic }: { result: BriefingResult; ac
         <h2>Sources</h2>
         <ol>
           {sources.map((source) => (
-            <li key={source.id}><span>[{source.id}]</span> <a href={source.url}>{briefLine(source.title, 100)}</a></li>
+            <li key={source.id}><span>[{source.id}]</span> <a href={source.url}>{briefLine(source.title, 100)}</a>{source.affiliatedCompanyReport ? <span> — Company-level report</span> : null}</li>
           ))}
         </ol>
       </footer>

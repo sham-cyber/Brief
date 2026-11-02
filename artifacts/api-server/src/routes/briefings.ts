@@ -99,10 +99,13 @@ type NewsItem = {
   publisher: string;
   publishedAt: string | null;
   snippet: string;
+  affiliatedCompanyReport: boolean;
 };
 
 type BriefingTopic = "news" | "hire" | "launch" | "financial" | "risk";
 type PersonRole = "business_owner" | "mp" | "corporate";
+type SourceMatch = "subject" | "company";
+type RawNewsItem = Omit<NewsItem, "id" | "affiliatedCompanyReport">;
 type SearchResult = { source: NewsItem; searchedAs: BriefingTopic };
 type SearchNewsResult = {
   sources: SearchResult[];
@@ -178,42 +181,59 @@ function contextRelevanceScore(source: NewsItem, terms: string[]): number {
   return score;
 }
 
-function sourceMentionsSubject(
+function sourceMatchScope(
   source: NewsItem,
   subject: string,
   subjectType: "company" | "person",
-): boolean {
+  associatedCompany: string | null,
+): SourceMatch | null {
   const normalize = (value: string) =>
     (value.match(/[\p{L}\p{N}]+/gu) ?? []).join(" ").toLocaleLowerCase();
-  const target = normalize(subject);
-  const title = normalize(source.title);
-  const content = normalize(`${source.title} ${source.snippet}`);
-  if (!target || !` ${content} `.includes(` ${target} `)) return false;
-
   const companyQualifiers = new Set([
     "automotive", "automobiles", "bank", "cables", "cement", "chemicals",
     "electronics", "energy", "finance", "foods", "industries", "infrastructure",
     "logistics", "motors", "pharma", "pharmaceuticals", "power", "software",
     "steel", "systems", "technology", "technologies", "telecom",
   ]);
-  const targetWords = target.split(" ");
-  const titleWords = title.split(" ");
-  const targetQualifier = targetWords.find((word) => companyQualifiers.has(word));
-  const titleQualifier = titleWords.find((word) => companyQualifiers.has(word));
-  const sharesLeadingName = targetWords[0] && titleWords[0] === targetWords[0];
+  const title = normalize(source.title);
+  const content = normalize(`${source.title} ${source.snippet}`);
+  const includesPhrase = (value: string) => {
+    const target = normalize(value);
+    return Boolean(target && ` ${content} `.includes(` ${target} `));
+  };
+  const belongsToDifferentCompany = (requestedCompany: string) => {
+    const targetWords = normalize(requestedCompany).split(" ");
+    const titleWords = title.split(" ");
+    const targetQualifier = targetWords.find((word) => companyQualifiers.has(word));
+    const titleQualifier = titleWords.find((word) => companyQualifiers.has(word));
+    const sharesLeadingName = targetWords[0] && titleWords[0] === targetWords[0];
+    return Boolean(
+      sharesLeadingName &&
+      targetQualifier &&
+      titleQualifier &&
+      targetQualifier !== titleQualifier,
+    );
+  };
 
-  // A headline that names a different company in the same brand family outranks
-  // a passing mention of the requested company in the search-result snippet.
-  if (
-    subjectType === "company" &&
-    sharesLeadingName &&
-    targetQualifier &&
-    titleQualifier &&
-    targetQualifier !== titleQualifier
-  ) {
-    return false;
+  if (includesPhrase(subject)) {
+    if (
+      subjectType === "company" &&
+      belongsToDifferentCompany(subject)
+    ) {
+      return null;
+    }
+    return subjectType === "company" ? "company" : "subject";
   }
-  return true;
+
+  if (
+    subjectType === "person" &&
+    associatedCompany &&
+    includesPhrase(associatedCompany) &&
+    !belongsToDifferentCompany(associatedCompany)
+  ) {
+    return "company";
+  }
+  return null;
 }
 
 function quoteSearchPhrase(value: string | null): string {
@@ -253,17 +273,24 @@ async function searchNews(
       ? quoteSearchPhrase(companyName)
       : "";
   const personTerms = `${roleTerms}${publicOfficeTerm}${companyTerm}`;
+  const isChairmanCompanyBrief =
+    subjectType === "person" &&
+    personRole === "business_owner" &&
+    Boolean(companyName);
   const searchTerms: { topic: BriefingTopic; query: string }[] = topics.map((topic) => {
     const terms: Record<BriefingTopic, string> = {
       news: "recent news coverage",
       hire: "hiring appointed joins named executive open roles",
       launch: "product launch released introduced unveiled",
-      financial: subjectType === "company"
+      financial: subjectType === "company" || isChairmanCompanyBrief
         ? "share price earnings profit loss revenue financial results"
         : "financial results investment profit loss funding",
       risk: "risk lawsuit investigation recall regulator fine breach restructuring",
     };
-    return { topic, query: `${subject}${personTerms} ${terms[topic]}` };
+    const query = isChairmanCompanyBrief
+      ? `${quoteSearchPhrase(companyName).trim()} ${terms[topic]} ${subject} ${ROLE_SEARCH_TERMS.business_owner}`
+      : `${subject}${personTerms} ${terms[topic]}`;
+    return { topic, query };
   });
   const settled = await Promise.allSettled(
     searchTerms.map(async ({ topic, query }) => ({
@@ -287,7 +314,7 @@ async function searchNews(
     throw new BriefingSearchFailure(failedStatuses, creditsUsed, fulfilled.length);
   }
 
-  const uniqueItems = new Map<string, { item: Omit<NewsItem, "id">; searchedAs: BriefingTopic }>();
+  const uniqueItems = new Map<string, { item: RawNewsItem; searchedAs: BriefingTopic }>();
   for (const { topic, results } of fulfilled) {
     for (const result of results) {
       const title = typeof result.title === "string" ? result.title.trim() : "";
@@ -331,25 +358,37 @@ async function searchNews(
 
   const contextKeywords = getContextTerms(context);
   const sources = [...uniqueItems.values()]
-    .map((entry) => ({
-      ...entry,
-      contextScore: contextRelevanceScore(
-        { ...entry.item, id: "", snippet: entry.item.snippet },
-        contextKeywords,
-      ),
-    }))
-    .filter(({ item, searchedAs }) =>
-      sourceMentionsSubject({ ...item, id: "" }, subject, subjectType) &&
-      classifySource({ ...item, id: "" }, searchedAs, topics) !== null,
-    )
+    .flatMap((entry) => {
+      const matchScope = sourceMatchScope(
+        { ...entry.item, id: "", affiliatedCompanyReport: false },
+        subject,
+        subjectType,
+        isChairmanCompanyBrief ? companyName : null,
+      );
+      if (
+        !matchScope ||
+        classifySource({ ...entry.item, id: "", affiliatedCompanyReport: false }, entry.searchedAs, topics) === null
+      ) {
+        return [];
+      }
+      return [{
+        ...entry,
+        affiliatedCompanyReport:
+          subjectType === "person" && matchScope === "company",
+        contextScore: contextRelevanceScore(
+          { ...entry.item, id: "", affiliatedCompanyReport: false },
+          contextKeywords,
+        ),
+      }];
+    })
     .sort((a, b) =>
       b.contextScore - a.contextScore ||
       new Date(b.item.publishedAt ?? 0).getTime() -
         new Date(a.item.publishedAt ?? 0).getTime(),
     )
     .slice(0, 18)
-    .map(({ item, searchedAs }, index) => ({
-      source: { ...item, id: `S${index + 1}` },
+    .map(({ item, searchedAs, affiliatedCompanyReport }, index) => ({
+      source: { ...item, affiliatedCompanyReport, id: `S${index + 1}` },
       searchedAs,
     }));
   return {
@@ -498,8 +537,13 @@ function buildTopSignal(
     .filter((candidate) => candidate.score > 0)
     .sort((a, b) => b.score - a.score);
   const line = phrases[0]?.phrase || title;
+  const labeledLine = selected.affiliatedCompanyReport
+    ? `Company report: ${line}`
+    : line;
   return {
-    text: line.length > 130 ? `${line.slice(0, 127).trimEnd()}…` : line,
+    text: labeledLine.length > 130
+      ? `${labeledLine.slice(0, 127).trimEnd()}…`
+      : labeledLine,
     sourceIds: [selected.id],
   };
 }
@@ -510,6 +554,7 @@ function buildBriefingContent(
   context: string | undefined,
   topics: BriefingTopic[],
   sources: SearchResult[],
+  companyName: string | null,
 ): {
   overview: {
     text: string;
@@ -533,14 +578,21 @@ function buildBriefingContent(
   }[];
 } {
   const contextTerms = getContextTerms(context);
+  const researchLabel =
+    subjectType === "person" && companyName
+      ? `${subject} or ${companyName}`
+      : subject;
   const highlights = sources.flatMap(({ source, searchedAs }) => {
     const category = classifySource(source, searchedAs, topics);
+    const rawSummary =
+      source.snippet ||
+      `This report was published by ${source.publisher}${source.publishedAt ? ` on ${new Date(source.publishedAt).toLocaleDateString("en-US", { dateStyle: "medium" })}` : ""}.`;
     return category ? [{
       category,
       title: source.title,
-      summary:
-        source.snippet ||
-        `This report was published by ${source.publisher}${source.publishedAt ? ` on ${new Date(source.publishedAt).toLocaleDateString("en-US", { dateStyle: "medium" })}` : ""}.`,
+      summary: source.affiliatedCompanyReport
+        ? `Company-level report for ${companyName}: ${rawSummary}`
+        : rawSummary,
       sourceIds: [source.id],
     }] : [];
   });
@@ -580,13 +632,13 @@ function buildBriefingContent(
   const answerSources = matchingSources.length ? matchingSources : sources.slice(0, 2);
   const overviewText = context
     ? matchingSources.length
-      ? `For “${shortContext}” about ${subject}, the closest recent public ${answerSources.length === 1 ? "report is" : "reports are"}: ${answerSources.map(({ source }) => `“${sourceExcerpt(source)}”`).join(" ")}`
+      ? `For “${shortContext}” related to ${researchLabel}, the closest recent public ${answerSources.length === 1 ? "report is" : "reports are"}: ${answerSources.map(({ source }) => `${source.affiliatedCompanyReport ? "Company report: " : ""}“${sourceExcerpt(source)}”`).join(" ")}`
       : sources.length
-        ? `No recent public report directly matched “${shortContext}” about ${subject}. These are the closest selected-topic reports found in the 30-day window.`
-        : `No recent public report matched “${shortContext}” about ${subject} in the 30-day window.`
+        ? `No recent public report directly matched “${shortContext}” related to ${researchLabel}. These are the closest selected-topic reports found in the 30-day window.`
+        : `No recent public report matched “${shortContext}” related to ${researchLabel} in the 30-day window.`
     : latest
-      ? `Recent public coverage for this ${subjectType} includes ${sources.length} reports from the 30-day research window. The latest report is “${latest.title},” published by ${latest.publisher}.`
-      : `No recent public reports were found for ${subject} in the selected topics during the 30-day research window.`;
+      ? `Recent public reporting related to ${researchLabel} includes ${sources.length} reports from the 30-day research window. The latest report is “${latest.title},” published by ${latest.publisher}.`
+      : `No recent public reports were found for ${researchLabel} in the selected topics during the 30-day research window.`;
   const topicLabels: Record<BriefingTopic, string> = {
     news: "news",
     hire: "hire",
@@ -611,10 +663,10 @@ function buildBriefingContent(
     return {
       category,
       text: latestTopicSource
-        ? `The 30-day ${label} tab has ${topicSources.length} sourced report${topicSources.length === 1 ? "" : "s"} for ${subject}. Latest: “${latestTopicSource.source.title}.”`
+        ? `The 30-day ${label} tab has ${topicSources.length} sourced report${topicSources.length === 1 ? "" : "s"} related to ${researchLabel}. Latest: “${latestTopicSource.source.title}.”`
         : category === "hire"
-          ? `No confirmed-hire reports for ${subject} were found in the 30-day public-news crawl.`
-          : `No ${label} reports for ${subject} were found in the 30-day window.`,
+          ? `No confirmed-hire reports related to ${researchLabel} were found in the 30-day public-news crawl.`
+          : `No ${label} reports related to ${researchLabel} were found in the 30-day window.`,
       sourceIds: latestTopicSource ? [latestTopicSource.source.id] : [],
       topPositive: buildTopSignal(
         topicSources,
@@ -914,6 +966,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
       input.data.context?.trim() || undefined,
       topics,
       relevant,
+      companyName,
     );
     const sources = relevant.map(({ source }) => source);
 
