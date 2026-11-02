@@ -2,7 +2,7 @@
 
 A source-first pre-meeting briefing app. Choose a company or person, select the topics that matter, and manually gather public reporting from the 30 days ending when the briefing starts. Each factual item links to its source.
 
-> **Hackathon prototype:** This repository has no published demo URL yet. Add the live demo and any required presentation links here before submitting.
+> **Hackathon prototype:** Add the demo URL and presentation links here when they are ready for submission.
 
 ## What it does
 
@@ -12,29 +12,29 @@ A source-first pre-meeting briefing app. Choose a company or person, select the 
 - Shows source links and, when Tavily returns them for an accepted source, a photo or supported video preview.
 - Provides a concise brief, a one-page print layout, and browser read-aloud.
 
-AI-generated summaries and AI API calls are **off**. Private Gmail, WhatsApp, and other private-source crawling are **not enabled**. Briefs are generated on demand and are not stored as research records.
+Current flow centers on cited public-source results, on-demand briefings, and transient output. Separate future work may cover AI and user-authorized private-source connections.
 
 ## Sign-in, owner lock, and crawl procedure
 
-1. Open the app and sign in through Clerk. Sign-up is available; signing in alone does not grant crawl permission.
+1. Open the app and sign in through Clerk. Sign-up is available for reviewers.
 2. Enter a company or person, complete the required role details, set the meeting time, and choose at least one topic. Context is optional.
 3. Press **Start/Crawl**. The app prompts for the four-digit start PIN.
-4. The server permits a crawl only for the account whose email matches `BRIEFING_OWNER_EMAIL` in that environment, and only when the PIN matches `BRIEFING_START_PIN`. Unauthorized accounts cannot use the project Tavily key or start a crawl.
+4. The configured developer account and `BRIEFING_START_PIN` are required to start a crawl. This keeps use of the project Tavily key with its owner.
 5. After a successful crawl, follow source links to verify claims. Use Print for the one-page layout.
 
-The PIN and owner email are server-side secrets. Do not put their values in this README, GitHub, screenshots, or a public issue. Repeated incorrect PIN attempts are temporarily rate-limited.
+The PIN and owner email are server-side secrets. Store their values in the hosting secret manager and share them only through a private channel when needed. Repeated incorrect PIN attempts are temporarily rate-limited.
 
 ### Crawl guardrails
 
-- No crawl starts automatically when a page loads or meeting time changes.
+- Meeting-time edits prepare the brief; the search begins when the user presses **Start/Crawl**.
 - One Tavily request is sent for each selected topic, up to five per crawl and eight results per topic.
 - The configured developer account is limited to 10 crawl starts and 10 search requests per Asia/Kolkata calendar day.
 - The app also enforces a shared 120-second crawl runtime per Asia/Kolkata calendar day, one active crawl at a time, a three-minute hard stop, and a maximum of 10 Tavily requests per five minutes.
-- Provider usage is charged to the Tavily account whose key is used. Keep the project key private; do not commit it.
+- Provider usage is charged to the Tavily account whose key is used. Store the project key in the hosting secret manager.
 
 ## Run in Replit
 
-The project uses separate managed workflows for the web app and API server. Open the Repl and press **Run** to start them. Use the Replit Secrets pane for credentials; do not create or commit a `.env` file containing real values.
+The project uses separate managed workflows for the web app and API server. Open the Repl and press **Run** to start them. Store credentials in the Replit Secrets pane.
 
 For a fresh development database, configure `DATABASE_URL`, then apply the development schema:
 
@@ -42,7 +42,7 @@ For a fresh development database, configure `DATABASE_URL`, then apply the devel
 pnpm --filter @workspace/db run push
 ```
 
-Run this schema command only against a development database—not production.
+Run this schema command against a development database. Handle production schema changes separately.
 
 ## Run locally
 
@@ -75,7 +75,7 @@ The repository includes `pnpm-lock.yaml`; use `pnpm install --frozen-lockfile` s
 
 ## Environment variables
 
-Set values in Replit Secrets or your hosting provider's secret manager. Names only are listed here; never commit actual values.
+Set values in Replit Secrets or your hosting provider's secret manager. This table lists variable names; keep actual values in the secret manager.
 
 | Variable | Purpose |
 | --- | --- |
@@ -88,7 +88,7 @@ Set values in Replit Secrets or your hosting provider's secret manager. Names on
 | `TAVILY_API_KEY` | Project Tavily key, restricted to the configured owner |
 | `USER_CREDENTIALS_ENCRYPTION_KEY` | Encryption key for securely saved user Tavily credentials |
 
-Clerk development and production environments may have separate accounts. Create and test the owner account in the same environment where the corresponding owner email and PIN are configured. A fork or separate deployment must use its own database, Clerk configuration, owner email, PIN, and Tavily key.
+Clerk development and production environments may have separate accounts. Create and test the owner account in the environment where its owner email and PIN are configured. Give each fork or separate deployment its own database, Clerk configuration, owner email, PIN, and Tavily key.
 
 ## Hackathon submission checklist
 
@@ -99,9 +99,9 @@ Hackathon rules differ, so follow the event's submission form and deadline. A ty
 - A short demo video or screenshots showing the workflow and cited sources.
 - This README with setup, run, and test instructions.
 - Any required team, project, and license information.
-- Judge credentials, only if needed, shared through the event's private submission field—not in the repository. For judge-run crawls, use a dedicated demo account and key rather than personal credentials.
+- If judges need access, share a dedicated demo account through the event's private submission field and configure its own key.
 
-Before making the repository public, confirm that no secrets, user data, or private source material are tracked. No license has been selected in this repository; add one only if the team chooses it or the event requires it.
+Before public release, confirm that the repository contains only intended source files. Add a license when the team selects one or the event requires it.
 
 ## Project layout
 

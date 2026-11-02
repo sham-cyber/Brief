@@ -130,3 +130,9 @@ No real crawl trial has been completed yet, so a sample briefing is not ready.
 **Why:** The user clarified that there is no actual trial evidence to use for a sample.
 
 **How to apply:** Do not present invented or unverified content as a real sample brief. Wait until a real, source-verified trial is available, or label any later mock clearly as fictional.
+
+Keep the README's wording positive and neutral while accurately describing the current prototype.
+
+**Why:** The user asked not to put negative wording in the README.
+
+**How to apply:** Describe current capabilities and setup affirmatively; preserve factual security, billing, and scope details without unnecessary negative phrasing.
