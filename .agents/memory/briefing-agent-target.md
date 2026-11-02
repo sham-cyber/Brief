@@ -118,3 +118,9 @@ The Start action requires both the approved owner account and a four-digit PIN o
 **Why:** The user requested that only their account can start crawls, in addition to the per-crawl PIN gate, while the app still allows account self-signup.
 
 **How to apply:** Store the PIN and approved owner email only as Replit Secrets; never put either in source, client storage, logs, or responses. Keep owner and PIN checks server-side before reserving Tavily quota.
+
+Anyone may sign in or create an account to inspect the app, but only the configured developer owner account plus the PIN may start a crawl or use the project Tavily key.
+
+**Why:** The user clarified that open sign-in is acceptable for testing because Tavily key use remains restricted to the developer.
+
+**How to apply:** Keep sign-up open for reviewers; do not weaken the server-side owner and PIN checks or include their values in the repository.

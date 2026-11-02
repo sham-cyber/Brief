@@ -4,13 +4,13 @@ A pre-meeting research app that creates concise one-page briefs on a person or c
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
+- `pnpm --filter @workspace/api-server run dev` — run the API server using the workflow-provided port
 - `pnpm --filter @workspace/briefing-agent run dev` — run the briefing app
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- Required secrets include `DATABASE_URL`, Clerk keys, `TAVILY_API_KEY`, `BRIEFING_OWNER_EMAIL`, and `BRIEFING_START_PIN`.
 
 ## Stack
 
@@ -30,15 +30,18 @@ A pre-meeting research app that creates concise one-page briefs on a person or c
 
 ## Architecture decisions
 
-- Search recent articles from Google News RSS and use the returned article URLs as the allowed citation set.
-- Build a concise, deterministic brief directly from returned article titles and snippets; link each item to its source.
+- Run on-demand Tavily news searches, one request per selected topic, and use validated source URLs as the citation set.
+- Build the source-based brief from returned titles and excerpts, with local positive/negative signal selection; no AI call is used.
+- Request per-source images within the same topic search; keep photos and supported video previews attached to their accepted source.
 - Briefs are generated on demand and are not persisted.
 
 ## Product
 
 - Enter a company or person's name, meeting date/time, and optional discussion context.
-- Generate recent news, hiring, and launch highlights plus questions to bring into the meeting.
-- Inspect source links, then copy or print the brief.
+- Select any of five blocks: News, Hires, Launches, Financial Facts, and Risks & Open Questions.
+- Inspect cited source links, then read aloud or print the one-page brief.
+- Sign-in is available, but only the configured owner email plus the four-digit server-side PIN may start a crawl.
+- Public sources only; AI, Gmail, and WhatsApp crawling are disabled.
 
 ## User preferences
 
