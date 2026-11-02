@@ -15,6 +15,12 @@ The optional meeting-context note should prioritize matching public results (for
 
 **How to apply:** Use context for local relevance ranking; do not append raw free-text context to third-party search queries unless the user is clearly informed and consents.
 
+The user chose to keep the Person role options at Chairman / CEO, MP, and Corporate; do not add Corporator or treat Corporate as Corporator.
+
+**Why:** The user explicitly declined adding a Corporator role.
+
+**How to apply:** Preserve the current role choices. If the subject is a corporator, explain that there is no exact role option rather than applying a misleading label.
+
 When the user enters a direct public question (for example, “market condition” for Finolex Cables), the brief should give a concise source-based answer with clickable citations; if no report directly matches, say so rather than guessing.
 
 **Why:** The user expects a CEO’s question to receive an answer with a source link.
