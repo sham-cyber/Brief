@@ -134,11 +134,12 @@
 
 .briefing-prose { white-space: pre-line; }
 .voice-button {
-  background: radial-gradient(circle at 35% 28%, #f7fff8, #bce5c9 74%);
-  border: 1px solid #8ac69f;
-  box-shadow: 0 0 0 5px rgba(108, 185, 133, .13), 0 8px 25px rgba(71, 143, 95, .25);
+  background: radial-gradient(circle at 35% 28%, #fff7f6, #d97d77 74%);
+  border: 1px solid #bd514a;
+  box-shadow: 0 0 0 5px rgba(190, 75, 68, .14), 0 8px 25px rgba(151, 52, 46, .24);
 }
-.voice-button:hover { box-shadow: 0 0 0 7px rgba(108, 185, 133, .17), 0 10px 28px rgba(71, 143, 95, .3); }
+.voice-button:hover { box-shadow: 0 0 0 7px rgba(190, 75, 68, .18), 0 10px 28px rgba(151, 52, 46, .3); }
+.voice-button-stopped { color: #fff !important; }
 .voice-button:disabled { cursor: not-allowed; opacity: 1; }
 .brief-status-button {
   display: inline-flex;

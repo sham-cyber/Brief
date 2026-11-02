@@ -181,37 +181,37 @@ function VoiceControls({ text }: { text: string }) {
   const seconds = Math.ceil(estimate.words / 2.5);
   const hasText = Boolean(text.trim());
   return (
-    <div className="flex items-center gap-3" data-testid="voice-controls">
+    <div className="grid grid-cols-[96px_minmax(0,1fr)] items-start gap-3" data-testid="voice-controls">
       <button
         type="button"
         disabled
-        title="AI voice is not connected. This stays off until you ask for AI integration."
+        title="AI voice is stopped and not connected. It stays off until you ask for AI integration."
         aria-describedby="ai-voice-status"
-        className="voice-button flex h-24 w-24 shrink-0 flex-col items-center justify-center gap-1 rounded-full text-[11px] font-bold text-[#164b36]"
-        aria-label="AI voice is not connected"
+        className="voice-button voice-button-stopped flex h-24 w-24 shrink-0 flex-col items-center justify-center gap-1 rounded-full text-[11px] font-bold text-white"
+        aria-label="AI voice stopped and not connected"
         data-testid="button-ai-voice"
       >
         <Volume2 className="h-5 w-5" aria-hidden="true" />
         AI voice
       </button>
       <div className="min-w-0">
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-col items-start gap-2">
+          <button
+            type="button"
+            onClick={() => window.speechSynthesis?.cancel()}
+            className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#e4b7b2] bg-[#fbefed] px-3 text-xs font-semibold text-[#98453e] transition hover:bg-[#f7e1de]"
+            data-testid="button-stop-speech"
+          >
+            <Square className="h-3.5 w-3.5 fill-current" aria-hidden="true" /> Stop
+          </button>
           <button
             type="button"
             disabled={!hasText}
             onClick={() => speakBlock(text)}
-            className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#cde0d4] bg-[#edf6f0] px-3 text-xs font-semibold text-[#32634a] transition hover:bg-[#e2f0e7] disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#cde0d4] bg-[#edf6f0] px-3 text-xs font-semibold text-[#32634a] transition hover:bg-[#e2f0e7] disabled:cursor-not-allowed disabled:opacity-50"
             data-testid="button-read-briefing"
           >
             <Volume2 className="h-3.5 w-3.5" aria-hidden="true" /> Read aloud
-          </button>
-          <button
-            type="button"
-            onClick={() => window.speechSynthesis?.cancel()}
-            className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#e4b7b2] bg-[#fbefed] px-3 text-xs font-semibold text-[#98453e] transition hover:bg-[#f7e1de]"
-            data-testid="button-stop-speech"
-          >
-            <Square className="h-3.5 w-3.5 fill-current" aria-hidden="true" /> Stop
           </button>
         </div>
         <p id="ai-voice-status" className="mt-2 max-w-52 text-[10px] leading-relaxed text-muted-foreground">
@@ -363,6 +363,18 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
         </div>
       </header>
 
+      <div className="no-print mt-5 flex flex-wrap items-center justify-between gap-5 rounded-2xl border border-[#d8d2df] bg-[#f4f1e9] p-5 sm:p-6" data-testid="voice-summary">
+        <div className="max-w-md">
+          <SectionEyebrow>Listen before you walk in</SectionEyebrow>
+          <p className="mt-2 text-sm leading-relaxed text-[#65616d]">Read this brief aloud using your device’s built-in voice. No AI voice service is connected.</p>
+        </div>
+        <VoiceControls text={[
+          result.overview.text,
+          ...result.highlights.flatMap((item) => [item.title, item.summary]),
+          ...result.questions.map((question) => question.text),
+        ].join('. ')} />
+      </div>
+
       <div className="mt-5 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]" data-testid="briefing-columns">
         <div className="min-w-0">
       <section className="print-card rounded-2xl border border-border bg-card px-6 py-6 shadow-[0_8px_28px_rgba(38,37,55,.035)] sm:px-8" aria-labelledby="overview-heading">
@@ -401,18 +413,6 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
           );
         })}
       </nav>
-
-      <div className="no-print mt-9 flex flex-wrap items-center justify-between gap-5 rounded-2xl border border-[#d8d2df] bg-[#f4f1e9] p-5 sm:p-6" data-testid="voice-summary">
-        <div className="max-w-md">
-          <SectionEyebrow>Listen before you walk in</SectionEyebrow>
-          <p className="mt-2 text-sm leading-relaxed text-[#65616d]">Read this brief aloud using your device’s built-in voice. No AI voice service is connected.</p>
-        </div>
-        <VoiceControls text={[
-          result.overview.text,
-          ...result.highlights.flatMap((item) => [item.title, item.summary]),
-          ...result.questions.map((question) => question.text),
-        ].join('. ')} />
-      </div>
 
       {visibleTopics.map((topic) => {
         const selected = TOPICS.find((item) => item.value === topic)!;
@@ -840,7 +840,16 @@ function LoadingBrief() {
 
 function EmptyBriefing() {
   return (
-    <div className="fade-up grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_360px]" data-testid="empty-briefing">
+    <div className="fade-up space-y-5" data-testid="empty-briefing">
+      <section className="flex flex-wrap items-center justify-between gap-5 rounded-2xl border border-border bg-card px-5 py-5 sm:px-6" aria-labelledby="voice-empty-heading">
+        <div className="max-w-md">
+          <SectionEyebrow>Voice controls</SectionEyebrow>
+          <h3 id="voice-empty-heading" className="mt-2 font-serif text-2xl text-foreground">AI and device speech</h3>
+          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">The AI voice button is shown but disabled. Device read-aloud becomes available after a briefing is collected.</p>
+        </div>
+        <VoiceControls text="" />
+      </section>
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
       <div className="flex min-h-[420px] flex-col items-center justify-center rounded-2xl border border-dashed border-[#d1cad9] bg-[#f8f6f2]/80 px-6 py-12 text-center">
         <div className="relative flex h-24 w-24 items-center justify-center">
           <span className="absolute inset-1 rounded-full border border-[#ded8e5]" aria-hidden="true" />
@@ -854,16 +863,7 @@ function EmptyBriefing() {
           <span className="h-px w-8 bg-[#d8d1df]" /><span className="font-mono uppercase tracking-[.13em]">Context in, clarity out</span><span className="h-px w-8 bg-[#d8d1df]" />
         </div>
       </div>
-      <div className="space-y-4">
-        <SourceColumn sources={[]} />
-        <section className="rounded-2xl border border-border bg-card px-5 py-5 sm:px-6" aria-labelledby="voice-empty-heading">
-          <SectionEyebrow>Voice controls</SectionEyebrow>
-          <h3 id="voice-empty-heading" className="mt-2 font-serif text-2xl text-foreground">AI and device speech</h3>
-          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">The AI voice button is shown but disabled. Device read-aloud becomes available after a briefing is collected.</p>
-          <div className="mt-4">
-            <VoiceControls text="" />
-          </div>
-        </section>
+      <SourceColumn sources={[]} />
       </div>
     </div>
   );
