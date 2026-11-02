@@ -5,12 +5,18 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { BriefingSourceStatusKeySource } from './briefingSourceStatusKeySource';
 import type { BriefingSourceStatusProvider } from './briefingSourceStatusProvider';
 import type { BriefingSourceStatusSearchDepth } from './briefingSourceStatusSearchDepth';
 
 export interface BriefingSourceStatus {
   provider: BriefingSourceStatusProvider;
+  /** Whether this signed-in account has an effective Tavily key. */
   configured: boolean;
+  /** Whether this signed-in account is the configured owner allowed to start crawls. */
+  canStart: boolean;
+  /** Effective key source for this account; the project key is owner-only. */
+  keySource: BriefingSourceStatusKeySource;
   startPinConfigured: boolean;
   ownerAccountConfigured: boolean;
   /** @minimum 0 */

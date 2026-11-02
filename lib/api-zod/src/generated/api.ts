@@ -71,7 +71,9 @@ export const getBriefingSourceStatusResponseMaxSearchesPerBriefingMax = 5;
 
 export const GetBriefingSourceStatusResponse = zod.object({
   "provider": zod.enum(['tavily']),
-  "configured": zod.boolean(),
+  "configured": zod.boolean().describe('Whether this signed-in account has an effective Tavily key.'),
+  "canStart": zod.boolean().describe('Whether this signed-in account is the configured owner allowed to start crawls.'),
+  "keySource": zod.enum(['project-owner', 'account', 'missing']).describe('Effective key source for this account; the project key is owner-only.'),
   "startPinConfigured": zod.boolean(),
   "ownerAccountConfigured": zod.boolean(),
   "dailyCrawlLimitMs": zod.number().int().min(getBriefingSourceStatusResponseDailyCrawlLimitMsMin),

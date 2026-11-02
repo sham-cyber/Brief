@@ -22,6 +22,7 @@ export * from './briefingResultSubjectType';
 export * from './briefingResultTopicsItem';
 export * from './briefingSignal';
 export * from './briefingSourceStatus';
+export * from './briefingSourceStatusKeySource';
 export * from './briefingSourceStatusProvider';
 export * from './briefingSourceStatusSearchDepth';
 export * from './briefingTopicBrief';

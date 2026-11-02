@@ -124,7 +124,7 @@ type TavilyCredentialStatus = {
   updatedAt: string | null;
 };
 
-function TavilyKeySettings({ onChanged }: { onChanged: () => void }) {
+function TavilyKeySettings({ onChanged, projectKeyActive }: { onChanged: () => void; projectKeyActive: boolean }) {
   const { isLoaded, isSignedIn } = useUser();
   const [status, setStatus] = useState<TavilyCredentialStatus | null>(null);
   const [apiKey, setApiKey] = useState('');
@@ -192,13 +192,19 @@ function TavilyKeySettings({ onChanged }: { onChanged: () => void }) {
         <div>
           <h3 className="text-xs font-semibold text-[#35364a]">Your Tavily key</h3>
           <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-[#777280]">
-            This key is encrypted and used only for your account’s searches. Tavily bills the account that owns the key. The key is never shown again after saving.
+            Personal keys are encrypted, account-scoped, and billed to their Tavily account. The configured owner uses the project key when available; that key is never shared with other accounts.
           </p>
         </div>
-        <span className={`rounded-full px-2 py-1 font-mono text-[9px] uppercase tracking-wide ${status?.connected ? 'bg-[#e8f3eb] text-[#32634a]' : 'bg-[#f3eee3] text-[#7b6338]'}`} data-testid="tavily-key-status">
-          {status?.connected ? 'Connected' : 'Not connected'}
+        <span className={`rounded-full px-2 py-1 font-mono text-[9px] uppercase tracking-wide ${projectKeyActive || status?.connected ? 'bg-[#e8f3eb] text-[#32634a]' : 'bg-[#f3eee3] text-[#7b6338]'}`} data-testid="tavily-key-status">
+          {projectKeyActive ? 'Project key active' : status?.connected ? 'Personal key connected' : 'Not connected'}
         </span>
       </div>
+      {projectKeyActive && (
+        <p className="mt-3 rounded-lg border border-[#c7dfd2] bg-[#edf6f0] px-3 py-2 text-[10px] text-[#32634a]" role="status" data-testid="project-tavily-key-notice">
+          The existing project Tavily key is being used only for the configured owner account. Other accounts cannot use it.
+          {status?.connected ? ' A personal key is also saved, but the project key takes priority for this account.' : ''}
+        </p>
+      )}
       {!status?.storageReady && (
         <p className="mt-3 rounded-lg border border-[#e5c5c0] bg-[#fbefed] px-3 py-2 text-[10px] text-[#7f413b]" role="status">
           Secure key storage is not configured on the server yet. You cannot save a key until the app owner configures it.
@@ -1064,6 +1070,8 @@ function Home() {
   const hasValidRole = hasValidRoleSelection && hasValidPersonDetails;
   const hasTopics = topics.length > 0;
   const tavilyConfigured = sourceStatusQuery.data?.configured === true;
+  const canStart = sourceStatusQuery.data?.canStart === true;
+  const keySource = sourceStatusQuery.data?.keySource;
   const startPinConfigured = sourceStatusQuery.data?.startPinConfigured === true;
   const ownerAccountConfigured = sourceStatusQuery.data?.ownerAccountConfigured === true;
   const dailyCrawlRemainingMs = sourceStatusQuery.data?.dailyCrawlRemainingMs ?? null;
@@ -1281,16 +1289,18 @@ function Home() {
       ? 'Sign in before using the briefing.'
       : sourceStatusQuery.isError
       ? 'Not ready — the server could not confirm Tavily status. Check the API Server workflow.'
-      : !tavilyConfigured
-        ? 'Not ready — save your Tavily key in the account settings above.'
-        : !startPinConfigured
-          ? 'Not ready — configure the briefing start PIN in API Server Secrets.'
         : !ownerAccountConfigured
           ? 'Not ready — configure the approved account in API Server Secrets.'
-        : crawlAlreadyActive
-          ? 'Not ready — a Tavily crawl is already running against the shared app allowance.'
-        : crawlBudgetExhausted
-          ? `Not ready — today's app-wide Tavily allowance is used${dailyCrawlResetsAt ? `; it resets at ${new Date(dailyCrawlResetsAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST` : ''}.`
+          : !canStart
+            ? 'Not ready — only the configured owner account can start crawls.'
+            : !tavilyConfigured
+              ? 'Not ready — configure the owner Tavily key or save a personal key in account settings.'
+              : !startPinConfigured
+                ? 'Not ready — configure the briefing start PIN in API Server Secrets.'
+                : crawlAlreadyActive
+                  ? 'Not ready — a Tavily crawl is already running against the shared app allowance.'
+                  : crawlBudgetExhausted
+                    ? `Not ready — today's app-wide Tavily allowance is used${dailyCrawlResetsAt ? `; it resets at ${new Date(dailyCrawlResetsAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST` : ''}.`
     : !hasValidSubject
       ? 'Not ready — enter a company or person.'
       : !hasValidRole
@@ -1390,7 +1400,7 @@ function Home() {
                 <section className="rounded-xl border border-[#d8d2df] bg-[#f4f1f8] px-5 py-6 sm:px-7" aria-label="Sign in before starting a briefing" data-testid="signin-before-briefing">
                   <p className="font-mono text-[10px] uppercase tracking-[.15em] text-[#766a93]">Account required</p>
                   <h2 className="mt-2 font-serif text-2xl text-[#292e46]">Sign in before you brief.</h2>
-                  <p className="mt-2 max-w-xl text-sm leading-relaxed text-[#625d69]">Sign-in is required to save a personal Tavily key. Each key is used for that account’s searches and billed by its Tavily provider. Crawl starts remain limited to the configured owner account. The app-wide 120-second runtime limit resets at midnight IST.</p>
+                  <p className="mt-2 max-w-xl text-sm leading-relaxed text-[#625d69]">The configured owner can use the existing project Tavily key; it is never shared with other accounts. Personal keys are kept separate and billed by their owners. Only the configured owner can start a crawl. The app-wide 120-second runtime limit resets at midnight IST.</p>
                   <div className="mt-5 flex flex-wrap items-center gap-3">
                     <a href={`${basePath}/sign-in`} className="inline-flex h-10 items-center justify-center rounded-lg bg-[#292e46] px-4 text-sm font-semibold text-white transition hover:bg-[#3c4160]" data-testid="button-sign-in-before-briefing">Sign in to use the briefing</a>
                     <a href={`${basePath}/sign-up`} className="text-sm font-semibold text-[#594b87] underline underline-offset-4" data-testid="button-create-account-before-briefing">Create an account</a>
@@ -1414,7 +1424,10 @@ function Home() {
                   <span className="font-mono text-[10px] text-[#968da0]">30 DAYS</span>
                 </div>
               </div>
-              <TavilyKeySettings onChanged={() => { void sourceStatusQuery.refetch(); }} />
+              <TavilyKeySettings
+                onChanged={() => { void sourceStatusQuery.refetch(); }}
+                projectKeyActive={keySource === 'project-owner'}
+              />
               <fieldset className="mt-4">
                 <legend className="mb-2 text-xs font-semibold text-[#35364a]">Briefing subject</legend>
                 <div className="grid max-w-md grid-cols-2 gap-2">
@@ -1725,15 +1738,17 @@ function Home() {
               />
               <div className="mt-1 text-right font-mono text-[9px] text-[#aaa4af]">{context.length} / 1500</div>
 
-              <button type="button" onClick={() => { setPinDialogError(''); setStartPin(''); setPinPromptOpen(true); }} disabled={mutation.isPending || !tavilyConfigured || !startPinConfigured || !ownerAccountConfigured || crawlBudgetExhausted || crawlAlreadyActive || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || sourceMode === 'private'} className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#2b304a] px-4 text-sm font-semibold text-[#faf7f0] transition hover:bg-[#3c4160] disabled:opacity-55" data-testid="button-generate-briefing">
+              <button type="button" onClick={() => { setPinDialogError(''); setStartPin(''); setPinPromptOpen(true); }} disabled={mutation.isPending || !canStart || !tavilyConfigured || !startPinConfigured || !ownerAccountConfigured || crawlBudgetExhausted || crawlAlreadyActive || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || sourceMode === 'private'} className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#2b304a] px-4 text-sm font-semibold text-[#faf7f0] transition hover:bg-[#3c4160] disabled:opacity-55" data-testid="button-generate-briefing">
                 {mutation.isPending ? <><LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />Crawling sources…</> : sourceMode === 'private' ? <><FileText className="h-4 w-4 text-[#c9b9ee]" aria-hidden="true" />Private mode unavailable</> : <><FileText className="h-4 w-4 text-[#c9b9ee]" aria-hidden="true" />{currentRequestFailed ? 'Start again' : hasCurrentResult ? 'Refresh briefing' : 'Start briefing'}<ArrowDown className="ml-auto h-4 w-4 opacity-60" aria-hidden="true" /></>}
               </button>
               <p id="form-note" className="mt-3 text-center text-[10px] leading-relaxed text-[#898392]" data-testid="text-tavily-setup">
                 {sourceStatusQuery.isLoading
                   ? 'Checking Tavily source-search connection…'
                   : tavilyConfigured
-                    ? 'Your Tavily key is connected. Each selected tab sends one separate basic search request (up to 5 per crawl, with up to 8 results per tab), billed to the Tavily account for your key. The app-wide rate limit is 10 requests per rolling five minutes; each tab counts once. Positive and negative signals are scored locally from cited source text; fragmentation adds no API request. AI stays off. Results include dates, titles, snippets and links—not full-page crawls.'
-                    : 'Add your Tavily API key in the account settings above. The key is encrypted and is not shared with other accounts.'}
+                    ? keySource === 'project-owner'
+                      ? 'The configured owner is using the existing project Tavily key. It is restricted to that account; Tavily bills the account that owns the project key. Each selected tab sends one basic search request (up to 5 per crawl and 8 results per tab). Positive and negative signals are scored locally from cited source text. AI stays off.'
+                      : 'Your personal Tavily key is connected and billed to its Tavily account. Each selected tab sends one basic search request (up to 5 per crawl and 8 results per tab). Positive and negative signals are scored locally from cited source text. AI stays off.'
+                    : 'The owner project key is unavailable for this account. Add a personal Tavily API key in account settings; keys are encrypted and are not shared across accounts.'}
                 {' '}The app-wide safety limit remains 120 seconds of crawl runtime per calendar day in IST, resetting at midnight, with a three-minute backup hard stop. Only the configured owner account can currently start crawls.
                 {dailyCrawlRemainingMs !== null && ` ${Math.ceil(dailyCrawlRemainingMs / 1000)} seconds remain in the shared allowance.`}
               </p>

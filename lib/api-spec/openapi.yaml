@@ -341,6 +341,14 @@ components:
           enum: [tavily]
         configured:
           type: boolean
+          description: Whether this signed-in account has an effective Tavily key.
+        canStart:
+          type: boolean
+          description: Whether this signed-in account is the configured owner allowed to start crawls.
+        keySource:
+          type: string
+          enum: [project-owner, account, missing]
+          description: Effective key source for this account; the project key is owner-only.
         startPinConfigured:
           type: boolean
         ownerAccountConfigured:
@@ -370,6 +378,8 @@ components:
       required:
         - provider
         - configured
+        - canStart
+        - keySource
         - startPinConfigured
         - ownerAccountConfigured
         - dailyCrawlLimitMs

@@ -96,6 +96,18 @@ export const BriefingSourceStatusProvider = {
   tavily: 'tavily',
 } as const;
 
+/**
+ * Effective key source for this account; the project key is owner-only.
+ */
+export type BriefingSourceStatusKeySource = typeof BriefingSourceStatusKeySource[keyof typeof BriefingSourceStatusKeySource];
+
+
+export const BriefingSourceStatusKeySource = {
+  'project-owner': 'project-owner',
+  account: 'account',
+  missing: 'missing',
+} as const;
+
 export type BriefingSourceStatusSearchDepth = typeof BriefingSourceStatusSearchDepth[keyof typeof BriefingSourceStatusSearchDepth];
 
 
@@ -105,7 +117,12 @@ export const BriefingSourceStatusSearchDepth = {
 
 export interface BriefingSourceStatus {
   provider: BriefingSourceStatusProvider;
+  /** Whether this signed-in account has an effective Tavily key. */
   configured: boolean;
+  /** Whether this signed-in account is the configured owner allowed to start crawls. */
+  canStart: boolean;
+  /** Effective key source for this account; the project key is owner-only. */
+  keySource: BriefingSourceStatusKeySource;
   startPinConfigured: boolean;
   ownerAccountConfigured: boolean;
   /** @minimum 0 */

@@ -396,13 +396,29 @@ const NEGATIVE_SIGNAL_PATTERNS = [
 ];
 
 router.get("/briefings", async (req, res): Promise<void> => {
-  const credentialStatus = await getTavilyCredentialStatus(
-    getAuth(req).userId ?? null,
-  );
+  const userId = getAuth(req).userId ?? null;
+  const ownerEmail = process.env.BRIEFING_OWNER_EMAIL?.trim().toLowerCase();
+  let canStart = false;
+  if (userId && ownerEmail) {
+    try {
+      canStart = (await resolveOwnerUserId(ownerEmail)) === userId;
+    } catch (error) {
+      req.log.error({ error }, "Failed to verify the briefing owner account for status");
+    }
+  }
+  const credentialStatus = await getTavilyCredentialStatus(userId);
+  const projectKeyConfigured = canStart && Boolean(process.env.TAVILY_API_KEY?.trim());
+  const keySource = projectKeyConfigured
+    ? "project-owner"
+    : credentialStatus.connected
+      ? "account"
+      : "missing";
   const quota = await getTavilyQuotaStatus();
   res.json(GetBriefingSourceStatusResponse.parse({
     provider: "tavily",
-    configured: credentialStatus.connected,
+    configured: keySource !== "missing",
+    canStart,
+    keySource,
     startPinConfigured: /^\d{4}$/.test(process.env.BRIEFING_START_PIN?.trim() ?? ""),
     ownerAccountConfigured: Boolean(process.env.BRIEFING_OWNER_EMAIL?.trim()),
     dailyCrawlLimitMs: TAVILY_DAILY_LIMIT_MS,
@@ -769,18 +785,24 @@ router.post("/briefings", async (req, res): Promise<void> => {
   }
 
   let apiKey: string | null;
-  try {
-    apiKey = await getUserTavilyApiKey(userId);
-  } catch {
-    req.log.error({}, "User Tavily credential is unavailable or cannot be decrypted");
-    res.status(503).json({
-      error: "Secure Tavily key storage is unavailable. No search request was sent.",
-    });
-    return;
+  const projectApiKey = process.env.TAVILY_API_KEY?.trim();
+  if (projectApiKey) {
+    // This branch is reached only after the server has verified the configured owner account.
+    apiKey = projectApiKey;
+  } else {
+    try {
+      apiKey = await getUserTavilyApiKey(userId);
+    } catch {
+      req.log.error({}, "User Tavily credential is unavailable or cannot be decrypted");
+      res.status(503).json({
+        error: "Secure Tavily key storage is unavailable. No search request was sent.",
+      });
+      return;
+    }
   }
   if (!apiKey) {
     res.status(503).json({
-      error: "Add your own Tavily API key in your account's Tavily settings before starting a crawl.",
+      error: "No Tavily key is available for the configured owner account. Configure the owner key or save a personal Tavily key.",
     });
     return;
   }
