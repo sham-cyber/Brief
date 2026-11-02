@@ -931,6 +931,11 @@ function Home() {
   const hasValidRole = hasValidRoleSelection && hasValidPersonDetails;
   const hasTopics = topics.length > 0;
   const tavilyConfigured = sourceStatusQuery.data?.configured === true;
+  const dailyCrawlRemainingMs = sourceStatusQuery.data?.dailyCrawlRemainingMs ?? null;
+  const dailyCrawlActive = sourceStatusQuery.data?.dailyCrawlActive === true;
+  const dailyCrawlResetsAt = sourceStatusQuery.data?.dailyCrawlResetsAt ?? null;
+  const crawlBudgetExhausted = dailyCrawlRemainingMs === 0;
+  const crawlAlreadyActive = dailyCrawlActive && !mutation.isPending;
   const hasCurrentResult = Boolean(mutation.data && resultKey === requestKey);
   const result = hasCurrentResult ? mutation.data : undefined;
   const currentRequestIsPending = mutation.isPending && activeRequestKey.current === requestKey;
@@ -1043,7 +1048,7 @@ function Home() {
   }, [meetingAt, meetingTimeIsValid]);
 
   const runBriefing = useCallback((key: string) => {
-    if (!isSignedIn || !tavilyConfigured || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || sourceMode !== 'public' || mutation.isPending) return;
+    if (!isSignedIn || crawlBudgetExhausted || crawlAlreadyActive || !tavilyConfigured || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || sourceMode !== 'public' || mutation.isPending) return;
     activeRequestKey.current = key;
     setFailedKey('');
     setTimedOutKey('');
@@ -1055,7 +1060,7 @@ function Home() {
         activeRequestKey.current = `timed-out:${key}`;
         abortControllerRef.current?.abort();
       }
-    }, 120_000);
+    }, 180_000);
     mutation.mutate(
       {
         data: {
@@ -1084,9 +1089,12 @@ function Home() {
           abortControllerRef.current = null;
           if (activeRequestKey.current === key) setFailedKey(key);
         },
+        onSettled: () => {
+          void sourceStatusQuery.refetch();
+        },
       },
     );
-  }, [companyName, context, hasTopics, hasValidRole, hasValidSubject, isSignedIn, meetingAt, meetingTimeIsValid, mutation.isPending, mutation.mutate, personRole, publicRoleTitle, sourceMode, subject, subjectType, tavilyConfigured, topics]);
+  }, [companyName, context, crawlAlreadyActive, crawlBudgetExhausted, hasTopics, hasValidRole, hasValidSubject, isSignedIn, meetingAt, meetingTimeIsValid, mutation.isPending, mutation.mutate, personRole, publicRoleTitle, sourceMode, sourceStatusQuery.refetch, subject, subjectType, tavilyConfigured, topics]);
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1101,6 +1109,8 @@ function Home() {
       ? 'error'
       : currentRequestIsPending
         ? 'crawling'
+        : crawlAlreadyActive || crawlBudgetExhausted
+          ? 'not-ready'
         : hasCurrentResult
           ? 'ready'
           : 'not-ready';
@@ -1117,6 +1127,10 @@ function Home() {
       ? 'Not ready — the server could not confirm Tavily status. Check the API Server workflow.'
       : !tavilyConfigured
         ? 'Not ready — add TAVILY_API_KEY in Replit Secrets, then restart API Server.'
+        : crawlAlreadyActive
+          ? 'Not ready — a Tavily crawl is already running for this account.'
+        : crawlBudgetExhausted
+          ? `Not ready — this account has used its rolling 24-hour Tavily allowance${dailyCrawlResetsAt ? `; it resets ${new Date(dailyCrawlResetsAt).toLocaleString()}` : ''}.`
     : !hasValidSubject
       ? 'Not ready — enter a company or person.'
       : !hasValidRole
@@ -1135,9 +1149,9 @@ function Home() {
               ? 'Not ready — private sources need user authorization and protected sign-in.'
               : 'Not ready — press Crawl & prepare briefing.'
     : readinessState === 'error'
-      ? timedOutKey === requestKey ? 'Not ready — collection exceeded the 2-minute limit.' : 'Not ready — source collection failed. Try again.'
+      ? timedOutKey === requestKey ? 'Not ready — the three-minute backup stop ended this crawl.' : 'Not ready — source collection failed. Try again.'
       : readinessState === 'crawling'
-        ? 'Collecting sources — this may take up to 2 minutes.'
+        ? 'Collecting sources — up to your remaining daily allowance.'
       : readinessState === 'ready'
           ? 'Data ready — sources collected for this meeting.'
           : 'Not ready — press Crawl & prepare briefing.';
@@ -1575,7 +1589,7 @@ function Home() {
               />
               <div className="mt-1 text-right font-mono text-[9px] text-[#aaa4af]">{context.length} / 1500</div>
 
-              <button type="submit" disabled={mutation.isPending || !tavilyConfigured || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || sourceMode === 'private'} className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#2b304a] px-4 text-sm font-semibold text-[#faf7f0] transition hover:bg-[#3c4160] disabled:opacity-55" data-testid="button-generate-briefing">
+              <button type="submit" disabled={mutation.isPending || !tavilyConfigured || crawlBudgetExhausted || crawlAlreadyActive || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || sourceMode === 'private'} className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#2b304a] px-4 text-sm font-semibold text-[#faf7f0] transition hover:bg-[#3c4160] disabled:opacity-55" data-testid="button-generate-briefing">
                 {mutation.isPending ? <><LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />Crawling sources…</> : sourceMode === 'private' ? <><FileText className="h-4 w-4 text-[#c9b9ee]" aria-hidden="true" />Private mode unavailable</> : <><FileText className="h-4 w-4 text-[#c9b9ee]" aria-hidden="true" />{hasCurrentResult ? 'Refresh briefing' : 'Crawl & prepare briefing'}<ArrowDown className="ml-auto h-4 w-4 opacity-60" aria-hidden="true" /></>}
               </button>
               <p id="form-note" className="mt-3 text-center text-[10px] leading-relaxed text-[#898392]" data-testid="text-tavily-setup">
@@ -1584,7 +1598,8 @@ function Home() {
                   : tavilyConfigured
                     ? 'Tavily basic search is connected. This pilot key uses the project owner’s credit balance; each crawl runs up to 5 topic searches. It returns dated titles, snippets and links—not full-page crawls. AI summaries stay off.'
                     : 'Tavily is not connected. Add the TAVILY_API_KEY secret to the API Server, then restart that workflow. This app does not expose the key.'}
-                {' '}One manual crawl only; no scheduled or meeting-time searches. Maximum crawl time: two minutes.
+                {' '}Per account: 120 seconds of Tavily runtime in a rolling 24 hours. A crawl has a three-minute backup hard stop. The pilot key still uses the project owner’s shared credit balance.
+                {dailyCrawlRemainingMs !== null && ` ${Math.ceil(dailyCrawlRemainingMs / 1000)} seconds remain on this account’s allowance.`}
               </p>
               </>
               )}

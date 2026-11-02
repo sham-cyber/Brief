@@ -69,8 +69,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: The signed-in user's rolling 24-hour crawl allowance is exhausted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "502":
           description: Research or briefing generation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "504":
+          description: The crawl reached its three-minute hard stop
           content:
             application/json:
               schema:
@@ -236,6 +248,20 @@ components:
           enum: [tavily]
         configured:
           type: boolean
+        dailyCrawlLimitMs:
+          type: integer
+          minimum: 0
+        dailyCrawlUsedMs:
+          type: ["integer", "null"]
+          minimum: 0
+        dailyCrawlRemainingMs:
+          type: ["integer", "null"]
+          minimum: 0
+        dailyCrawlActive:
+          type: boolean
+        dailyCrawlResetsAt:
+          type: ["string", "null"]
+          format: date-time
         maxSearchesPerBriefing:
           type: integer
           minimum: 1
@@ -243,7 +269,16 @@ components:
         searchDepth:
           type: string
           enum: [basic]
-      required: [provider, configured, maxSearchesPerBriefing, searchDepth]
+      required:
+        - provider
+        - configured
+        - dailyCrawlLimitMs
+        - dailyCrawlUsedMs
+        - dailyCrawlRemainingMs
+        - dailyCrawlActive
+        - dailyCrawlResetsAt
+        - maxSearchesPerBriefing
+        - searchDepth
     BriefingHighlight:
       type: object
       properties:

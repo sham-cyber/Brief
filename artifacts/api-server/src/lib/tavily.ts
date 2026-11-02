@@ -22,7 +22,11 @@ export async function searchTavily(
   startDate: string,
   endDate: string,
   apiKey: string,
+  signal?: AbortSignal,
 ): Promise<{ results: TavilyResult[]; creditsUsed: number | null }> {
+  const requestSignal = signal
+    ? AbortSignal.any([signal, AbortSignal.timeout(25_000)])
+    : AbortSignal.timeout(25_000);
   const response = await fetch("https://api.tavily.com/search", {
     method: "POST",
     headers: {
@@ -44,7 +48,7 @@ export async function searchTavily(
       include_usage: true,
       language: "en",
     }),
-    signal: AbortSignal.timeout(25_000),
+    signal: requestSignal,
   });
 
   if (!response.ok) throw new TavilySearchError(response.status);

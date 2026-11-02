@@ -100,6 +100,21 @@ export const BriefingSourceStatusSearchDepth = {
 export interface BriefingSourceStatus {
   provider: BriefingSourceStatusProvider;
   configured: boolean;
+  /** @minimum 0 */
+  dailyCrawlLimitMs: number;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  dailyCrawlUsedMs: number | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  dailyCrawlRemainingMs: number | null;
+  dailyCrawlActive: boolean;
+  /** @nullable */
+  dailyCrawlResetsAt: string | null;
   /**
      * @minimum 1
      * @maximum 5

@@ -7,7 +7,7 @@ The user means the existing Briefing Agent in this workspace when referring to t
 
 **Why:** The user clarified the 30-day crawler brief, Company/Person differences, role choices, private sources, user-owned connection methods and provider billing, and explicitly decided AI assistance should remain in chat rather than be integrated into the app.
 
-**How to apply:** Extend the existing Briefing Agent as a user-triggered web app. Meeting time is context only; the user must press the crawl button. Prioritize stated meeting context; do not infer private motives or finances or make investment recommendations. Each block should have a repeat action using browser-native speech. Crawling is capped at 2 minutes and never continuous. Keep Company briefs public-only. Do not read private accounts until the source owner or authorized delegate grants access and each user's data is isolated. Do not connect workspace credentials after the user declines; user-owned provider credentials may be supported only through secure per-user handling. Exclude personal WhatsApp history and personal/family health records. Keep the app's reports source-based with citations; keep AI-assisted questions and summaries in the Replit Agent chat, not inside the app. Present it as a source-first briefing assistant: explain its role-specific value and 30-day method, but do not claim active AI while AI is off.
+**How to apply:** Extend the existing Briefing Agent as a user-triggered web app. Meeting time is context only; the user must press the crawl button. Prioritize stated meeting context; do not infer private motives or finances or make investment recommendations. Each block should have a repeat action using browser-native speech. Each signed-in account has a 120-second Tavily runtime budget per rolling 24 hours; a three-minute hard stop is the fallback. Crawling is never continuous. Keep Company briefs public-only. Do not read private accounts until the source owner or authorized delegate grants access and each user's data is isolated. Do not connect workspace credentials after the user declines; user-owned provider credentials may be supported only through secure per-user handling. Exclude personal WhatsApp history and personal/family health records. Keep the app's reports source-based with citations; keep AI-assisted questions and summaries in the Replit Agent chat, not inside the app. Present it as a source-first briefing assistant: explain its role-specific value and 30-day method, but do not claim active AI while AI is off.
 
 The optional meeting-context note should prioritize matching public results (for example, “new cable plant”) without changing the 30-day window or selected categories.
 
@@ -68,3 +68,9 @@ The project-level Tavily secret is a pilot-only search credential; it charges th
 **Why:** The user wants to use their Tavily trial credits now, while the intended multi-tenant product must keep each user's provider charges on that user's account.
 
 **How to apply:** Keep the shared key server-side and disclose its project-wide billing during the pilot. Before public multi-tenant use, require securely isolated user-owned Tavily credentials or another explicit billing model.
+
+The user selected a separate 120-second rolling 24-hour crawl-time allowance for each signed-in account, with a three-minute backup hard stop. This is a usage limit, not per-user billing; the pilot still spends the project owner's shared Tavily balance.
+
+**Why:** The user specified the time limits and chose per-account scope for the pilot.
+
+**How to apply:** Keep the account-specific budget persistent across restarts and reserve it atomically so overlapping crawls cannot exceed it. Continue to disclose that all accounts share the project-level provider bill.

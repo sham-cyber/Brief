@@ -20,6 +20,12 @@ export const HealthCheckResponse = zod.object({
 /**
  * @summary Get public-source search configuration
  */
+export const getBriefingSourceStatusResponseDailyCrawlLimitMsMin = 0;
+
+export const getBriefingSourceStatusResponseDailyCrawlUsedMsMin = 0;
+
+export const getBriefingSourceStatusResponseDailyCrawlRemainingMsMin = 0;
+
 export const getBriefingSourceStatusResponseMaxSearchesPerBriefingMax = 5;
 
 
@@ -27,6 +33,11 @@ export const getBriefingSourceStatusResponseMaxSearchesPerBriefingMax = 5;
 export const GetBriefingSourceStatusResponse = zod.object({
   "provider": zod.enum(['tavily']),
   "configured": zod.boolean(),
+  "dailyCrawlLimitMs": zod.number().int().min(getBriefingSourceStatusResponseDailyCrawlLimitMsMin),
+  "dailyCrawlUsedMs": zod.number().int().min(getBriefingSourceStatusResponseDailyCrawlUsedMsMin).nullable(),
+  "dailyCrawlRemainingMs": zod.number().int().min(getBriefingSourceStatusResponseDailyCrawlRemainingMsMin).nullable(),
+  "dailyCrawlActive": zod.boolean(),
+  "dailyCrawlResetsAt": zod.coerce.date().nullable(),
   "maxSearchesPerBriefing": zod.number().int().min(1).max(getBriefingSourceStatusResponseMaxSearchesPerBriefingMax),
   "searchDepth": zod.enum(['basic'])
 })

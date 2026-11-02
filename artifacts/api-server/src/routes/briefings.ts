@@ -6,6 +6,13 @@ import {
   GetBriefingSourceStatusResponse,
 } from "@workspace/api-zod";
 import { getAuth } from "@clerk/express";
+import {
+  finishTavilyQuotaReservation,
+  getTavilyQuotaStatus,
+  reserveTavilyQuota,
+  TAVILY_CRAWL_HARD_STOP_MS,
+  TAVILY_DAILY_LIMIT_MS,
+} from "../lib/tavily-quota";
 import { searchTavily, TavilySearchError } from "../lib/tavily";
 
 const router: IRouter = Router();
@@ -154,6 +161,7 @@ async function searchNews(
   context?: string,
   publicRoleTitle: string | null = null,
   companyName: string | null = null,
+  signal?: AbortSignal,
 ): Promise<SearchNewsResult> {
   const apiKey = process.env.TAVILY_API_KEY?.trim();
   if (!apiKey) {
@@ -189,7 +197,7 @@ async function searchNews(
   const settled = await Promise.allSettled(
     searchTerms.map(async ({ topic, query }) => ({
       topic,
-      ...(await searchTavily(query, startDate, endDate, apiKey)),
+      ...(await searchTavily(query, startDate, endDate, apiKey, signal)),
     })),
   );
   const fulfilled = settled.flatMap((entry) =>
@@ -316,10 +324,17 @@ const NEGATIVE_SIGNAL_PATTERNS = [
   /\b(?:layoffs?|cuts?|miss(?:es|ed)? estimates?|debt|delay(?:s|ed)?|slowdown|warning|concern|pressure|closure|shutdown|restructur(?:e|ing))\b/i,
 ];
 
-router.get("/briefings", (_req, res): void => {
+router.get("/briefings", async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId;
+  const quota = userId ? await getTavilyQuotaStatus(userId) : null;
   res.json(GetBriefingSourceStatusResponse.parse({
     provider: "tavily",
     configured: Boolean(process.env.TAVILY_API_KEY?.trim()),
+    dailyCrawlLimitMs: TAVILY_DAILY_LIMIT_MS,
+    dailyCrawlUsedMs: quota?.usedMs ?? null,
+    dailyCrawlRemainingMs: quota?.remainingMs ?? null,
+    dailyCrawlActive: quota?.active ?? false,
+    dailyCrawlResetsAt: quota?.resetsAt?.toISOString() ?? null,
     maxSearchesPerBriefing: 5,
     searchDepth: "basic",
   }));
@@ -556,7 +571,8 @@ function buildBriefingContent(
 }
 
 router.post("/briefings", async (req, res): Promise<void> => {
-  if (!getAuth(req).userId) {
+  const userId = getAuth(req).userId;
+  if (!userId) {
     res.status(401).json({ error: "Sign in before using the briefing search." });
     return;
   }
@@ -607,6 +623,49 @@ router.post("/briefings", async (req, res): Promise<void> => {
     return;
   }
 
+  if (!process.env.TAVILY_API_KEY?.trim()) {
+    res.status(503).json({
+      error: "Tavily is not connected. Add TAVILY_API_KEY in Replit Secrets, then restart the API Server workflow.",
+    });
+    return;
+  }
+
+  const quota = await reserveTavilyQuota(userId);
+  if (!quota.allowed || quota.reservationId === null) {
+    if (quota.reason === "active-crawl") {
+      res.status(429).json({
+        error: "A Tavily crawl is already running for this account. Wait for it to finish before starting another.",
+      });
+      return;
+    }
+    const resetNote = quota.resetsAt
+      ? ` It resets after ${quota.resetsAt.toISOString()}.`
+      : "";
+    res.status(429).json({
+      error: `Your two-minute Tavily crawl allowance for the rolling 24-hour period is used.${resetNote}`,
+    });
+    return;
+  }
+
+  const crawlStartedAt = Date.now();
+  const crawlController = new AbortController();
+  let stopReason: "daily-budget" | "hard-stop" | null = null;
+  let quotaSettled = false;
+  const settleQuota = async () => {
+    if (quotaSettled || quota.reservationId === null) return;
+    quotaSettled = true;
+    const durationMs = Math.min(quota.remainingMs, Date.now() - crawlStartedAt);
+    await finishTavilyQuotaReservation(userId, quota.reservationId, durationMs);
+  };
+  const dailyBudgetTimer = setTimeout(() => {
+    stopReason = "daily-budget";
+    crawlController.abort(new Error("The rolling daily Tavily allowance has been reached."));
+  }, quota.remainingMs);
+  const hardStopTimer = setTimeout(() => {
+    stopReason = "hard-stop";
+    crawlController.abort(new Error("The three-minute Tavily crawl hard stop has been reached."));
+  }, TAVILY_CRAWL_HARD_STOP_MS);
+
   try {
     const now = new Date();
     const meetingAt = input.data.meetingAt;
@@ -623,7 +682,22 @@ router.post("/briefings", async (req, res): Promise<void> => {
       input.data.context?.trim() || undefined,
       publicRoleTitle,
       companyName,
+      crawlController.signal,
     );
+    if (stopReason) {
+      await settleQuota();
+      if (stopReason === "daily-budget") {
+        res.status(429).json({
+          error: "This crawl used the remaining two-minute Tavily allowance and was stopped.",
+        });
+      } else {
+        res.status(504).json({
+          error: "The crawl reached its three-minute backup hard stop.",
+        });
+      }
+      return;
+    }
+    await settleQuota();
     const collected = searchResult.sources;
 
     const relevant = collected.filter(({ source, searchedAs }) =>
@@ -659,6 +733,27 @@ router.post("/briefings", async (req, res): Promise<void> => {
     });
     res.json(result);
   } catch (error) {
+    try {
+      await settleQuota();
+    } catch (settleError) {
+      req.log.error({ error: settleError }, "Failed to save Tavily crawl usage");
+      res.status(503).json({
+        error: "Crawl usage could not be saved safely. Please try again later.",
+      });
+      return;
+    }
+    if (stopReason === "daily-budget") {
+      res.status(429).json({
+        error: "This crawl used the remaining two-minute Tavily allowance and was stopped.",
+      });
+      return;
+    }
+    if (stopReason === "hard-stop") {
+      res.status(504).json({
+        error: "The crawl reached its three-minute backup hard stop.",
+      });
+      return;
+    }
     if (error instanceof Error && error.message.startsWith("Tavily is not configured.")) {
       req.log.warn("Tavily source search is not configured");
       res.status(503).json({
@@ -694,6 +789,9 @@ router.post("/briefings", async (req, res): Promise<void> => {
     res.status(502).json({
       error: "The briefing could not be generated. Please try again shortly.",
     });
+  } finally {
+    clearTimeout(dailyBudgetTimer);
+    clearTimeout(hardStopTimer);
   }
 });
 
