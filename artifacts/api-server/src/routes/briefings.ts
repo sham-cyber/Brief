@@ -651,6 +651,12 @@ router.post("/briefings", async (req, res): Promise<void> => {
     });
     return;
   }
+  if (new Set(input.data.topics).size !== input.data.topics.length) {
+    res.status(400).json({
+      error: "Select each topic tab only once so it receives one search request.",
+    });
+    return;
+  }
 
   const ownerEmail = process.env.BRIEFING_OWNER_EMAIL?.trim().toLowerCase();
   if (!ownerEmail) {
