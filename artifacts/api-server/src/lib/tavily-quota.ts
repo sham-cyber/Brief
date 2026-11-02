@@ -3,10 +3,10 @@ import { pool } from "@workspace/db";
 export const TAVILY_DAILY_LIMIT_MS = 120_000;
 export const TAVILY_CRAWL_HARD_STOP_MS = 180_000;
 
-type UsageTotalsRow = {
-  used_ms: string | number;
-  active_count: string | number;
-  reset_at: Date | string | null;
+type UsageRow = {
+  reserved_ms: string | number;
+  started_at: Date | string;
+  finished_at: Date | string | null;
 };
 
 export type TavilyQuotaStatus = {
@@ -31,37 +31,48 @@ function toDate(value: Date | string | null | undefined): Date | null {
 
 async function readUsageTotals(
   executor: Pick<typeof pool, "query">,
-  userId: string,
 ): Promise<TavilyQuotaStatus> {
-  const result = await executor.query<UsageTotalsRow>(
-    `SELECT
-       COALESCE(SUM(reserved_ms), 0)::int AS used_ms,
-       COUNT(*) FILTER (WHERE finished_at IS NULL)::int AS active_count,
-       MIN(started_at + INTERVAL '24 hours')
-         FILTER (WHERE reserved_ms > 0) AS reset_at
+  const result = await executor.query<UsageRow>(
+    `SELECT reserved_ms, started_at, finished_at
      FROM briefing_tavily_usage
-     WHERE user_id = $1
-       AND started_at >= NOW() - INTERVAL '24 hours'`,
-    [userId],
+     WHERE started_at >= NOW() - INTERVAL '24 hours'
+     ORDER BY started_at ASC`,
+  );
+  const totalUsedMs = result.rows.reduce(
+    (total, row) => total + Math.max(0, Number(row.reserved_ms)),
+    0,
   );
   const usedMs = Math.min(
     TAVILY_DAILY_LIMIT_MS,
-    Math.max(0, Number(result.rows[0]?.used_ms ?? 0)),
+    Math.max(0, totalUsedMs),
   );
+  const active = result.rows.some((row) => row.finished_at === null);
+  let resetsAt: Date | null = null;
+  if (totalUsedMs >= TAVILY_DAILY_LIMIT_MS) {
+    let usageToExpire = totalUsedMs - TAVILY_DAILY_LIMIT_MS + 1;
+    for (const row of result.rows) {
+      usageToExpire -= Math.max(0, Number(row.reserved_ms));
+      if (usageToExpire <= 0) {
+        const startedAt = toDate(row.started_at);
+        if (startedAt) {
+          resetsAt = new Date(startedAt.getTime() + 24 * 60 * 60 * 1000);
+        }
+        break;
+      }
+    }
+  }
 
   return {
     limitMs: TAVILY_DAILY_LIMIT_MS,
     usedMs,
     remainingMs: Math.max(0, TAVILY_DAILY_LIMIT_MS - usedMs),
-    resetsAt: toDate(result.rows[0]?.reset_at),
-    active: Number(result.rows[0]?.active_count ?? 0) > 0,
+    resetsAt,
+    active,
   };
 }
 
-export async function getTavilyQuotaStatus(
-  userId: string,
-): Promise<TavilyQuotaStatus> {
-  return readUsageTotals(pool, userId);
+export async function getTavilyQuotaStatus(): Promise<TavilyQuotaStatus> {
+  return readUsageTotals(pool);
 }
 
 export async function reserveTavilyQuota(
@@ -72,18 +83,16 @@ export async function reserveTavilyQuota(
     await client.query("BEGIN");
     await client.query(
       "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
-      [userId],
+      ["briefing-agent-shared-tavily-pool"],
     );
 
     await client.query(
       `DELETE FROM briefing_tavily_usage
-       WHERE user_id = $1
-         AND started_at < NOW() - INTERVAL '24 hours'`,
-      [userId],
+       WHERE started_at < NOW() - INTERVAL '24 hours'`,
     );
 
-    const quota = await readUsageTotals(client, userId);
-    if (quota.remainingMs <= 0) {
+    const quota = await readUsageTotals(client);
+    if (quota.active || quota.remainingMs <= 0) {
       await client.query("COMMIT");
       return {
         ...quota,

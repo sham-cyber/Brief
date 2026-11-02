@@ -145,7 +145,7 @@ export const getGetBriefingSourceStatusUrl = () => {
 }
 
 /**
- * @summary Get public-source search configuration
+ * @summary Get public-source configuration and shared crawl allowance
  */
 export const getBriefingSourceStatus = async ( options?: Parameters<typeof customFetch>[1]): Promise<BriefingSourceStatus> => {
 
@@ -192,7 +192,7 @@ export type GetBriefingSourceStatusQueryError = ErrorType<unknown>
 
 
 /**
- * @summary Get public-source search configuration
+ * @summary Get public-source configuration and shared crawl allowance
  */
 
 export function useGetBriefingSourceStatus<TData = Awaited<ReturnType<typeof getBriefingSourceStatus>>, TError = ErrorType<unknown>>(

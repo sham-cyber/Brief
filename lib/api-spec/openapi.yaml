@@ -32,10 +32,10 @@ paths:
     get:
       operationId: getBriefingSourceStatus
       tags: [briefings]
-      summary: Get public-source search configuration
+      summary: Get public-source configuration and shared crawl allowance
       responses:
         "200":
-          description: Tavily search configuration without exposing credentials
+          description: Shared Tavily settings and the app-wide rolling crawl allowance without exposing credentials
           content:
             application/json:
               schema:
@@ -70,7 +70,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "429":
-          description: The signed-in user's rolling 24-hour crawl allowance is exhausted
+          description: The app-wide shared rolling 24-hour crawl allowance is exhausted
           content:
             application/json:
               schema:

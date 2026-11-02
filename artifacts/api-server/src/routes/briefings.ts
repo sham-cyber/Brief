@@ -325,16 +325,15 @@ const NEGATIVE_SIGNAL_PATTERNS = [
 ];
 
 router.get("/briefings", async (req, res): Promise<void> => {
-  const userId = getAuth(req).userId;
-  const quota = userId ? await getTavilyQuotaStatus(userId) : null;
+  const quota = await getTavilyQuotaStatus();
   res.json(GetBriefingSourceStatusResponse.parse({
     provider: "tavily",
     configured: Boolean(process.env.TAVILY_API_KEY?.trim()),
     dailyCrawlLimitMs: TAVILY_DAILY_LIMIT_MS,
-    dailyCrawlUsedMs: quota?.usedMs ?? null,
-    dailyCrawlRemainingMs: quota?.remainingMs ?? null,
-    dailyCrawlActive: quota?.active ?? false,
-    dailyCrawlResetsAt: quota?.resetsAt?.toISOString() ?? null,
+    dailyCrawlUsedMs: quota.usedMs,
+    dailyCrawlRemainingMs: quota.remainingMs,
+    dailyCrawlActive: quota.active,
+    dailyCrawlResetsAt: quota.resetsAt?.toISOString() ?? null,
     maxSearchesPerBriefing: 5,
     searchDepth: "basic",
   }));
@@ -634,7 +633,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
   if (!quota.allowed || quota.reservationId === null) {
     if (quota.reason === "active-crawl") {
       res.status(429).json({
-        error: "A Tavily crawl is already running for this account. Wait for it to finish before starting another.",
+        error: "A Tavily crawl is already using the shared app allowance. Wait for it to finish before starting another.",
       });
       return;
     }
@@ -642,7 +641,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
       ? ` It resets after ${quota.resetsAt.toISOString()}.`
       : "";
     res.status(429).json({
-      error: `Your two-minute Tavily crawl allowance for the rolling 24-hour period is used.${resetNote}`,
+      error: `The shared two-minute Tavily crawl allowance for the rolling 24-hour period is used.${resetNote}`,
     });
     return;
   }

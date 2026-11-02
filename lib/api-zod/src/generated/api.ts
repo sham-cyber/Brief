@@ -18,7 +18,7 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
- * @summary Get public-source search configuration
+ * @summary Get public-source configuration and shared crawl allowance
  */
 export const getBriefingSourceStatusResponseDailyCrawlLimitMsMin = 0;
 
