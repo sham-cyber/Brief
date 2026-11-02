@@ -272,6 +272,7 @@ function buildTopSignal(
   sources: SearchResult[],
   contextTerms: string[],
   polarity: "positive" | "negative",
+  scopeLabel = "the selected public reports",
 ): BriefingSignal {
   const patterns = polarity === "positive"
     ? POSITIVE_SIGNAL_PATTERNS
@@ -303,7 +304,7 @@ function buildTopSignal(
   const selected = candidates[0]?.entry.source;
   if (!selected) {
     return {
-      text: `No clear ${polarity} signal was found in the selected public reports.`,
+      text: `No clear ${polarity} signal was found in ${scopeLabel}.`,
       sourceIds: [],
     };
   }

@@ -12,6 +12,7 @@ import type { BriefingResultPersonRole } from './briefingResultPersonRole';
 import type { BriefingResultSourceMode } from './briefingResultSourceMode';
 import type { BriefingResultSubjectType } from './briefingResultSubjectType';
 import type { BriefingResultTopicsItem } from './briefingResultTopicsItem';
+import type { BriefingTopicBrief } from './briefingTopicBrief';
 import type { BriefSource } from './briefSource';
 
 export interface BriefingResult {
@@ -29,5 +30,6 @@ export interface BriefingResult {
   overview: BriefingOverview;
   highlights: BriefingHighlight[];
   questions: BriefingQuestion[];
+  topicBriefs: BriefingTopicBrief[];
   sources: BriefSource[];
 }

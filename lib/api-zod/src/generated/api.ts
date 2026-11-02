@@ -42,7 +42,6 @@ export const CreateBriefingBody = zod.object({
 
 
 
-
 export const CreateBriefingResponse = zod.object({
   "briefingId": zod.string().uuid(),
   "subject": zod.string(),
@@ -56,7 +55,7 @@ export const CreateBriefingResponse = zod.object({
   "windowEnd": zod.coerce.date(),
   "overview": zod.object({
   "text": zod.string(),
-  "sourceIds": zod.array(zod.string()).min(1),
+  "sourceIds": zod.array(zod.string()),
   "topPositive": zod.object({
   "text": zod.string(),
   "sourceIds": zod.array(zod.string())
@@ -75,6 +74,19 @@ export const CreateBriefingResponse = zod.object({
   "questions": zod.array(zod.object({
   "text": zod.string(),
   "sourceIds": zod.array(zod.string())
+})),
+  "topicBriefs": zod.array(zod.object({
+  "category": zod.enum(['news', 'hire', 'launch', 'financial', 'risk']),
+  "text": zod.string(),
+  "sourceIds": zod.array(zod.string()),
+  "topPositive": zod.object({
+  "text": zod.string(),
+  "sourceIds": zod.array(zod.string())
+}),
+  "topNegative": zod.object({
+  "text": zod.string(),
+  "sourceIds": zod.array(zod.string())
+})
 })),
   "sources": zod.array(zod.object({
   "id": zod.string(),

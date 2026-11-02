@@ -21,6 +21,8 @@ export * from './briefingResultSourceMode';
 export * from './briefingResultSubjectType';
 export * from './briefingResultTopicsItem';
 export * from './briefingSignal';
+export * from './briefingTopicBrief';
+export * from './briefingTopicBriefCategory';
 export * from './briefSource';
 export * from './error';
 export * from './healthStatus';

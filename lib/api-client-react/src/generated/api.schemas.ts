@@ -105,7 +105,25 @@ export interface BriefingSignal {
 
 export interface BriefingOverview {
   text: string;
-  /** @minItems 1 */
+  sourceIds: string[];
+  topPositive: BriefingSignal;
+  topNegative: BriefingSignal;
+}
+
+export type BriefingTopicBriefCategory = typeof BriefingTopicBriefCategory[keyof typeof BriefingTopicBriefCategory];
+
+
+export const BriefingTopicBriefCategory = {
+  news: 'news',
+  hire: 'hire',
+  launch: 'launch',
+  financial: 'financial',
+  risk: 'risk',
+} as const;
+
+export interface BriefingTopicBrief {
+  category: BriefingTopicBriefCategory;
+  text: string;
   sourceIds: string[];
   topPositive: BriefingSignal;
   topNegative: BriefingSignal;
@@ -170,6 +188,7 @@ export interface BriefingResult {
   overview: BriefingOverview;
   highlights: BriefingHighlight[];
   questions: BriefingQuestion[];
+  topicBriefs: BriefingTopicBrief[];
   sources: BriefSource[];
 }
 

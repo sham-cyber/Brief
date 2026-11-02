@@ -150,7 +150,6 @@ components:
           type: array
           items:
             type: string
-          minItems: 1
         topPositive:
           $ref: "#/components/schemas/BriefingSignal"
         topNegative:
@@ -166,6 +165,23 @@ components:
           items:
             type: string
       required: [text, sourceIds]
+    BriefingTopicBrief:
+      type: object
+      properties:
+        category:
+          type: string
+          enum: [news, hire, launch, financial, risk]
+        text:
+          type: string
+        sourceIds:
+          type: array
+          items:
+            type: string
+        topPositive:
+          $ref: "#/components/schemas/BriefingSignal"
+        topNegative:
+          $ref: "#/components/schemas/BriefingSignal"
+      required: [category, text, sourceIds, topPositive, topNegative]
     BriefingQuestion:
       type: object
       properties:
@@ -220,6 +236,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/BriefingQuestion"
+        topicBriefs:
+          type: array
+          items:
+            $ref: "#/components/schemas/BriefingTopicBrief"
         sources:
           type: array
           items:
@@ -238,5 +258,6 @@ components:
         - overview
         - highlights
         - questions
+        - topicBriefs
         - sources
 
