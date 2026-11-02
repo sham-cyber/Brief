@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { randomUUID } from "node:crypto";
 import { CreateBriefingBody, CreateBriefingResponse } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -233,7 +234,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
   }
 
   if (input.data.subjectType === "person" && !input.data.personRole) {
-    res.status(400).json({ error: "Choose a briefing context for the person: Business Owner, MP, or Corporate." });
+    res.status(400).json({ error: "Choose a briefing context for the person: Chairman / CEO, MP, or Corporate." });
     return;
   }
   if (input.data.subjectType === "company" && input.data.personRole) {
@@ -293,6 +294,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
     const sources = relevant.map(({ source }) => source);
 
     const result = CreateBriefingResponse.parse({
+      briefingId: randomUUID(),
       subject: input.data.subject.trim(),
       subjectType: input.data.subjectType,
       personRole: input.data.personRole,

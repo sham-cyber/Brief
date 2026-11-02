@@ -15,6 +15,7 @@ import type { BriefingResultTopicsItem } from './briefingResultTopicsItem';
 import type { BriefSource } from './briefSource';
 
 export interface BriefingResult {
+  briefingId: string;
   subject: string;
   subjectType: BriefingResultSubjectType;
   /** @nullable */

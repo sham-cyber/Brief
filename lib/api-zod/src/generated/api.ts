@@ -44,6 +44,7 @@ export const CreateBriefingBody = zod.object({
 
 
 export const CreateBriefingResponse = zod.object({
+  "briefingId": zod.string().uuid(),
   "subject": zod.string(),
   "subjectType": zod.enum(['company', 'person']),
   "personRole": zod.union([zod.literal('business_owner'),zod.literal('mp'),zod.literal('corporate'),zod.literal(null)]).nullable(),

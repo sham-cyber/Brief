@@ -165,6 +165,9 @@ components:
     BriefingResult:
       type: object
       properties:
+        briefingId:
+          type: string
+          format: uuid
         subject:
           type: string
         subjectType:
@@ -208,6 +211,7 @@ components:
           items:
             $ref: "#/components/schemas/BriefSource"
       required:
+        - briefingId
         - subject
         - subjectType
         - personRole

@@ -2,14 +2,57 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useCreateBriefing } from '@workspace/api-client-react';
 import type { BriefingResult, BriefSource } from '@workspace/api-client-react';
+import { ClerkProvider, SignIn, SignUp, Show, useClerk, useUser } from '@clerk/react';
+import { publishableKeyFromHost } from '@clerk/react/internal';
+import { shadcn } from '@clerk/themes';
 import { ArrowDown, ArrowUpRight, Check, Clipboard, Clock3, FileText, Link2, LoaderCircle, Play, Printer, Radio, RefreshCw, Search, Square, Volume2 } from 'lucide-react';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
-import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
+import { Redirect, Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 
 const queryClient = new QueryClient();
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+const clerkPubKey = publishableKeyFromHost(
+  window.location.hostname,
+  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
+);
+const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
+const clerkAppearance = {
+  theme: shadcn,
+  cssLayerName: 'clerk',
+  options: {
+    logoPlacement: 'inside' as const,
+    logoLinkUrl: basePath || '/',
+    logoImageUrl: `${window.location.origin}${basePath}/logo.svg`,
+  },
+  variables: {
+    colorPrimary: '#594b87',
+    colorForeground: '#292e46',
+    colorMutedForeground: '#777280',
+    colorDanger: '#a54e47',
+    colorBackground: '#fcfbf8',
+    colorInput: '#ffffff',
+    colorInputForeground: '#292e46',
+    colorNeutral: '#d8d1e5',
+    fontFamily: "'DM Sans', sans-serif",
+    borderRadius: '0.75rem',
+  },
+  elements: {
+    rootBox: 'w-full flex justify-center',
+    cardBox: 'bg-[#fcfbf8] rounded-2xl w-[440px] max-w-full overflow-hidden',
+    card: '!shadow-none !border-0 !bg-transparent !rounded-none',
+    footer: '!shadow-none !border-0 !bg-transparent !rounded-none',
+    headerTitle: 'text-[#292e46]',
+    headerSubtitle: 'text-[#777280]',
+    formFieldLabel: 'text-[#292e46]',
+    formFieldInput: 'text-[#292e46]',
+    formButtonPrimary: 'bg-[#594b87] text-white',
+    footerActionText: 'text-[#777280]',
+    footerActionLink: 'text-[#594b87]',
+  },
+};
 const TOPICS = [
   { value: 'news', label: 'News' },
   { value: 'hire', label: 'Hires' },
@@ -26,6 +69,186 @@ const PERSON_ROLES = [
 type PersonRole = typeof PERSON_ROLES[number]['value'];
 type SourceMode = 'public' | 'private';
 const SPEECH_WORD_LIMIT = 280;
+const AI_REQUESTS_PER_BRIEFING = 1;
+
+type AiGuardrailsStatus = {
+  serverEnabled: boolean;
+  passcodeConfigured: boolean;
+  activated: boolean;
+  requestsPerBriefing: number;
+  aiProviderConnected: boolean;
+};
+
+function apiUrl(path: string) {
+  return `${basePath}/api/${path}`;
+}
+
+async function sendGuardrailRequest(path: string, method: string, body?: unknown) {
+  const response = await fetch(apiUrl(path), {
+    method,
+    credentials: 'include',
+    headers: body ? { 'content-type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const payload = await response.json().catch(() => ({})) as { error?: string };
+  if (!response.ok) throw new Error(payload.error ?? 'The AI access request failed.');
+  return payload;
+}
+
+function AuthActions() {
+  const { isLoaded, isSignedIn, user } = useUser();
+  const { signOut } = useClerk();
+  if (!isLoaded) return <span className="font-mono text-[9px] uppercase tracking-[.12em] text-[#898392]">Checking account</span>;
+  if (!isSignedIn) {
+    return (
+      <div className="flex items-center gap-3">
+        <a href={`${basePath}/sign-in`} className="font-mono text-[9px] uppercase tracking-[.12em] text-[#6b627d] underline underline-offset-4">Sign in</a>
+        <a href={`${basePath}/sign-up`} className="rounded-lg bg-[#292e46] px-3 py-2 font-mono text-[9px] uppercase tracking-[.12em] text-white">Create account</a>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-3">
+      <span className="max-w-32 truncate font-mono text-[9px] text-[#71658e]">{user?.primaryEmailAddress?.emailAddress ?? 'Signed in'}</span>
+      <button type="button" onClick={() => void signOut({ redirectUrl: basePath || '/' })} className="font-mono text-[9px] uppercase tracking-[.12em] text-[#6b627d] underline underline-offset-4">Sign out</button>
+    </div>
+  );
+}
+
+function AiGuardrailPanel() {
+  const { isLoaded, isSignedIn } = useUser();
+  const [status, setStatus] = useState<AiGuardrailsStatus | null>(null);
+  const [passcode, setPasscode] = useState('');
+  const [confirmPasscode, setConfirmPasscode] = useState('');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const refreshStatus = useCallback(async () => {
+    const response = await fetch(apiUrl('ai/guardrails'), { credentials: 'include' });
+    const payload = await response.json().catch(() => ({})) as AiGuardrailsStatus & { error?: string };
+    if (!response.ok) throw new Error(payload.error ?? 'Could not load AI guardrails.');
+    setStatus(payload);
+  }, []);
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) {
+      setStatus(null);
+      return;
+    }
+    void refreshStatus().catch((error: unknown) => {
+      setMessage(error instanceof Error ? error.message : 'Could not load AI guardrails.');
+    });
+  }, [isLoaded, isSignedIn, refreshStatus]);
+
+  const savePasscode = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setMessage('');
+    if (passcode.length < 8 || passcode.length > 128) {
+      setMessage('Use 8–128 characters for your activation passcode.');
+      return;
+    }
+    if (passcode !== confirmPasscode) {
+      setMessage('The passcodes do not match.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await sendGuardrailRequest('ai/guardrails/passcode', 'PUT', { passcode });
+      setConfirmPasscode('');
+      setMessage('Passcode saved. The server switch still controls whether AI can be activated.');
+      await refreshStatus();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'The passcode could not be saved.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const activate = async () => {
+    setBusy(true);
+    setMessage('');
+    try {
+      await sendGuardrailRequest('ai/guardrails/activate', 'POST', { passcode });
+      setPasscode('');
+      setMessage('AI guardrail activated for this account.');
+      await refreshStatus();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'AI could not be activated.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const deactivate = async () => {
+    setBusy(true);
+    setMessage('');
+    try {
+      await sendGuardrailRequest('ai/guardrails/deactivate', 'POST');
+      setPasscode('');
+      setMessage('AI access stopped for this account.');
+      await refreshStatus();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'AI access could not be stopped.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!isLoaded) return null;
+  return (
+    <section className="no-print mt-4 rounded-xl border border-[#ded9e5] bg-[#f8f6fb] p-3 text-[11px]" aria-label="AI activation guardrails" data-testid="ai-guardrails">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <strong className="font-mono uppercase tracking-[.1em] text-[#443a66]">AI guardrails</strong>
+        <span className={`rounded-full px-2 py-1 font-mono text-[9px] uppercase tracking-[.12em] ${status?.activated ? 'bg-[#e7f2eb] text-[#2f6d4c]' : 'bg-[#fbefed] text-[#98453e]'}`}>
+          {status?.activated ? 'Account active' : 'Stopped'}
+        </span>
+      </div>
+      <p className="mt-2 leading-relaxed text-muted-foreground">
+        Server switch: {status?.serverEnabled ? 'ON' : 'OFF'} · {status?.requestsPerBriefing ?? AI_REQUESTS_PER_BRIEFING} AI request per briefing. Your phone number is not used as a password.
+      </p>
+      {!isSignedIn ? (
+        <p className="mt-2 text-muted-foreground">Sign in to set your separate activation passcode. <a href={`${basePath}/sign-in`} className="font-semibold text-[#594b87] underline underline-offset-2">Sign in</a></p>
+      ) : status ? (
+        <>
+          <form className="mt-3 grid gap-2 sm:grid-cols-[1fr_1fr_auto]" onSubmit={savePasscode}>
+            <input
+              aria-label="AI activation passcode"
+              autoComplete="new-password"
+              type="password"
+              minLength={8}
+              maxLength={128}
+              value={passcode}
+              onChange={(event) => setPasscode(event.target.value)}
+              placeholder="New activation passcode"
+              className="h-9 min-w-0 rounded-lg border border-[#d8d1e5] bg-white px-3 text-xs text-[#292e46] outline-none focus:ring-2 focus:ring-[#887ba7]"
+            />
+            <input
+              aria-label="Confirm AI activation passcode"
+              autoComplete="new-password"
+              type="password"
+              minLength={8}
+              maxLength={128}
+              value={confirmPasscode}
+              onChange={(event) => setConfirmPasscode(event.target.value)}
+              placeholder="Confirm passcode"
+              className="h-9 min-w-0 rounded-lg border border-[#d8d1e5] bg-white px-3 text-xs text-[#292e46] outline-none focus:ring-2 focus:ring-[#887ba7]"
+            />
+            <button type="submit" disabled={busy} className="h-9 rounded-lg bg-[#292e46] px-3 text-xs font-semibold text-white disabled:opacity-50">Save passcode</button>
+          </form>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button type="button" onClick={() => void activate()} disabled={busy || !status.serverEnabled || !status.passcodeConfigured || !status.aiProviderConnected || !passcode} className="h-9 rounded-lg border border-[#d7b3ae] bg-[#fbefed] px-3 text-xs font-semibold text-[#98453e] disabled:cursor-not-allowed disabled:opacity-50">Activate AI</button>
+            <button type="button" onClick={() => void deactivate()} disabled={busy || !status.activated} className="h-9 rounded-lg border border-[#d8d1e5] bg-white px-3 text-xs font-semibold text-[#443a66] disabled:cursor-not-allowed disabled:opacity-50">Stop AI</button>
+          </div>
+          {!status.serverEnabled && <p className="mt-2 text-[#98453e]">The server switch is off. No AI request can run.</p>}
+          {!status.aiProviderConnected && <p className="mt-1 text-muted-foreground">Per-user AI key setup is not available yet; AI remains stopped and no AI request can run.</p>}
+        </>
+      ) : (
+        <p className="mt-2 text-[#98453e]" role="status">{message || 'AI access settings are unavailable.'}</p>
+      )}
+      {message && status && <p className="mt-2 text-muted-foreground" role="status">{message}</p>}
+    </section>
+  );
+}
 
 function personRoleLabel(role: PersonRole | null | undefined) {
   return PERSON_ROLES.find((option) => option.value === role)?.label ?? '';
@@ -244,6 +467,7 @@ function VoiceControls({ text }: { text: string }) {
             ? `Speech preview: ${estimate.words}/${SPEECH_WORD_LIMIT} words spoken, ${text.length} characters; ${estimate.totalWords} words total${estimate.clipped ? ' — capped at 2 minutes' : ''}. Device estimate: about ${seconds}s. AI provider calls are off, so no AI speech cost is incurred.`
             : `0/${SPEECH_WORD_LIMIT} speech words, 0 characters. AI voice is off; device read-aloud starts after the crawl.`}
         </p>
+        <AiGuardrailPanel />
       </div>
     </div>
   );
@@ -630,7 +854,7 @@ function Home() {
     ? !hasValidSubject
       ? 'Not ready — enter a company or person.'
       : !hasValidRole
-        ? 'Not ready — choose Business Owner, MP, or Corporate.'
+        ? 'Not ready — choose Chairman / CEO, MP, or Corporate.'
         : !meetingTimeIsValid
           ? 'Not ready — set a meeting time.'
           : !hasTopics
@@ -672,12 +896,15 @@ function Home() {
     <main className="paper-grid min-h-[100dvh] overflow-hidden">
       <div className="mx-auto max-w-[1240px] px-5 pb-16 pt-5 sm:px-8 lg:px-12">
         <nav className="no-print flex items-center justify-between border-b border-[#d9d4df] pb-4" aria-label="Main">
-          <a href="/" className="inline-flex items-center gap-2.5 text-foreground no-underline" aria-label="Briefing Agent home" data-testid="link-home">
+          <a href={`${basePath}/`} className="inline-flex items-center gap-2.5 text-foreground no-underline" aria-label="Briefing Agent home" data-testid="link-home">
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#292e46] text-[#d9cef3]"><FileText className="h-4 w-4" aria-hidden="true" /></span>
             <span className="text-[13px] font-bold tracking-[-.02em]">briefing<span className="font-normal text-[#786d93]"> agent</span></span>
           </a>
-          <div className="flex items-center gap-2 font-mono text-[9px] uppercase tracking-[.14em] text-[#736d7d] sm:text-[10px]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#5b9b7e]" aria-hidden="true" /> Research, with receipts
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <span className="flex items-center gap-2 font-mono text-[9px] uppercase tracking-[.14em] text-[#736d7d] sm:text-[10px]">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#5b9b7e]" aria-hidden="true" /> Research, with receipts
+            </span>
+            <AuthActions />
           </div>
         </nav>
 
@@ -1011,10 +1238,93 @@ function Router() {
   return (
     <RoutedErrorBoundary>
       <Switch>
-        <Route path="/" component={Home} />
+        <Route path="/sign-in/*?" component={SignInPage} />
+        <Route path="/sign-up/*?" component={SignUpPage} />
+        <Route path="/" component={HomeRedirect} />
+        <Route path="/user-portal" component={UserPortal} />
         <Route component={NotFound} />
       </Switch>
     </RoutedErrorBoundary>
+  );
+}
+
+function HomeRedirect() {
+  return (
+    <>
+      <Show when="signed-in"><Redirect to="/user-portal" /></Show>
+      <Show when="signed-out"><Home /></Show>
+    </>
+  );
+}
+
+function UserPortal() {
+  return (
+    <>
+      <Show when="signed-in"><Home /></Show>
+      <Show when="signed-out"><Redirect to="/" /></Show>
+    </>
+  );
+}
+
+function SignInPage() {
+  return (
+    <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4 py-8">
+      <SignIn routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} />
+    </div>
+  );
+}
+
+function SignUpPage() {
+  return (
+    <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4 py-8">
+      <SignUp routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} />
+    </div>
+  );
+}
+
+function ClerkQueryClientCacheInvalidator() {
+  const { addListener } = useClerk();
+  const previousUserId = useRef<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    const unsubscribe = addListener(({ user }) => {
+      const userId = user?.id ?? null;
+      if (previousUserId.current !== undefined && previousUserId.current !== userId) {
+        queryClient.clear();
+      }
+      previousUserId.current = userId;
+    });
+    return unsubscribe;
+  }, [addListener]);
+
+  return null;
+}
+
+function ClerkProviderWithRoutes() {
+  const [, setLocation] = useLocation();
+
+  return (
+    <ClerkProvider
+      publishableKey={clerkPubKey}
+      proxyUrl={clerkProxyUrl}
+      appearance={clerkAppearance}
+      signInUrl={`${basePath}/sign-in`}
+      signUpUrl={`${basePath}/sign-up`}
+      localization={{
+        signIn: { start: { title: 'Welcome back', subtitle: 'Sign in to your briefing account' } },
+        signUp: { start: { title: 'Create your account', subtitle: 'Keep your provider connections separate' } },
+      }}
+      routerPush={(to) => setLocation(to.startsWith(basePath) ? to.slice(basePath.length) || '/' : to)}
+      routerReplace={(to) => setLocation(to.startsWith(basePath) ? to.slice(basePath.length) || '/' : to, { replace: true })}
+    >
+      <QueryClientProvider client={queryClient}>
+        <ClerkQueryClientCacheInvalidator />
+        <TooltipProvider>
+          <Router />
+          <Toaster />
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ClerkProvider>
   );
 }
 
@@ -1024,15 +1334,13 @@ function RoutedErrorBoundary({ children }: { children: ReactNode }) {
 }
 
 function App() {
+  if (!clerkPubKey) {
+    throw new Error('Missing VITE_CLERK_PUBLISHABLE_KEY for account sign-in.');
+  }
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
-          <Router />
-        </WouterRouter>
-        <Toaster />
-      </TooltipProvider>
-    </QueryClientProvider>
+    <WouterRouter base={basePath}>
+      <ClerkProviderWithRoutes />
+    </WouterRouter>
   );
 }
 

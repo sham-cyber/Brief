@@ -149,6 +149,7 @@ export const BriefingResultTopicsItem = {
 } as const;
 
 export interface BriefingResult {
+  briefingId: string;
   subject: string;
   subjectType: BriefingResultSubjectType;
   /** @nullable */
