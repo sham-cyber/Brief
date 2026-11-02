@@ -143,15 +143,17 @@ function SourceColumn({ sources }: { sources: BriefSource[] }) {
   const hasVideo = sources.some(isVideoSource);
   return (
     <aside className="source-column space-y-4" aria-label="Source links and video" data-testid="source-column">
-      <section className="rounded-2xl border border-border bg-card px-5 py-5 sm:px-6" aria-labelledby="source-column-heading">
+      <section className="rounded-2xl border border-border bg-card px-5 py-5 sm:px-6" aria-labelledby="source-column-heading" data-testid="links-box">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
             <SectionEyebrow>Trace every claim</SectionEyebrow>
-            <h3 id="source-column-heading" className="mt-2 font-serif text-2xl text-foreground">Link column</h3>
+            <h3 id="source-column-heading" className="mt-2 font-serif text-2xl text-foreground">Links</h3>
           </div>
           <span className="rounded-full bg-[#f1eef7] px-3 py-1 font-mono text-[10px] text-[#5d5279]">{sources.length} links</span>
         </div>
-        <SourceList sources={sources} />
+        <div className="max-h-[280px] overflow-y-auto pr-1">
+          <SourceList sources={sources} />
+        </div>
       </section>
       {!hasVideo && (
         <section className="rounded-2xl border border-border bg-card px-5 py-5 sm:px-6" aria-labelledby="video-column-heading">
@@ -375,8 +377,7 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
         ].join('. ')} />
       </div>
 
-      <div className="mt-5 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]" data-testid="briefing-columns">
-        <div className="min-w-0">
+      <div className="mt-5" data-testid="briefing-columns">
       <section className="print-card rounded-2xl border border-border bg-card px-6 py-6 shadow-[0_8px_28px_rgba(38,37,55,.035)] sm:px-8" aria-labelledby="overview-heading">
         <SectionEyebrow>01 / The short read</SectionEyebrow>
         <h3 id="overview-heading" className="sr-only">Overview</h3>
@@ -428,8 +429,6 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
         );
       })}
 
-        </div>
-        <SourceColumn sources={result.sources} />
       </div>
       <p className="no-print mt-5 text-right font-mono text-[10px] uppercase tracking-[.12em] text-muted-foreground">Generated {formatDate(result.generatedAt)}</p>
       </div>
@@ -462,7 +461,7 @@ function PrintOnePageBrief({ result }: { result: BriefingResult }) {
       </header>
       <section className="print-page-overview">
         <h2>Brief</h2>
-        <p>{briefLine(result.overview.text, 420)} <References sourceIds={result.overview.sourceIds} sources={result.sources} /></p>
+        <p>{briefLine(result.overview.text, 420)} <PrintReferences sourceIds={result.overview.sourceIds} sources={result.sources} /></p>
       </section>
       <div className="print-topic-grid">
         {result.topics.map((topic) => {
@@ -473,11 +472,11 @@ function PrintOnePageBrief({ result }: { result: BriefingResult }) {
             <section key={topic} className="print-topic">
               <h2>{topicInfo.label}</h2>
               {highlight ? (
-                <p><strong>{briefLine(highlight.title, 90)}.</strong> {briefLine(highlight.summary, 190)} <References sourceIds={highlight.sourceIds} sources={result.sources} /></p>
+                <p><strong>{briefLine(highlight.title, 90)}.</strong> {briefLine(highlight.summary, 190)} <PrintReferences sourceIds={highlight.sourceIds} sources={result.sources} /></p>
               ) : (
                 <p>No sourced items returned for this category.</p>
               )}
-              {question && <p className="print-question"><strong>Open question:</strong> {briefLine(question.text, 150)} <References sourceIds={question.sourceIds} sources={result.sources} /></p>}
+              {question && <p className="print-question"><strong>Open question:</strong> {briefLine(question.text, 150)} <PrintReferences sourceIds={question.sourceIds} sources={result.sources} /></p>}
             </section>
           );
         })}
@@ -491,6 +490,18 @@ function PrintOnePageBrief({ result }: { result: BriefingResult }) {
         </ol>
       </footer>
     </section>
+  );
+}
+
+function PrintReferences({ sourceIds, sources }: { sourceIds: string[]; sources: BriefSource[] }) {
+  const sourceById = new Map(sources.map((source) => [source.id, source]));
+  return (
+    <span className="ml-1 inline-flex flex-wrap items-center gap-1 align-middle" aria-label="Source links">
+      {sourceIds.map((id) => {
+        const source = sourceById.get(id);
+        return source ? <a key={id} className="reference-pill" href={source.url} title={source.title}>{id}</a> : null;
+      })}
+    </span>
   );
 }
 
@@ -696,7 +707,8 @@ function Home() {
                 data-testid="input-subject"
               />
 
-              <fieldset className="mt-5">
+              <div className="mt-5 grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_320px]" data-testid="topics-and-links-row">
+              <fieldset className="min-w-0">
                 <legend className="mb-2 flex w-full items-center justify-between gap-2 text-xs font-semibold text-[#35364a]">
                   <span>Choose what to include</span>
                   <span className="font-mono text-[9px] font-normal text-[#8d8694]">{topics.length} of 5 selected</span>
@@ -727,6 +739,8 @@ function Home() {
                   ))}
                 </div>
               </fieldset>
+              <SourceColumn sources={result?.sources ?? []} />
+              </div>
 
               <label htmlFor="meetingAt" className="mb-1.5 mt-5 block text-xs font-semibold text-[#35364a]">When is the meeting?</label>
               <input
@@ -849,7 +863,6 @@ function EmptyBriefing() {
         </div>
         <VoiceControls text="" />
       </section>
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
       <div className="flex min-h-[420px] flex-col items-center justify-center rounded-2xl border border-dashed border-[#d1cad9] bg-[#f8f6f2]/80 px-6 py-12 text-center">
         <div className="relative flex h-24 w-24 items-center justify-center">
           <span className="absolute inset-1 rounded-full border border-[#ded8e5]" aria-hidden="true" />
@@ -862,8 +875,6 @@ function EmptyBriefing() {
         <div className="mt-8 flex items-center gap-3 text-[10px] text-[#8f8996]">
           <span className="h-px w-8 bg-[#d8d1df]" /><span className="font-mono uppercase tracking-[.13em]">Context in, clarity out</span><span className="h-px w-8 bg-[#d8d1df]" />
         </div>
-      </div>
-      <SourceColumn sources={[]} />
       </div>
     </div>
   );
