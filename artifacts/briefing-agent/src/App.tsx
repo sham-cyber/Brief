@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useCreateBriefing } from '@workspace/api-client-react';
+import { getGetBriefingSourceStatusQueryKey, useCreateBriefing, useGetBriefingSourceStatus } from '@workspace/api-client-react';
 import type { BriefingResult, BriefSource } from '@workspace/api-client-react';
 import { ClerkProvider, SignIn, SignUp, Show, useClerk, useUser } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
@@ -704,6 +704,9 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
           <div className="mt-6 flex flex-wrap gap-x-6 gap-y-3 text-xs text-[#d2d0da]">
             <span className="inline-flex items-center gap-2"><Clock3 className="h-3.5 w-3.5 text-[#c5b9e8]" />{formatDate(result.meetingAt)}</span>
             <span className="inline-flex items-center gap-2"><Radio className="h-3.5 w-3.5 text-[#c5b9e8]" />Research window: {formatWindow(result.windowStart, result.windowEnd)}</span>
+            <span className="inline-flex items-center gap-2" data-testid="text-tavily-usage">
+              Tavily: {result.searchCreditsUsed === null ? 'usage not reported' : `${result.searchCreditsUsed} credit${result.searchCreditsUsed === 1 ? '' : 's'}`} · {result.sourceSearchesCompleted} basic topic search{result.sourceSearchesCompleted === 1 ? '' : 'es'}
+            </span>
           </div>
         </div>
       </header>
@@ -887,6 +890,13 @@ function PrintReferences({ sourceIds, sources }: { sourceIds: string[]; sources:
 
 function Home() {
   const { isLoaded: accountLoaded, isSignedIn } = useUser();
+  const sourceStatusQuery = useGetBriefingSourceStatus({
+    query: {
+      queryKey: getGetBriefingSourceStatusQueryKey(),
+      refetchInterval: 15_000,
+      retry: false,
+    },
+  });
   const abortControllerRef = useRef<AbortController | null>(null);
   const mutation = useCreateBriefing({ request: { get signal() { return abortControllerRef.current?.signal; } } });
   const [subject, setSubject] = useState('');
@@ -920,6 +930,7 @@ function Home() {
   );
   const hasValidRole = hasValidRoleSelection && hasValidPersonDetails;
   const hasTopics = topics.length > 0;
+  const tavilyConfigured = sourceStatusQuery.data?.configured === true;
   const hasCurrentResult = Boolean(mutation.data && resultKey === requestKey);
   const result = hasCurrentResult ? mutation.data : undefined;
   const currentRequestIsPending = mutation.isPending && activeRequestKey.current === requestKey;
@@ -1032,7 +1043,7 @@ function Home() {
   }, [meetingAt, meetingTimeIsValid]);
 
   const runBriefing = useCallback((key: string) => {
-    if (!hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || sourceMode !== 'public' || mutation.isPending) return;
+    if (!tavilyConfigured || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || sourceMode !== 'public' || mutation.isPending) return;
     activeRequestKey.current = key;
     setFailedKey('');
     setTimedOutKey('');
@@ -1075,17 +1086,16 @@ function Home() {
         },
       },
     );
-  }, [companyName, context, hasTopics, hasValidRole, hasValidSubject, meetingAt, meetingTimeIsValid, mutation.isPending, mutation.mutate, personRole, publicRoleTitle, sourceMode, subject, subjectType, topics]);
+  }, [companyName, context, hasTopics, hasValidRole, hasValidSubject, meetingAt, meetingTimeIsValid, mutation.isPending, mutation.mutate, personRole, publicRoleTitle, sourceMode, subject, subjectType, tavilyConfigured, topics]);
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     runBriefing(requestKey);
   };
 
-  const errorMessage = mutation.error instanceof Error
-    ? mutation.error.message
-    : 'The briefing could not be generated. Check your connection and try again.';
-  const readinessState = !meetingTimeIsValid || !hasValidSubject || !hasValidRole || !hasTopics || sourceMode === 'private'
+  const apiError = mutation.error as (Error & { data?: { error?: string } }) | null;
+  const errorMessage = apiError?.data?.error ?? apiError?.message ?? 'The briefing could not be generated. Check your connection and try again.';
+  const readinessState = !tavilyConfigured || !meetingTimeIsValid || !hasValidSubject || !hasValidRole || !hasTopics || sourceMode === 'private'
     ? 'not-ready'
     : currentRequestFailed
       ? 'error'
@@ -1101,7 +1111,11 @@ function Home() {
     ready: 'border-[#c7dfd2] bg-[#edf6f0] text-[#2f6d4c]',
   }[readinessState];
   const readinessMessage = readinessState === 'not-ready'
-    ? !hasValidSubject
+    ? sourceStatusQuery.isError
+      ? 'Not ready — the server could not confirm Tavily status. Check the API Server workflow.'
+      : !tavilyConfigured
+        ? 'Not ready — add TAVILY_API_KEY in Replit Secrets, then restart API Server.'
+    : !hasValidSubject
       ? 'Not ready — enter a company or person.'
       : !hasValidRole
         ? !hasValidRoleSelection
@@ -1545,10 +1559,17 @@ function Home() {
               />
               <div className="mt-1 text-right font-mono text-[9px] text-[#aaa4af]">{context.length} / 1500</div>
 
-              <button type="submit" disabled={mutation.isPending || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || sourceMode === 'private'} className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#2b304a] px-4 text-sm font-semibold text-[#faf7f0] transition hover:bg-[#3c4160] disabled:opacity-55" data-testid="button-generate-briefing">
+              <button type="submit" disabled={mutation.isPending || !tavilyConfigured || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || sourceMode === 'private'} className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#2b304a] px-4 text-sm font-semibold text-[#faf7f0] transition hover:bg-[#3c4160] disabled:opacity-55" data-testid="button-generate-briefing">
                 {mutation.isPending ? <><LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />Crawling sources…</> : sourceMode === 'private' ? <><FileText className="h-4 w-4 text-[#c9b9ee]" aria-hidden="true" />Private mode unavailable</> : <><FileText className="h-4 w-4 text-[#c9b9ee]" aria-hidden="true" />{hasCurrentResult ? 'Refresh briefing' : 'Crawl & prepare briefing'}<ArrowDown className="ml-auto h-4 w-4 opacity-60" aria-hidden="true" /></>}
               </button>
-              <p id="form-note" className="mt-3 text-center text-[10px] leading-relaxed text-[#898392]">One manual crawl when you press the button. It never runs on a schedule or at meeting time, and is limited to two minutes.</p>
+              <p id="form-note" className="mt-3 text-center text-[10px] leading-relaxed text-[#898392]" data-testid="text-tavily-setup">
+                {sourceStatusQuery.isLoading
+                  ? 'Checking Tavily source-search connection…'
+                  : tavilyConfigured
+                    ? 'Tavily basic search is connected. This pilot key uses the project owner’s credit balance; each crawl runs up to 5 topic searches. It returns dated titles, snippets and links—not full-page crawls. AI summaries stay off.'
+                    : 'Tavily is not connected. Add the TAVILY_API_KEY secret to the API Server, then restart that workflow. This app does not expose the key.'}
+                {' '}One manual crawl only; no scheduled or meeting-time searches. Maximum crawl time: two minutes.
+              </p>
             </form>
 
             {mutation.isPending && (

@@ -62,3 +62,9 @@ For print, use a compact one-page A4 summary with the overview, one sourced lead
 **Why:** The user explicitly requires the printed briefing to fit on one page.
 
 **How to apply:** Preserve a concise print-only layout instead of shrinking or clipping the full interactive research view.
+
+The project-level Tavily secret is a pilot-only search credential; it charges the project owner's Tavily balance and must not be presented as per-user billing.
+
+**Why:** The user wants to use their Tavily trial credits now, while the intended multi-tenant product must keep each user's provider charges on that user's account.
+
+**How to apply:** Keep the shared key server-side and disclose its project-wide billing during the pilot. Before public multi-tenant use, require securely isolated user-owned Tavily credentials or another explicit billing model.

@@ -29,6 +29,17 @@ paths:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
   /briefings:
+    get:
+      operationId: getBriefingSourceStatus
+      tags: [briefings]
+      summary: Get public-source search configuration
+      responses:
+        "200":
+          description: Tavily search configuration without exposing credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BriefingSourceStatus"
     post:
       operationId: createBriefing
       tags: [briefings]
@@ -211,6 +222,22 @@ components:
         snippet:
           type: string
       required: [id, title, url, publisher, publishedAt, snippet]
+    BriefingSourceStatus:
+      type: object
+      properties:
+        provider:
+          type: string
+          enum: [tavily]
+        configured:
+          type: boolean
+        maxSearchesPerBriefing:
+          type: integer
+          minimum: 1
+          maximum: 5
+        searchDepth:
+          type: string
+          enum: [basic]
+      required: [provider, configured, maxSearchesPerBriefing, searchDepth]
     BriefingHighlight:
       type: object
       properties:
@@ -318,6 +345,12 @@ components:
         windowEnd:
           type: string
           format: date-time
+        searchCreditsUsed:
+          type: ["integer", "null"]
+          minimum: 0
+        sourceSearchesCompleted:
+          type: integer
+          minimum: 0
         overview:
           $ref: "#/components/schemas/BriefingOverview"
         highlights:
@@ -349,6 +382,8 @@ components:
         - generatedAt
         - windowStart
         - windowEnd
+        - searchCreditsUsed
+        - sourceSearchesCompleted
         - overview
         - highlights
         - questions

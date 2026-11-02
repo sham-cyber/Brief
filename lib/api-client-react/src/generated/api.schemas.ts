@@ -83,6 +83,31 @@ export interface BriefSource {
   snippet: string;
 }
 
+export type BriefingSourceStatusProvider = typeof BriefingSourceStatusProvider[keyof typeof BriefingSourceStatusProvider];
+
+
+export const BriefingSourceStatusProvider = {
+  tavily: 'tavily',
+} as const;
+
+export type BriefingSourceStatusSearchDepth = typeof BriefingSourceStatusSearchDepth[keyof typeof BriefingSourceStatusSearchDepth];
+
+
+export const BriefingSourceStatusSearchDepth = {
+  basic: 'basic',
+} as const;
+
+export interface BriefingSourceStatus {
+  provider: BriefingSourceStatusProvider;
+  configured: boolean;
+  /**
+     * @minimum 1
+     * @maximum 5
+     */
+  maxSearchesPerBriefing: number;
+  searchDepth: BriefingSourceStatusSearchDepth;
+}
+
 export type BriefingHighlightCategory = typeof BriefingHighlightCategory[keyof typeof BriefingHighlightCategory];
 
 
@@ -199,6 +224,13 @@ export interface BriefingResult {
   generatedAt: string;
   windowStart: string;
   windowEnd: string;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  searchCreditsUsed: number | null;
+  /** @minimum 0 */
+  sourceSearchesCompleted: number;
   overview: BriefingOverview;
   highlights: BriefingHighlight[];
   questions: BriefingQuestion[];

@@ -1,6 +1,11 @@
 import { Router, type IRouter } from "express";
 import { randomUUID } from "node:crypto";
-import { CreateBriefingBody, CreateBriefingResponse } from "@workspace/api-zod";
+import {
+  CreateBriefingBody,
+  CreateBriefingResponse,
+  GetBriefingSourceStatusResponse,
+} from "@workspace/api-zod";
+import { searchTavily, TavilySearchError } from "../lib/tavily";
 
 const router: IRouter = Router();
 
@@ -16,38 +21,28 @@ type NewsItem = {
 type BriefingTopic = "news" | "hire" | "launch" | "financial" | "risk";
 type PersonRole = "business_owner" | "mp" | "corporate";
 type SearchResult = { source: NewsItem; searchedAs: BriefingTopic };
+type SearchNewsResult = {
+  sources: SearchResult[];
+  creditsUsed: number | null;
+  searchesCompleted: number;
+};
+
+class BriefingSearchFailure extends Error {
+  constructor(
+    readonly statuses: number[],
+    readonly creditsUsed: number | null,
+    readonly searchesCompleted: number,
+  ) {
+    super("One or more Tavily topic searches failed.");
+    this.name = "BriefingSearchFailure";
+  }
+}
 
 const ROLE_SEARCH_TERMS: Record<PersonRole, string> = {
   business_owner: "(business owner OR founder OR chairman OR entrepreneur OR CEO)",
   mp: "(Member of Parliament OR MP OR legislator OR constituency OR parliament)",
   corporate: "(corporate executive OR CEO OR director OR executive leadership)",
 };
-
-function decodeXml(value: string): string {
-  const decoded = value
-    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;|&apos;/g, "'")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&#(\d+);/g, (_, code: string) =>
-      String.fromCodePoint(Number(code)),
-    )
-    .replace(/&#x([\da-f]+);/gi, (_, code: string) =>
-      String.fromCodePoint(parseInt(code, 16)),
-    );
-  return decoded
-    .replace(/<[^>]*>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function readTag(xml: string, tag: string): string {
-  const match = xml.match(new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`, "i"));
-  return match?.[1] ? decodeXml(match[1]) : "";
-}
 
 const CONTEXT_STOP_WORDS = new Set([
   "about", "after", "also", "and", "before", "between", "during", "for",
@@ -128,9 +123,14 @@ async function searchNews(
   context?: string,
   publicRoleTitle: string | null = null,
   companyName: string | null = null,
-): Promise<SearchResult[]> {
+): Promise<SearchNewsResult> {
+  const apiKey = process.env.TAVILY_API_KEY?.trim();
+  if (!apiKey) {
+    throw new Error("Tavily is not configured. Add TAVILY_API_KEY in Replit Secrets.");
+  }
+
   const startDate = start.toISOString().slice(0, 10);
-  const endDate = new Date(end.getTime() + 86_400_000).toISOString().slice(0, 10);
+  const endDate = end.toISOString().slice(0, 10);
   const roleTerms = subjectType === "person" && personRole
     ? ` ${ROLE_SEARCH_TERMS[personRole]}`
     : "";
@@ -143,73 +143,76 @@ async function searchNews(
       ? quoteSearchPhrase(companyName)
       : "";
   const personTerms = `${roleTerms}${publicOfficeTerm}${companyTerm}`;
-  const searchTerms: { topic: BriefingTopic; term: string }[] = topics.map((topic) => {
+  const searchTerms: { topic: BriefingTopic; query: string }[] = topics.map((topic) => {
     const terms: Record<BriefingTopic, string> = {
-      news: `${subject}${personTerms} news`,
-      hire: subjectType === "person"
-        ? `${subject}${personTerms} (appointed OR appointment OR joins OR joined OR hired OR hiring OR promoted OR promotion)`
-        : `${subject} (appointed OR appointment OR joins OR joined OR hired OR hiring OR promoted OR promotion OR named CEO)`,
-      launch: `${subject}${personTerms} (launch OR launched OR launches OR release OR released OR unveiled OR debut OR introduced)`,
+      news: "recent news coverage",
+      hire: "hiring appointed joins named executive open roles",
+      launch: "product launch released introduced unveiled",
       financial: subjectType === "company"
-        ? `${subject} (share price OR shares OR stock OR earnings OR profit OR loss OR revenue OR valuation OR funding)`
-        : `${subject}${personTerms} (financial results OR earnings OR investment OR profit OR loss OR valuation OR funding)`,
-      risk: `${subject}${personTerms} (risk OR lawsuit OR sues OR sued OR recall OR investigation OR regulator OR fine OR penalty OR restructuring OR breach)`,
+        ? "share price earnings profit loss revenue financial results"
+        : "financial results investment profit loss funding",
+      risk: "risk lawsuit investigation recall regulator fine breach restructuring",
     };
-    return { topic, term: terms[topic] };
+    return { topic, query: `${subject}${personTerms} ${terms[topic]}` };
   });
-  const feeds = await Promise.all(
-    searchTerms.map(async ({ topic, term }) => {
-      const url = new URL("https://news.google.com/rss/search");
-      url.searchParams.set("q", `${term} after:${startDate} before:${endDate}`);
-      url.searchParams.set("hl", "en-US");
-      url.searchParams.set("gl", "US");
-      url.searchParams.set("ceid", "US:en");
-
-      const response = await fetch(url, {
-        headers: { "User-Agent": "BriefingAgent/1.0 (+https://replit.com)" },
-        signal: AbortSignal.timeout(12_000),
-      });
-      if (!response.ok) {
-        throw new Error(`News search returned ${response.status}`);
-      }
-      return { topic, xml: await response.text() };
-    }),
+  const settled = await Promise.allSettled(
+    searchTerms.map(async ({ topic, query }) => ({
+      topic,
+      ...(await searchTavily(query, startDate, endDate, apiKey)),
+    })),
   );
+  const fulfilled = settled.flatMap((entry) =>
+    entry.status === "fulfilled" ? [entry.value] : [],
+  );
+  const failedStatuses = settled.flatMap((entry) => {
+    if (entry.status === "fulfilled") return [];
+    return entry.reason instanceof TavilySearchError ? [entry.reason.status] : [0];
+  });
+  const creditReports = fulfilled.map(({ creditsUsed }) => creditsUsed);
+  const creditsUsed = creditReports.every((value) => value !== null)
+    ? creditReports.reduce<number>((sum, value) => sum + (value ?? 0), 0)
+    : null;
+
+  if (failedStatuses.length > 0) {
+    throw new BriefingSearchFailure(failedStatuses, creditsUsed, fulfilled.length);
+  }
 
   const uniqueItems = new Map<string, { item: Omit<NewsItem, "id">; searchedAs: BriefingTopic }>();
-  for (const { topic, xml } of feeds) {
-    const entries = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)].slice(0, 12);
-    for (const entry of entries) {
-      const item = entry[1] ?? "";
-      const title = readTag(item, "title");
-      const link = readTag(item, "link");
-      const source = readTag(item, "source");
-      const published = readTag(item, "pubDate");
-      const description = readTag(item, "description");
-      const parsedDate = published ? new Date(published) : null;
+  for (const { topic, results } of fulfilled) {
+    for (const result of results) {
+      const title = typeof result.title === "string" ? result.title.trim() : "";
+      const link = typeof result.url === "string" ? result.url : "";
+      const snippet = typeof result.content === "string" ? result.content.trim() : "";
+      const published = typeof result.published_date === "string"
+        ? new Date(result.published_date)
+        : null;
       const validDate =
-        parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate : null;
-      if (!title || !link || !validDate || uniqueItems.has(link)) continue;
+        published && !Number.isNaN(published.getTime()) ? published : null;
+      if (!title || !link || !validDate) continue;
 
-      let publisher = source;
+      let parsedUrl: URL;
       try {
-        const parsedUrl = new URL(link);
+        parsedUrl = new URL(link);
         if (parsedUrl.protocol !== "https:") continue;
-        publisher ||= parsedUrl.hostname.replace(/^www\./, "");
       } catch {
         continue;
       }
-      if (validDate.getTime() < start.getTime() || validDate.getTime() > end.getTime()) {
-        continue;
-      }
+      const publishedDay = validDate.toISOString().slice(0, 10);
+      if (publishedDay < startDate || publishedDay > endDate) continue;
 
-      uniqueItems.set(link, {
+      const canonicalUrl = new URL(parsedUrl);
+      canonicalUrl.hash = "";
+      const canonicalLink = canonicalUrl.toString();
+      if (uniqueItems.has(canonicalLink)) continue;
+      const publisher = parsedUrl.hostname.replace(/^www\./, "");
+
+      uniqueItems.set(canonicalLink, {
         item: {
           title,
           url: link,
           publisher,
-          publishedAt: validDate?.toISOString() ?? null,
-          snippet: description.slice(0, 700),
+          publishedAt: validDate.toISOString(),
+          snippet: snippet.slice(0, 700),
         },
         searchedAs: topic,
       });
@@ -217,7 +220,7 @@ async function searchNews(
   }
 
   const contextKeywords = getContextTerms(context);
-  return [...uniqueItems.values()]
+  const sources = [...uniqueItems.values()]
     .map((entry) => ({
       ...entry,
       contextScore: contextRelevanceScore(
@@ -239,6 +242,11 @@ async function searchNews(
       source: { ...item, id: `S${index + 1}` },
       searchedAs,
     }));
+  return {
+    sources,
+    creditsUsed,
+    searchesCompleted: fulfilled.length,
+  };
 }
 
 const TOPIC_MATCHERS: Record<Exclude<BriefingTopic, "news">, RegExp> = {
@@ -276,6 +284,15 @@ const NEGATIVE_SIGNAL_PATTERNS = [
   /\b(?:risk(?:s)?|lawsuit|sues?|sued|investigation|probe|recall|fine|penalt(?:y|ies)|breach|fraud)\b/i,
   /\b(?:layoffs?|cuts?|miss(?:es|ed)? estimates?|debt|delay(?:s|ed)?|slowdown|warning|concern|pressure|closure|shutdown|restructur(?:e|ing))\b/i,
 ];
+
+router.get("/briefings", (_req, res): void => {
+  res.json(GetBriefingSourceStatusResponse.parse({
+    provider: "tavily",
+    configured: Boolean(process.env.TAVILY_API_KEY?.trim()),
+    maxSearchesPerBriefing: 5,
+    searchDepth: "basic",
+  }));
+});
 
 function countSignalMatches(text: string, patterns: RegExp[]): number {
   return patterns.reduce((count, pattern) => count + Number(pattern.test(text)), 0);
@@ -560,7 +577,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
     const windowEnd = now;
     const windowStart = new Date(windowEnd.getTime() - 30 * 86_400_000);
     const topics = input.data.topics as BriefingTopic[];
-    const collected = await searchNews(
+    const searchResult = await searchNews(
       input.data.subject.trim(),
       input.data.subjectType,
       input.data.personRole,
@@ -571,6 +588,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
       publicRoleTitle,
       companyName,
     );
+    const collected = searchResult.sources;
 
     const relevant = collected.filter(({ source, searchedAs }) =>
       classifySource(source, searchedAs, topics) !== null,
@@ -598,12 +616,45 @@ router.post("/briefings", async (req, res): Promise<void> => {
       generatedAt: now.toISOString(),
       windowStart: windowStart.toISOString(),
       windowEnd: windowEnd.toISOString(),
+      searchCreditsUsed: searchResult.creditsUsed,
+      sourceSearchesCompleted: searchResult.searchesCompleted,
       ...content,
       sources,
     });
     res.json(result);
-  } catch {
-    req.log.error({ sourceMode: input.data.sourceMode }, "Briefing generation failed");
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("Tavily is not configured.")) {
+      req.log.warn("Tavily source search is not configured");
+      res.status(503).json({
+        error: "Tavily is not connected. Add TAVILY_API_KEY in Replit Secrets, then restart the API Server workflow.",
+      });
+      return;
+    }
+    if (error instanceof BriefingSearchFailure) {
+      req.log.error(
+        {
+          completedSearches: error.searchesCompleted,
+          failedSearches: error.statuses.length,
+          statusCodes: error.statuses,
+          creditsReported: error.creditsUsed,
+        },
+        "Tavily briefing search failed",
+      );
+      const credentialsRejected = error.statuses.some((status) =>
+        [401, 403, 432, 433, 434].includes(status),
+      );
+      const creditNote = error.creditsUsed === null
+        ? "Credit use for completed searches could not be confirmed."
+        : `Tavily reported ${error.creditsUsed} credit${error.creditsUsed === 1 ? "" : "s"} for completed searches; check its dashboard for final usage.`;
+      res.status(502).json({
+        error: `${credentialsRejected ? "Tavily rejected the API key or account limit." : "Some Tavily searches failed."} ${creditNote} Check the key and dashboard before retrying.`,
+      });
+      return;
+    }
+    req.log.error(
+      { sourceMode: input.data.sourceMode, error },
+      "Briefing generation failed",
+    );
     res.status(502).json({
       error: "The briefing could not be generated. Please try again shortly.",
     });

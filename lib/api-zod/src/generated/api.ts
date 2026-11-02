@@ -18,6 +18,21 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
+ * @summary Get public-source search configuration
+ */
+export const getBriefingSourceStatusResponseMaxSearchesPerBriefingMax = 5;
+
+
+
+export const GetBriefingSourceStatusResponse = zod.object({
+  "provider": zod.enum(['tavily']),
+  "configured": zod.boolean(),
+  "maxSearchesPerBriefing": zod.number().int().min(1).max(getBriefingSourceStatusResponseMaxSearchesPerBriefingMax),
+  "searchDepth": zod.enum(['basic'])
+})
+
+
+/**
  * @summary Create a sourced pre-meeting briefing
  */
 export const createBriefingBodySubjectMin = 2;
@@ -49,6 +64,10 @@ export const createBriefingResponsePublicRoleTitleMax = 80;
 
 export const createBriefingResponseCompanyNameMax = 200;
 
+export const createBriefingResponseSearchCreditsUsedMin = 0;
+
+export const createBriefingResponseSourceSearchesCompletedMin = 0;
+
 
 
 
@@ -65,6 +84,8 @@ export const CreateBriefingResponse = zod.object({
   "generatedAt": zod.coerce.date(),
   "windowStart": zod.coerce.date(),
   "windowEnd": zod.coerce.date(),
+  "searchCreditsUsed": zod.number().int().min(createBriefingResponseSearchCreditsUsedMin).nullable(),
+  "sourceSearchesCompleted": zod.number().int().min(createBriefingResponseSourceSearchesCompletedMin),
   "overview": zod.object({
   "text": zod.string(),
   "sourceIds": zod.array(zod.string()),

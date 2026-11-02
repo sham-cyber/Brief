@@ -22,6 +22,7 @@ import type {
 import type {
   BriefingInput,
   BriefingResult,
+  BriefingSourceStatus,
   Error,
   HealthStatus,
   PersonProfile,
@@ -123,6 +124,83 @@ export function useHealthCheck<TData = Awaited<ReturnType<typeof healthCheck>>, 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getHealthCheckQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetBriefingSourceStatusUrl = () => {
+
+
+
+
+  return `/api/briefings`
+}
+
+/**
+ * @summary Get public-source search configuration
+ */
+export const getBriefingSourceStatus = async ( options?: Parameters<typeof customFetch>[1]): Promise<BriefingSourceStatus> => {
+
+  return customFetch<BriefingSourceStatus>(getGetBriefingSourceStatusUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetBriefingSourceStatusQueryKey = () => {
+    return [
+    `/api/briefings`
+    ] as const;
+    }
+
+
+export const getGetBriefingSourceStatusQueryOptions = <TData = Awaited<ReturnType<typeof getBriefingSourceStatus>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBriefingSourceStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetBriefingSourceStatusQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBriefingSourceStatus>>> = ({ signal }) => getBriefingSourceStatus({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getBriefingSourceStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetBriefingSourceStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getBriefingSourceStatus>>>
+export type GetBriefingSourceStatusQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get public-source search configuration
+ */
+
+export function useGetBriefingSourceStatus<TData = Awaited<ReturnType<typeof getBriefingSourceStatus>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBriefingSourceStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetBriefingSourceStatusQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

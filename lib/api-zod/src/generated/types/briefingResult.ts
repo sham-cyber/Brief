@@ -37,6 +37,13 @@ export interface BriefingResult {
   generatedAt: Date;
   windowStart: Date;
   windowEnd: Date;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  searchCreditsUsed: number | null;
+  /** @minimum 0 */
+  sourceSearchesCompleted: number;
   overview: BriefingOverview;
   highlights: BriefingHighlight[];
   questions: BriefingQuestion[];
