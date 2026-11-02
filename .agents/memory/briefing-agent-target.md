@@ -89,6 +89,18 @@ The app still has one shared 120-second crawl-runtime allowance per Asia/Kolkata
 
 **How to apply:** Keep the daily runtime and request-rate caps app-wide unless the user explicitly changes them. Tell users provider credits bill their own Tavily account, while the runtime allowance remains shared.
 
+The configured developer account may use up to 10 crawl starts and 10 selected-tab Tavily search requests per Asia/Kolkata calendar day. These are separate limits and do not increase the shared runtime or rolling request-rate caps.
+
+**Why:** The user explicitly set both daily developer limits to 10.
+
+**How to apply:** Count one start per valid crawl and one search per selected tab. Keep the counts only when owner, PIN, form, key, and rolling rate checks pass; cancel reservations when preflight checks reject a crawl.
+
+Legacy crawl rows from before daily search counting was added do not record selected-tab totals, so treat each such completed crawl as the maximum five searches for that IST day.
+
+**Why:** The exact earlier request count cannot be recovered; undercounting could exceed the new 10-search daily cap.
+
+**How to apply:** Include this conservative estimate only for legacy rows with no saved search count and positive reserved runtime; it stops affecting usage after midnight.
+
 The Brief status indicator glows green only when a successful briefing still matches the currently selected subject, meeting, and topics; entering meeting details alone does not mean the brief is ready.
 
 **Why:** The user wants the green Brief indicator to mean the requested brief is ready for its selected goals.

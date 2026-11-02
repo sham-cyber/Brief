@@ -1095,9 +1095,21 @@ function Home() {
   const startPinConfigured = sourceStatusQuery.data?.startPinConfigured === true;
   const ownerAccountConfigured = sourceStatusQuery.data?.ownerAccountConfigured === true;
   const dailyCrawlRemainingMs = sourceStatusQuery.data?.dailyCrawlRemainingMs ?? null;
+  const dailyCrawlStartsLimit = sourceStatusQuery.data?.dailyCrawlStartsLimit ?? null;
+  const dailyCrawlStartsUsed = sourceStatusQuery.data?.dailyCrawlStartsUsed ?? null;
+  const dailyCrawlStartsRemaining = sourceStatusQuery.data?.dailyCrawlStartsRemaining ?? null;
+  const dailySearchRequestsLimit = sourceStatusQuery.data?.dailySearchRequestsLimit ?? null;
+  const dailySearchRequestsUsed = sourceStatusQuery.data?.dailySearchRequestsUsed ?? null;
+  const dailySearchRequestsRemaining = sourceStatusQuery.data?.dailySearchRequestsRemaining ?? null;
   const dailyCrawlActive = sourceStatusQuery.data?.dailyCrawlActive === true;
   const dailyCrawlResetsAt = sourceStatusQuery.data?.dailyCrawlResetsAt ?? null;
   const crawlBudgetExhausted = dailyCrawlRemainingMs === 0;
+  const dailyCrawlStartLimitReached = canStart && dailyCrawlStartsRemaining === 0;
+  const dailySearchLimitInsufficient =
+    canStart &&
+    dailySearchRequestsRemaining !== null &&
+    topics.length > 0 &&
+    topics.length > dailySearchRequestsRemaining;
   const crawlAlreadyActive = dailyCrawlActive && !mutation.isPending;
   const hasCurrentResult = Boolean(mutation.data && resultKey === requestKey);
   const result = hasCurrentResult ? mutation.data : undefined;
@@ -1319,8 +1331,12 @@ function Home() {
                 ? 'Not ready — configure the briefing start PIN in API Server Secrets.'
                 : crawlAlreadyActive
                   ? 'Not ready — a Tavily crawl is already running against the shared app allowance.'
-                  : crawlBudgetExhausted
-                    ? `Not ready — today's app-wide Tavily allowance is used${dailyCrawlResetsAt ? `; it resets at ${new Date(dailyCrawlResetsAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST` : ''}.`
+                  : dailyCrawlStartLimitReached
+                    ? 'Not ready — the developer account has used all 10 crawl starts for today.'
+                    : dailySearchLimitInsufficient
+                      ? `Not ready — only ${dailySearchRequestsRemaining} Tavily search requests remain today; select fewer topic tabs.`
+                      : crawlBudgetExhausted
+                        ? `Not ready — today's app-wide Tavily allowance is used${dailyCrawlResetsAt ? `; it resets at ${new Date(dailyCrawlResetsAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST` : ''}.`
     : !hasValidSubject
       ? 'Not ready — enter a company or person.'
       : !hasValidRole
@@ -1762,7 +1778,7 @@ function Home() {
               />
               <div className="mt-1 text-right font-mono text-[9px] text-[#aaa4af]">{context.length} / 1500</div>
 
-              <button type="button" onClick={() => { setPinDialogError(''); setStartPin(''); setPinPromptOpen(true); }} disabled={mutation.isPending || !canStart || !tavilyConfigured || !startPinConfigured || !ownerAccountConfigured || crawlBudgetExhausted || crawlAlreadyActive || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || sourceMode === 'private'} className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#2b304a] px-4 text-sm font-semibold text-[#faf7f0] transition hover:bg-[#3c4160] disabled:opacity-55" data-testid="button-generate-briefing">
+              <button type="button" onClick={() => { setPinDialogError(''); setStartPin(''); setPinPromptOpen(true); }} disabled={mutation.isPending || !canStart || !tavilyConfigured || !startPinConfigured || !ownerAccountConfigured || crawlBudgetExhausted || dailyCrawlStartLimitReached || dailySearchLimitInsufficient || crawlAlreadyActive || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || sourceMode === 'private'} className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#2b304a] px-4 text-sm font-semibold text-[#faf7f0] transition hover:bg-[#3c4160] disabled:opacity-55" data-testid="button-generate-briefing">
                 {mutation.isPending ? <><LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />Crawling sources…</> : sourceMode === 'private' ? <><FileText className="h-4 w-4 text-[#c9b9ee]" aria-hidden="true" />Private mode unavailable</> : <><FileText className="h-4 w-4 text-[#c9b9ee]" aria-hidden="true" />{currentRequestFailed ? 'Start again' : hasCurrentResult ? 'Refresh briefing' : 'Start briefing'}<ArrowDown className="ml-auto h-4 w-4 opacity-60" aria-hidden="true" /></>}
               </button>
               <p id="form-note" className="mt-3 text-center text-[10px] leading-relaxed text-[#898392]" data-testid="text-tavily-setup">
@@ -1775,6 +1791,7 @@ function Home() {
                     : 'The owner project key is unavailable for this account. Add a personal Tavily API key in account settings; keys are encrypted and are not shared across accounts.'}
                 {' '}The app-wide safety limit remains 120 seconds of crawl runtime per calendar day in IST, resetting at midnight, with a three-minute backup hard stop. Only the configured owner account can currently start crawls.
                 {dailyCrawlRemainingMs !== null && ` ${Math.ceil(dailyCrawlRemainingMs / 1000)} seconds remain in the shared allowance.`}
+                 {canStart && dailyCrawlStartsLimit !== null && dailyCrawlStartsUsed !== null && dailySearchRequestsLimit !== null && dailySearchRequestsUsed !== null && ` Developer daily limits: ${dailyCrawlStartsUsed}/${dailyCrawlStartsLimit} crawl starts and ${dailySearchRequestsUsed}/${dailySearchRequestsLimit} Tavily search requests used; resets at midnight IST.`}
               </p>
               </>
               )}

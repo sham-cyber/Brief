@@ -7,11 +7,16 @@ import {
 } from "@workspace/api-zod";
 import { clerkClient, getAuth } from "@clerk/express";
 import {
+  cancelTavilyQuotaReservation,
   finishTavilyQuotaReservation,
+  getTavilyDailyUsageStatus,
   getTavilyQuotaStatus,
   reserveTavilyQuota,
   TAVILY_CRAWL_HARD_STOP_MS,
+  TAVILY_DAILY_CRAWL_START_LIMIT,
   TAVILY_DAILY_LIMIT_MS,
+  TAVILY_DAILY_SEARCH_REQUEST_LIMIT,
+  TAVILY_MAX_SEARCHES_PER_BRIEFING,
   TAVILY_QUOTA_TIME_ZONE,
 } from "../lib/tavily-quota";
 import {
@@ -455,6 +460,9 @@ router.get("/briefings", async (req, res): Promise<void> => {
       ? "account"
       : "missing";
   const quota = await getTavilyQuotaStatus();
+  const dailyUsage = canStart && userId
+    ? await getTavilyDailyUsageStatus(userId)
+    : null;
   res.json(GetBriefingSourceStatusResponse.parse({
     provider: "tavily",
     configured: keySource !== "missing",
@@ -467,7 +475,13 @@ router.get("/briefings", async (req, res): Promise<void> => {
     dailyCrawlRemainingMs: quota.remainingMs,
     dailyCrawlActive: quota.active,
     dailyCrawlResetsAt: quota.resetsAt?.toISOString() ?? null,
-    maxSearchesPerBriefing: 5,
+    dailyCrawlStartsLimit: dailyUsage?.dailyCrawlStartsLimit ?? null,
+    dailyCrawlStartsUsed: dailyUsage?.dailyCrawlStartsUsed ?? null,
+    dailyCrawlStartsRemaining: dailyUsage?.dailyCrawlStartsRemaining ?? null,
+    dailySearchRequestsLimit: dailyUsage?.dailySearchRequestsLimit ?? null,
+    dailySearchRequestsUsed: dailyUsage?.dailySearchRequestsUsed ?? null,
+    dailySearchRequestsRemaining: dailyUsage?.dailySearchRequestsRemaining ?? null,
+    maxSearchesPerBriefing: TAVILY_MAX_SEARCHES_PER_BRIEFING,
     searchDepth: "basic",
   }));
 });
@@ -861,11 +875,23 @@ router.post("/briefings", async (req, res): Promise<void> => {
     return;
   }
 
-  const quota = await reserveTavilyQuota(userId);
+  const quota = await reserveTavilyQuota(userId, input.data.topics.length);
   if (!quota.allowed || quota.reservationId === null) {
     if (quota.reason === "active-crawl") {
       res.status(429).json({
         error: "A Tavily crawl is already using the shared app allowance. Wait for it to finish before starting another.",
+      });
+      return;
+    }
+    if (quota.reason === "daily-start-limit") {
+      res.status(429).json({
+        error: `The configured developer account has reached ${TAVILY_DAILY_CRAWL_START_LIMIT} crawl starts for today's IST calendar day. It resets at midnight IST.`,
+      });
+      return;
+    }
+    if (quota.reason === "daily-search-limit") {
+      res.status(429).json({
+        error: `Only ${quota.dailySearchRequestsRemaining} of today's ${TAVILY_DAILY_SEARCH_REQUEST_LIMIT} Tavily search requests remain for the configured developer account. Select fewer topic tabs or try again after midnight IST.`,
       });
       return;
     }
@@ -883,9 +909,9 @@ router.post("/briefings", async (req, res): Promise<void> => {
     requestRateLimit = await reserveTavilyRequestSlots(input.data.topics.length);
   } catch (error) {
     req.log.error({ error }, "Failed to reserve Tavily request rate-limit slots");
-    await finishTavilyQuotaReservation(userId, quota.reservationId, 0)
-      .catch((finishError) => {
-        req.log.error({ error: finishError }, "Failed to release Tavily crawl quota");
+    await cancelTavilyQuotaReservation(userId, quota.reservationId)
+      .catch((cancelError) => {
+        req.log.error({ error: cancelError }, "Failed to release Tavily crawl quota");
       });
     res.status(503).json({
       error: "The Tavily request limit could not be checked. No search request was sent.",
@@ -893,9 +919,9 @@ router.post("/briefings", async (req, res): Promise<void> => {
     return;
   }
   if (!requestRateLimit.allowed) {
-    await finishTavilyQuotaReservation(userId, quota.reservationId, 0)
-      .catch((error) => {
-        req.log.error({ error }, "Failed to release Tavily crawl quota");
+    await cancelTavilyQuotaReservation(userId, quota.reservationId)
+      .catch((cancelError) => {
+        req.log.error({ error: cancelError }, "Failed to release Tavily crawl quota");
       });
     res.setHeader("Retry-After", String(requestRateLimit.retryAfterSeconds));
     res.status(429).json({

@@ -35,6 +35,38 @@ export interface BriefingSourceStatus {
   /** @nullable */
   dailyCrawlResetsAt: Date | null;
   /**
+     * @minimum 0
+     * @maximum 10
+     * @nullable
+     */
+  dailyCrawlStartsLimit: number | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  dailyCrawlStartsUsed: number | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  dailyCrawlStartsRemaining: number | null;
+  /**
+     * @minimum 0
+     * @maximum 10
+     * @nullable
+     */
+  dailySearchRequestsLimit: number | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  dailySearchRequestsUsed: number | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  dailySearchRequestsRemaining: number | null;
+  /**
      * One request per selected topic, up to five topics.
      * @minimum 1
      * @maximum 5

@@ -16,6 +16,7 @@ export const briefingTavilyUsage = pgTable(
       .notNull()
       .defaultNow(),
     reservedMs: integer("reserved_ms").notNull(),
+    searchCount: integer("search_count").notNull().default(0),
     durationMs: integer("duration_ms"),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
   },

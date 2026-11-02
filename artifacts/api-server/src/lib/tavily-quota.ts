@@ -1,12 +1,20 @@
 import { pool } from "@workspace/db";
 
 export const TAVILY_DAILY_LIMIT_MS = 120_000;
+export const TAVILY_DAILY_CRAWL_START_LIMIT = 10;
+export const TAVILY_DAILY_SEARCH_REQUEST_LIMIT = 10;
+export const TAVILY_MAX_SEARCHES_PER_BRIEFING = 5;
 export const TAVILY_CRAWL_HARD_STOP_MS = 180_000;
 export const TAVILY_QUOTA_TIME_ZONE = "Asia/Kolkata";
 const STALE_RESERVATION_GRACE_MS = TAVILY_CRAWL_HARD_STOP_MS + 30_000;
 
 type UsageRow = {
   reserved_ms: string | number;
+};
+
+type DailyUsageRow = {
+  crawl_starts: string | number;
+  search_requests: string | number;
 };
 
 type CalendarDayRow = {
@@ -28,10 +36,31 @@ export type TavilyQuotaStatus = {
 };
 
 export type TavilyQuotaReservation = TavilyQuotaStatus & {
+  dailyCrawlStartsLimit: number;
+  dailyCrawlStartsUsed: number;
+  dailyCrawlStartsRemaining: number;
+  dailySearchRequestsLimit: number;
+  dailySearchRequestsUsed: number;
+  dailySearchRequestsRemaining: number;
   allowed: boolean;
   reservationId: number | null;
-  reason: "active-crawl" | "daily-limit" | null;
+  reason:
+    | "active-crawl"
+    | "daily-limit"
+    | "daily-start-limit"
+    | "daily-search-limit"
+    | null;
 };
+
+export type TavilyDailyUsageStatus = Pick<
+  TavilyQuotaReservation,
+  | "dailyCrawlStartsLimit"
+  | "dailyCrawlStartsUsed"
+  | "dailyCrawlStartsRemaining"
+  | "dailySearchRequestsLimit"
+  | "dailySearchRequestsUsed"
+  | "dailySearchRequestsRemaining"
+>;
 
 function toDate(value: Date | string | null | undefined): Date | null {
   if (value == null) return null;
@@ -100,13 +129,65 @@ async function getCalendarDayBounds(
   return { dayStart, nextDayStart };
 }
 
+async function readDailyUsage(
+  executor: Pick<typeof pool, "query">,
+  userId: string,
+  dayBounds: CalendarDayBounds,
+): Promise<TavilyDailyUsageStatus> {
+  const result = await executor.query<DailyUsageRow>(
+    `SELECT
+       (COUNT(*) FILTER (WHERE reserved_ms > 0 OR search_count > 0))::integer AS crawl_starts,
+       (
+         COALESCE(SUM(search_count), 0) +
+         (COUNT(*) FILTER (WHERE search_count = 0 AND reserved_ms > 0) * $4::integer)
+       )::integer AS search_requests
+     FROM briefing_tavily_usage
+     WHERE user_id = $1
+       AND started_at >= $2
+       AND started_at < $3`,
+    [
+      userId,
+      dayBounds.dayStart,
+      dayBounds.nextDayStart,
+      TAVILY_MAX_SEARCHES_PER_BRIEFING,
+    ],
+  );
+  const crawlStartsUsed = Math.max(0, Number(result.rows[0]?.crawl_starts ?? 0));
+  const searchRequestsUsed = Math.max(0, Number(result.rows[0]?.search_requests ?? 0));
+  return {
+    dailyCrawlStartsLimit: TAVILY_DAILY_CRAWL_START_LIMIT,
+    dailyCrawlStartsUsed: crawlStartsUsed,
+    dailyCrawlStartsRemaining: Math.max(
+      0,
+      TAVILY_DAILY_CRAWL_START_LIMIT - crawlStartsUsed,
+    ),
+    dailySearchRequestsLimit: TAVILY_DAILY_SEARCH_REQUEST_LIMIT,
+    dailySearchRequestsUsed: searchRequestsUsed,
+    dailySearchRequestsRemaining: Math.max(
+      0,
+      TAVILY_DAILY_SEARCH_REQUEST_LIMIT - searchRequestsUsed,
+    ),
+  };
+}
+
+export async function getTavilyDailyUsageStatus(
+  userId: string,
+): Promise<TavilyDailyUsageStatus> {
+  const dayBounds = await getCalendarDayBounds(pool);
+  return readDailyUsage(pool, userId, dayBounds);
+}
+
 export async function getTavilyQuotaStatus(): Promise<TavilyQuotaStatus> {
   return readUsageTotals(pool);
 }
 
 export async function reserveTavilyQuota(
   userId: string,
+  searchRequestCount: number,
 ): Promise<TavilyQuotaReservation> {
+  if (!Number.isSafeInteger(searchRequestCount) || searchRequestCount < 1) {
+    throw new Error("Tavily crawl reservations require at least one search request.");
+  }
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -132,26 +213,52 @@ export async function reserveTavilyQuota(
     );
 
     const quota = await readUsageTotals(client, dayBounds);
-    if (quota.active || quota.remainingMs <= 0) {
+    const dailyUsage = await readDailyUsage(client, userId, dayBounds);
+    const sharedFailure = quota.active
+      ? "active-crawl"
+      : quota.remainingMs <= 0
+        ? "daily-limit"
+        : null;
+    const dailyFailure =
+      dailyUsage.dailyCrawlStartsRemaining <= 0
+        ? "daily-start-limit"
+        : dailyUsage.dailySearchRequestsRemaining < searchRequestCount
+          ? "daily-search-limit"
+          : null;
+    const reason = sharedFailure ?? dailyFailure;
+    if (reason) {
       await client.query("COMMIT");
       return {
         ...quota,
+        ...dailyUsage,
         allowed: false,
         reservationId: null,
-        reason: quota.active ? "active-crawl" : "daily-limit",
+        reason,
       };
     }
 
     const inserted = await client.query<{ id: number }>(
-      `INSERT INTO briefing_tavily_usage (user_id, reserved_ms)
-       VALUES ($1, $2)
+      `INSERT INTO briefing_tavily_usage (user_id, reserved_ms, search_count)
+       VALUES ($1, $2, $3)
        RETURNING id`,
-      [userId, quota.remainingMs],
+      [userId, quota.remainingMs, searchRequestCount],
     );
     await client.query("COMMIT");
 
     return {
       ...quota,
+      ...dailyUsage,
+      dailyCrawlStartsUsed: dailyUsage.dailyCrawlStartsUsed + 1,
+      dailyCrawlStartsRemaining: Math.max(
+        0,
+        dailyUsage.dailyCrawlStartsRemaining - 1,
+      ),
+      dailySearchRequestsUsed:
+        dailyUsage.dailySearchRequestsUsed + searchRequestCount,
+      dailySearchRequestsRemaining: Math.max(
+        0,
+        dailyUsage.dailySearchRequestsRemaining - searchRequestCount,
+      ),
       allowed: true,
       reservationId: inserted.rows[0]?.id ?? null,
       reason: null,
@@ -162,6 +269,19 @@ export async function reserveTavilyQuota(
   } finally {
     client.release();
   }
+}
+
+export async function cancelTavilyQuotaReservation(
+  userId: string,
+  reservationId: number,
+): Promise<void> {
+  await pool.query(
+    `DELETE FROM briefing_tavily_usage
+     WHERE id = $1
+       AND user_id = $2
+       AND finished_at IS NULL`,
+    [reservationId, userId],
+  );
 }
 
 export async function finishTavilyQuotaReservation(

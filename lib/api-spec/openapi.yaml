@@ -370,6 +370,26 @@ components:
         dailyCrawlResetsAt:
           type: ["string", "null"]
           format: date-time
+        dailyCrawlStartsLimit:
+          type: ["integer", "null"]
+          minimum: 0
+          maximum: 10
+        dailyCrawlStartsUsed:
+          type: ["integer", "null"]
+          minimum: 0
+        dailyCrawlStartsRemaining:
+          type: ["integer", "null"]
+          minimum: 0
+        dailySearchRequestsLimit:
+          type: ["integer", "null"]
+          minimum: 0
+          maximum: 10
+        dailySearchRequestsUsed:
+          type: ["integer", "null"]
+          minimum: 0
+        dailySearchRequestsRemaining:
+          type: ["integer", "null"]
+          minimum: 0
         maxSearchesPerBriefing:
           type: integer
           minimum: 1
@@ -390,6 +410,12 @@ components:
         - dailyCrawlRemainingMs
         - dailyCrawlActive
         - dailyCrawlResetsAt
+        - dailyCrawlStartsLimit
+        - dailyCrawlStartsUsed
+        - dailyCrawlStartsRemaining
+        - dailySearchRequestsLimit
+        - dailySearchRequestsUsed
+        - dailySearchRequestsRemaining
         - maxSearchesPerBriefing
         - searchDepth
     TavilyCredentialStatus:

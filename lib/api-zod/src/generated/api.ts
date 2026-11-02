@@ -65,6 +65,20 @@ export const getBriefingSourceStatusResponseDailyCrawlUsedMsMin = 0;
 
 export const getBriefingSourceStatusResponseDailyCrawlRemainingMsMin = 0;
 
+export const getBriefingSourceStatusResponseDailyCrawlStartsLimitMin = 0;
+export const getBriefingSourceStatusResponseDailyCrawlStartsLimitMax = 10;
+
+export const getBriefingSourceStatusResponseDailyCrawlStartsUsedMin = 0;
+
+export const getBriefingSourceStatusResponseDailyCrawlStartsRemainingMin = 0;
+
+export const getBriefingSourceStatusResponseDailySearchRequestsLimitMin = 0;
+export const getBriefingSourceStatusResponseDailySearchRequestsLimitMax = 10;
+
+export const getBriefingSourceStatusResponseDailySearchRequestsUsedMin = 0;
+
+export const getBriefingSourceStatusResponseDailySearchRequestsRemainingMin = 0;
+
 export const getBriefingSourceStatusResponseMaxSearchesPerBriefingMax = 5;
 
 
@@ -81,6 +95,12 @@ export const GetBriefingSourceStatusResponse = zod.object({
   "dailyCrawlRemainingMs": zod.number().int().min(getBriefingSourceStatusResponseDailyCrawlRemainingMsMin).nullable(),
   "dailyCrawlActive": zod.boolean(),
   "dailyCrawlResetsAt": zod.coerce.date().nullable(),
+  "dailyCrawlStartsLimit": zod.number().int().min(getBriefingSourceStatusResponseDailyCrawlStartsLimitMin).max(getBriefingSourceStatusResponseDailyCrawlStartsLimitMax).nullable(),
+  "dailyCrawlStartsUsed": zod.number().int().min(getBriefingSourceStatusResponseDailyCrawlStartsUsedMin).nullable(),
+  "dailyCrawlStartsRemaining": zod.number().int().min(getBriefingSourceStatusResponseDailyCrawlStartsRemainingMin).nullable(),
+  "dailySearchRequestsLimit": zod.number().int().min(getBriefingSourceStatusResponseDailySearchRequestsLimitMin).max(getBriefingSourceStatusResponseDailySearchRequestsLimitMax).nullable(),
+  "dailySearchRequestsUsed": zod.number().int().min(getBriefingSourceStatusResponseDailySearchRequestsUsedMin).nullable(),
+  "dailySearchRequestsRemaining": zod.number().int().min(getBriefingSourceStatusResponseDailySearchRequestsRemainingMin).nullable(),
   "maxSearchesPerBriefing": zod.number().int().min(1).max(getBriefingSourceStatusResponseMaxSearchesPerBriefingMax).describe('One request per selected topic, up to five topics.'),
   "searchDepth": zod.enum(['basic'])
 })
