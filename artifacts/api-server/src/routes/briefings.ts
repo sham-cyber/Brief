@@ -100,6 +100,14 @@ function contextRelevanceScore(source: NewsItem, terms: string[]): number {
   return score;
 }
 
+function sourceMentionsSubject(source: NewsItem, subject: string): boolean {
+  const normalize = (value: string) =>
+    (value.match(/[\p{L}\p{N}]+/gu) ?? []).join(" ").toLocaleLowerCase();
+  const target = normalize(subject);
+  const content = normalize(`${source.title} ${source.snippet}`);
+  return target.length > 0 && ` ${content} `.includes(` ${target} `);
+}
+
 async function searchNews(
   subject: string,
   subjectType: "company" | "person",
@@ -197,6 +205,7 @@ async function searchNews(
       ),
     }))
     .filter(({ item, searchedAs }) =>
+      sourceMentionsSubject({ ...item, id: "" }, subject) &&
       classifySource({ ...item, id: "" }, searchedAs, topics) !== null,
     )
     .sort((a, b) =>
