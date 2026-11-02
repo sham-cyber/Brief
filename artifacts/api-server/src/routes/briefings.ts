@@ -245,9 +245,9 @@ function classifySource(
 type BriefingSignal = { text: string; sourceIds: string[] };
 
 const POSITIVE_SIGNAL_PATTERNS = [
-  /\b(?:surges?|surged|soars?|soared|rises?|rose|gains?|gained|increases?|increased|grew|growth|higher|up|rebound(?:s|ed)?)\b/i,
+  /\b(?:surges?|surged|soars?|soared|rises?|rose|gains?|gained|increases?|increased|grew|growth|higher|rebound(?:s|ed)?)\b/i,
   /\b(?:record|beat(?:s)? estimates?|stronger|improves?|improvement|profitability)\b/i,
-  /\b(?:launch(?:es|ed)?|unveil(?:s|ed)?|award(?:ed)?|wins?|won|approved|approval|expansion|expands?|appointed|appointment)\b/i,
+  /\b(?:launch(?:es|ed)?|introduc(?:e|es|ed|ing)|unveil(?:s|ed)?|award(?:ed)?|wins?|won|approved|approval|expansion|expands?|appointed|appointment)\b/i,
 ];
 
 const NEGATIVE_SIGNAL_PATTERNS = [
@@ -284,12 +284,17 @@ function buildTopSignal(
         `${entry.source.title} ${entry.source.snippet}`,
         patterns,
       ),
+      topicScore: polarity === "positive"
+        ? Number(entry.searchedAs === "launch")
+        : Number(entry.searchedAs === "risk") * 2 +
+          Number(entry.searchedAs === "financial"),
       contextScore: contextRelevanceScore(entry.source, contextTerms),
       publishedAt: new Date(entry.source.publishedAt ?? 0).getTime(),
     }))
     .filter((candidate) => candidate.signalScore > 0)
     .sort((a, b) =>
       b.signalScore - a.signalScore ||
+      b.topicScore - a.topicScore ||
       b.contextScore - a.contextScore ||
       b.publishedAt - a.publishedAt ||
       a.index - b.index,

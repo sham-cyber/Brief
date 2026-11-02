@@ -27,6 +27,12 @@ Include one concise top-positive signal and one top-negative signal in each brie
 
 **How to apply:** Use collected source headlines/excerpts and link each line to its supporting source; do not invent or infer missing positives or risks.
 
+Do not mix results for similarly named people or companies. Require the selected subject name to appear in the source title or excerpt; omit ambiguous matches rather than attributing them.
+
+**Why:** A live Finolex Cables crawl also returned Finolex Industries and unrelated companies.
+
+**How to apply:** Prefer fewer exact-name results over broad fuzzy matches. Add ticker or legal-name aliases only through an explicit alias mechanism.
+
 For print, use a compact one-page A4 summary with the overview, one sourced leading item per selected category, an open question, and citation links; keep the complete multi-item source view on screen.
 
 **Why:** The user explicitly requires the printed briefing to fit on one page.
