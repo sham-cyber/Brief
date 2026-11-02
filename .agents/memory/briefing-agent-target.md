@@ -9,6 +9,12 @@ The user means the existing Briefing Agent in this workspace when referring to t
 
 **How to apply:** Extend the existing Briefing Agent as a user-triggered web app. Meeting time is context only; the user must press the crawl button. Prioritize stated meeting context; do not infer private motives or finances or make investment recommendations. Each block should have a repeat action using browser-native speech for now. Crawling is capped at 2 minutes and never continuous. Keep Company briefs public-only. Do not read private accounts until the source owner or authorized delegate grants access and each user's data is isolated. Do not connect workspace credentials after the user declines; user-owned provider credentials may be supported only through secure per-user handling. Exclude personal WhatsApp history and personal/family health records. Keep AI calls blocked until the user-owned provider path exists and the server switch is explicitly enabled; require each signed-in user’s activation passcode and enforce one AI request per briefing. If AI speech/Q&A is explicitly authorized later, use the app user's credentials, keep the separate spoken-brief cap at 2 minutes, and show word/character and cost estimates first.
 
+The optional meeting-context note should prioritize matching public results (for example, “new cable plant”) without changing the 30-day window or selected categories.
+
+**Why:** The user confirmed that meeting context should guide which collected results appear first.
+
+**How to apply:** Use context for local relevance ranking; do not append raw free-text context to third-party search queries unless the user is clearly informed and consents.
+
 For print, use a compact one-page A4 summary with the overview, one sourced leading item per selected category, an open question, and citation links; keep the complete multi-item source view on screen.
 
 **Why:** The user explicitly requires the printed briefing to fit on one page.

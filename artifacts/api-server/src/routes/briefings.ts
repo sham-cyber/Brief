@@ -49,6 +49,57 @@ function readTag(xml: string, tag: string): string {
   return match?.[1] ? decodeXml(match[1]) : "";
 }
 
+const CONTEXT_STOP_WORDS = new Set([
+  "about", "after", "also", "and", "before", "between", "during", "for",
+  "from", "have", "into", "meeting", "need", "new", "our", "that", "the",
+  "their", "them", "there", "these", "this", "those", "through", "today",
+  "want", "what", "when", "where", "which", "with", "would",
+]);
+
+function normalizeToken(token: string): string {
+  const lower = token.toLocaleLowerCase();
+  if (lower.length > 4 && lower.endsWith("ies")) return `${lower.slice(0, -3)}y`;
+  if (lower.length > 4 && lower.endsWith("s") && !lower.endsWith("ss")) {
+    return lower.slice(0, -1);
+  }
+  return lower;
+}
+
+function getContextTerms(context?: string): string[] {
+  if (!context) return [];
+  const terms = context.match(/[\p{L}\p{N}]+/gu) ?? [];
+  return [...new Set(
+    terms
+      .map(normalizeToken)
+      .filter((term) => term.length >= 3 && !CONTEXT_STOP_WORDS.has(term)),
+  )].slice(0, 8);
+}
+
+function contextRelevanceScore(source: NewsItem, terms: string[]): number {
+  if (terms.length === 0) return 0;
+
+  const tokenize = (value: string) =>
+    new Set((value.match(/[\p{L}\p{N}]+/gu) ?? []).map(normalizeToken));
+  const titleTerms = tokenize(source.title);
+  const bodyTerms = tokenize(`${source.snippet} ${source.publisher}`);
+  let score = 0;
+  let matchedTerms = 0;
+
+  for (const term of terms) {
+    if (titleTerms.has(term)) {
+      score += 5;
+      matchedTerms += 1;
+    } else if (bodyTerms.has(term)) {
+      score += 2;
+      matchedTerms += 1;
+    }
+  }
+
+  if (matchedTerms > 1) score += (matchedTerms - 1) * 2;
+  if (matchedTerms === terms.length && terms.length > 1) score += 4;
+  return score;
+}
+
 async function searchNews(
   subject: string,
   subjectType: "company" | "person",
@@ -56,6 +107,7 @@ async function searchNews(
   topics: BriefingTopic[],
   start: Date,
   end: Date,
+  context?: string,
 ): Promise<SearchResult[]> {
   const startDate = start.toISOString().slice(0, 10);
   const endDate = new Date(end.getTime() + 86_400_000).toISOString().slice(0, 10);
@@ -97,7 +149,7 @@ async function searchNews(
 
   const uniqueItems = new Map<string, { item: Omit<NewsItem, "id">; searchedAs: BriefingTopic }>();
   for (const { topic, xml } of feeds) {
-    const entries = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)].slice(0, 8);
+    const entries = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)].slice(0, 12);
     for (const entry of entries) {
       const item = entry[1] ?? "";
       const title = readTag(item, "title");
@@ -135,10 +187,21 @@ async function searchNews(
     }
   }
 
+  const contextKeywords = getContextTerms(context);
   return [...uniqueItems.values()]
-    .sort(
-      (a, b) =>
-        new Date(b.item.publishedAt ?? 0).getTime() -
+    .map((entry) => ({
+      ...entry,
+      contextScore: contextRelevanceScore(
+        { ...entry.item, id: "", snippet: entry.item.snippet },
+        contextKeywords,
+      ),
+    }))
+    .filter(({ item, searchedAs }) =>
+      classifySource({ ...item, id: "" }, searchedAs, topics) !== null,
+    )
+    .sort((a, b) =>
+      b.contextScore - a.contextScore ||
+      new Date(b.item.publishedAt ?? 0).getTime() -
         new Date(a.item.publishedAt ?? 0).getTime(),
     )
     .slice(0, 18)
@@ -197,7 +260,12 @@ function buildBriefingContent(
       sourceIds: [source.id],
     }] : [];
   });
-  const latest = sources[0]!.source;
+  const latest = sources.reduce((newest, candidate) =>
+    new Date(candidate.source.publishedAt ?? 0).getTime() >
+    new Date(newest.source.publishedAt ?? 0).getTime()
+      ? candidate
+      : newest,
+  ).source;
   const questions = topics.includes("risk") ? highlights.slice(0, 3).map((highlight, index) => ({
     text: [
       `What has changed since “${highlight.title}” was reported, and what is the latest status?`,
@@ -265,6 +333,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
       topics,
       windowStart,
       windowEnd,
+      input.data.context?.trim() || undefined,
     );
 
     if (collected.length === 0) {
