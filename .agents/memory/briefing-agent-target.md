@@ -74,3 +74,9 @@ The user clarified that all accounts share one 120-second rolling 24-hour crawl-
 **Why:** The user clarified that the whole app, rather than each account, must stop after two minutes because all accounts spend the same Tavily balance.
 
 **How to apply:** Keep the global budget persistent across restarts and reserve it atomically so accounts cannot exceed the combined limit through overlapping crawls. Continue to disclose that all accounts share the project-level provider bill.
+
+The Brief status indicator glows green only when a successful briefing still matches the currently selected subject, meeting, and topics; entering meeting details alone does not mean the brief is ready.
+
+**Why:** The user wants the green Brief indicator to mean the requested brief is ready for its selected goals.
+
+**How to apply:** Derive green status from a completed result matching the current form, not from valid inputs or available crawl time alone.

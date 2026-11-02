@@ -1102,14 +1102,12 @@ function Home() {
 
   const apiError = mutation.error as (Error & { data?: { error?: string } }) | null;
   const errorMessage = apiError?.data?.error ?? apiError?.message ?? 'The briefing could not be generated. Check your connection and try again.';
-  const readinessState = !isSignedIn || !tavilyConfigured || !meetingTimeIsValid || !hasValidSubject || !hasValidRole || !hasTopics || sourceMode === 'private'
+  const readinessState = !isSignedIn
     ? 'not-ready'
     : currentRequestFailed
       ? 'error'
       : currentRequestIsPending
         ? 'crawling'
-        : crawlAlreadyActive || crawlBudgetExhausted
-          ? 'not-ready'
         : hasCurrentResult
           ? 'ready'
           : 'not-ready';
@@ -1152,7 +1150,7 @@ function Home() {
       : readinessState === 'crawling'
         ? 'Collecting sources — up to your remaining daily allowance.'
       : readinessState === 'ready'
-          ? 'Data ready — sources collected for this meeting.'
+          ? 'Brief ready — sources collected for the selected subject, meeting and topics.'
           : 'Not ready — press Crawl & prepare briefing.';
   const briefStatusClass = readinessState === 'ready'
     ? 'brief-status-ready'

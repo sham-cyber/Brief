@@ -159,10 +159,13 @@
   transition: background .18s ease, box-shadow .18s ease, opacity .18s ease;
 }
 .brief-status-ready {
-  border: 1px solid #34845a;
-  background: #34845a;
+  border: 1px solid #25844d;
+  background: #2f965a;
   color: white;
-  box-shadow: 0 0 0 4px rgba(63, 156, 100, .15), 0 4px 12px rgba(43, 117, 71, .2);
+  box-shadow:
+    0 0 0 4px rgba(63, 176, 105, .2),
+    0 0 14px 4px rgba(63, 176, 105, .42),
+    0 0 28px rgba(43, 117, 71, .28);
 }
 .brief-status-not-ready {
   border: 1px solid #bb5048;
