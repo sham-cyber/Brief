@@ -5,6 +5,8 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { BriefingInputPersonRole } from './briefingInputPersonRole';
+import type { BriefingInputSourceMode } from './briefingInputSourceMode';
 import type { BriefingInputSubjectType } from './briefingInputSubjectType';
 import type { BriefingInputTopicsItem } from './briefingInputTopicsItem';
 
@@ -15,6 +17,9 @@ export interface BriefingInput {
      */
   subject: string;
   subjectType: BriefingInputSubjectType;
+  /** @nullable */
+  personRole: BriefingInputPersonRole;
+  sourceMode: BriefingInputSourceMode;
   meetingAt: Date;
   /** @maxLength 1500 */
   context?: string;

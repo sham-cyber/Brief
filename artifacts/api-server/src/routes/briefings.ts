@@ -13,7 +13,14 @@ type NewsItem = {
 };
 
 type BriefingTopic = "news" | "hire" | "launch" | "financial" | "risk";
+type PersonRole = "business_owner" | "mp" | "corporate";
 type SearchResult = { source: NewsItem; searchedAs: BriefingTopic };
+
+const ROLE_SEARCH_TERMS: Record<PersonRole, string> = {
+  business_owner: "(business owner OR founder OR chairman OR entrepreneur OR CEO)",
+  mp: "(Member of Parliament OR MP OR legislator OR constituency OR parliament)",
+  corporate: "(corporate executive OR CEO OR director OR executive leadership)",
+};
 
 function decodeXml(value: string): string {
   const decoded = value
@@ -44,23 +51,27 @@ function readTag(xml: string, tag: string): string {
 async function searchNews(
   subject: string,
   subjectType: "company" | "person",
+  personRole: PersonRole | null,
   topics: BriefingTopic[],
   start: Date,
   end: Date,
 ): Promise<SearchResult[]> {
   const startDate = start.toISOString().slice(0, 10);
   const endDate = new Date(end.getTime() + 86_400_000).toISOString().slice(0, 10);
+  const roleTerms = subjectType === "person" && personRole
+    ? ` ${ROLE_SEARCH_TERMS[personRole]}`
+    : "";
   const searchTerms: { topic: BriefingTopic; term: string }[] = topics.map((topic) => {
     const terms: Record<BriefingTopic, string> = {
-      news: `${subject} news`,
+      news: `${subject}${roleTerms} news`,
       hire: subjectType === "person"
-        ? `${subject} (appointed OR appointment OR joins OR joined OR hired OR hiring OR promoted OR promotion)`
+        ? `${subject}${roleTerms} (appointed OR appointment OR joins OR joined OR hired OR hiring OR promoted OR promotion)`
         : `${subject} (appointed OR appointment OR joins OR joined OR hired OR hiring OR promoted OR promotion OR named CEO)`,
-      launch: `${subject} (launch OR launched OR launches OR release OR released OR unveiled OR debut OR introduced)`,
+      launch: `${subject}${roleTerms} (launch OR launched OR launches OR release OR released OR unveiled OR debut OR introduced)`,
       financial: subjectType === "company"
         ? `${subject} (share price OR shares OR stock OR earnings OR profit OR loss OR revenue OR valuation OR funding)`
-        : `${subject} (financial results OR earnings OR investment OR profit OR loss OR valuation OR funding)`,
-      risk: `${subject} (risk OR lawsuit OR sues OR sued OR recall OR investigation OR regulator OR fine OR penalty OR restructuring OR breach)`,
+        : `${subject}${roleTerms} (financial results OR earnings OR investment OR profit OR loss OR valuation OR funding)`,
+      risk: `${subject}${roleTerms} (risk OR lawsuit OR sues OR sued OR recall OR investigation OR regulator OR fine OR penalty OR restructuring OR breach)`,
     };
     return { topic, term: terms[topic] };
   });
@@ -216,7 +227,26 @@ router.post("/briefings", async (req, res): Promise<void> => {
   const input = CreateBriefingBody.safeParse(req.body);
   if (!input.success) {
     res.status(400).json({
-      error: "Enter a company or person, choose at least one topic, and set a meeting time.",
+      error: "Enter a company or person, choose a person role when needed, select a source mode and at least one topic, and set a meeting time.",
+    });
+    return;
+  }
+
+  if (input.data.subjectType === "person" && !input.data.personRole) {
+    res.status(400).json({ error: "Choose a briefing context for the person: Business Owner, MP, or Corporate." });
+    return;
+  }
+  if (input.data.subjectType === "company" && input.data.personRole) {
+    res.status(400).json({ error: "Person briefing context is only available for Person briefs." });
+    return;
+  }
+  if (input.data.subjectType === "company" && input.data.sourceMode === "private") {
+    res.status(400).json({ error: "Company briefs use public sources only." });
+    return;
+  }
+  if (input.data.sourceMode === "private") {
+    res.status(503).json({
+      error: "Private source access is not configured. No mailbox or WhatsApp data was read.",
     });
     return;
   }
@@ -230,6 +260,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
     const collected = await searchNews(
       input.data.subject.trim(),
       input.data.subjectType,
+      input.data.personRole,
       topics,
       windowStart,
       windowEnd,
@@ -264,6 +295,8 @@ router.post("/briefings", async (req, res): Promise<void> => {
     const result = CreateBriefingResponse.parse({
       subject: input.data.subject.trim(),
       subjectType: input.data.subjectType,
+      personRole: input.data.personRole,
+      sourceMode: "public",
       topics,
       meetingAt: meetingAt.toISOString(),
       generatedAt: now.toISOString(),
@@ -273,8 +306,8 @@ router.post("/briefings", async (req, res): Promise<void> => {
       sources,
     });
     res.json(result);
-  } catch (error) {
-    req.log.error({ err: error }, "Briefing generation failed");
+  } catch {
+    req.log.error({ sourceMode: input.data.sourceMode }, "Briefing generation failed");
     res.status(502).json({
       error: "The briefing could not be generated. Please try again shortly.",
     });

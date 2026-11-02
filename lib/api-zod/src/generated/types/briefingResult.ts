@@ -8,6 +8,8 @@
 import type { BriefingHighlight } from './briefingHighlight';
 import type { BriefingOverview } from './briefingOverview';
 import type { BriefingQuestion } from './briefingQuestion';
+import type { BriefingResultPersonRole } from './briefingResultPersonRole';
+import type { BriefingResultSourceMode } from './briefingResultSourceMode';
 import type { BriefingResultSubjectType } from './briefingResultSubjectType';
 import type { BriefingResultTopicsItem } from './briefingResultTopicsItem';
 import type { BriefSource } from './briefSource';
@@ -15,6 +17,9 @@ import type { BriefSource } from './briefSource';
 export interface BriefingResult {
   subject: string;
   subjectType: BriefingResultSubjectType;
+  /** @nullable */
+  personRole: BriefingResultPersonRole;
+  sourceMode: BriefingResultSourceMode;
   topics: BriefingResultTopicsItem[];
   meetingAt: Date;
   generatedAt: Date;

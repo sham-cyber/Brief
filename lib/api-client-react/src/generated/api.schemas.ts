@@ -21,6 +21,26 @@ export const BriefingInputSubjectType = {
   person: 'person',
 } as const;
 
+/**
+ * @nullable
+ */
+export type BriefingInputPersonRole = typeof BriefingInputPersonRole[keyof typeof BriefingInputPersonRole] | null;
+
+
+export const BriefingInputPersonRole = {
+  business_owner: 'business_owner',
+  mp: 'mp',
+  corporate: 'corporate',
+} as const;
+
+export type BriefingInputSourceMode = typeof BriefingInputSourceMode[keyof typeof BriefingInputSourceMode];
+
+
+export const BriefingInputSourceMode = {
+  public: 'public',
+  private: 'private',
+} as const;
+
 export type BriefingInputTopicsItem = typeof BriefingInputTopicsItem[keyof typeof BriefingInputTopicsItem];
 
 
@@ -39,6 +59,9 @@ export interface BriefingInput {
      */
   subject: string;
   subjectType: BriefingInputSubjectType;
+  /** @nullable */
+  personRole: BriefingInputPersonRole;
+  sourceMode: BriefingInputSourceMode;
   meetingAt: string;
   /** @maxLength 1500 */
   context?: string;
@@ -94,6 +117,26 @@ export const BriefingResultSubjectType = {
   person: 'person',
 } as const;
 
+/**
+ * @nullable
+ */
+export type BriefingResultPersonRole = typeof BriefingResultPersonRole[keyof typeof BriefingResultPersonRole] | null;
+
+
+export const BriefingResultPersonRole = {
+  business_owner: 'business_owner',
+  mp: 'mp',
+  corporate: 'corporate',
+} as const;
+
+export type BriefingResultSourceMode = typeof BriefingResultSourceMode[keyof typeof BriefingResultSourceMode];
+
+
+export const BriefingResultSourceMode = {
+  public: 'public',
+  private: 'private',
+} as const;
+
 export type BriefingResultTopicsItem = typeof BriefingResultTopicsItem[keyof typeof BriefingResultTopicsItem];
 
 
@@ -108,6 +151,9 @@ export const BriefingResultTopicsItem = {
 export interface BriefingResult {
   subject: string;
   subjectType: BriefingResultSubjectType;
+  /** @nullable */
+  personRole: BriefingResultPersonRole;
+  sourceMode: BriefingResultSourceMode;
   topics: BriefingResultTopicsItem[];
   meetingAt: string;
   generatedAt: string;

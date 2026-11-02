@@ -23,6 +23,7 @@ export const HealthCheckResponse = zod.object({
 export const createBriefingBodySubjectMin = 2;
 export const createBriefingBodySubjectMax = 200;
 
+export const createBriefingBodySourceModeDefault = `public`;
 export const createBriefingBodyContextMax = 1500;
 
 
@@ -31,6 +32,8 @@ export const createBriefingBodyContextMax = 1500;
 export const CreateBriefingBody = zod.object({
   "subject": zod.string().min(createBriefingBodySubjectMin).max(createBriefingBodySubjectMax),
   "subjectType": zod.enum(['company', 'person']),
+  "personRole": zod.union([zod.literal('business_owner'),zod.literal('mp'),zod.literal('corporate'),zod.literal(null)]).nullable(),
+  "sourceMode": zod.enum(['public', 'private']).default(createBriefingBodySourceModeDefault),
   "meetingAt": zod.coerce.date(),
   "context": zod.string().max(createBriefingBodyContextMax).optional(),
   "topics": zod.array(zod.enum(['news', 'hire', 'launch', 'financial', 'risk'])).min(1)
@@ -43,6 +46,8 @@ export const CreateBriefingBody = zod.object({
 export const CreateBriefingResponse = zod.object({
   "subject": zod.string(),
   "subjectType": zod.enum(['company', 'person']),
+  "personRole": zod.union([zod.literal('business_owner'),zod.literal('mp'),zod.literal('corporate'),zod.literal(null)]).nullable(),
+  "sourceMode": zod.enum(['public', 'private']),
   "topics": zod.array(zod.enum(['news', 'hire', 'launch', 'financial', 'risk'])),
   "meetingAt": zod.coerce.date(),
   "generatedAt": zod.coerce.date(),

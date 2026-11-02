@@ -18,7 +18,18 @@ const TOPICS = [
   { value: 'risk', label: 'Risks & Open Questions' },
 ] as const;
 type Topic = typeof TOPICS[number]['value'];
+const PERSON_ROLES = [
+  { value: 'business_owner', label: 'Business Owner' },
+  { value: 'mp', label: 'MP' },
+  { value: 'corporate', label: 'Corporate' },
+] as const;
+type PersonRole = typeof PERSON_ROLES[number]['value'];
+type SourceMode = 'public' | 'private';
 const SPEECH_WORD_LIMIT = 280;
+
+function personRoleLabel(role: PersonRole | null | undefined) {
+  return PERSON_ROLES.find((option) => option.value === role)?.label ?? '';
+}
 
 function speechText(value: string) {
   const words = value.trim().split(/\s+/).filter(Boolean);
@@ -215,14 +226,23 @@ function VoiceControls({ text }: { text: string }) {
           >
             <Volume2 className="h-3.5 w-3.5" aria-hidden="true" /> Read aloud
           </button>
+          <button
+            type="button"
+            disabled
+            title="AI Q&A is stopped until you authorize the app user's AI connection."
+            className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#e4b7b2] bg-[#fbefed] px-3 text-xs font-semibold text-[#98453e] disabled:cursor-not-allowed"
+            data-testid="button-ask-ai-question"
+          >
+            Ask a spoken question
+          </button>
         </div>
         <p id="ai-voice-status" className="mt-2 max-w-52 text-[10px] leading-relaxed text-muted-foreground">
-          AI voice is not connected.
+          AI voice and Q&A are stopped. If enabled later, they will use your own AI credentials; none are connected.
         </p>
         <p className="mt-1 max-w-60 text-[10px] leading-relaxed text-muted-foreground" data-testid="status-speech-estimate">
           {hasText
-            ? `Speech budget preview: ${estimate.words}/${SPEECH_WORD_LIMIT} words spoken; ${estimate.totalWords} words total${estimate.clipped ? ' — capped at 2 minutes' : ''}. Device voice estimate: about ${seconds}s.`
-            : `0/${SPEECH_WORD_LIMIT} speech words. AI voice is off; device read-aloud starts after the crawl.`}
+            ? `Speech preview: ${estimate.words}/${SPEECH_WORD_LIMIT} words spoken, ${text.length} characters; ${estimate.totalWords} words total${estimate.clipped ? ' — capped at 2 minutes' : ''}. Device estimate: about ${seconds}s. AI provider calls are off, so no AI speech cost is incurred.`
+            : `0/${SPEECH_WORD_LIMIT} speech words, 0 characters. AI voice is off; device read-aloud starts after the crawl.`}
         </p>
       </div>
     </div>
@@ -310,6 +330,7 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
       `${result.subject} — meeting briefing`,
       `Meeting: ${formatDate(result.meetingAt)}`,
       `Research window: ${formatWindow(result.windowStart, result.windowEnd)}`,
+      ...(result.personRole ? [`Briefing context: ${personRoleLabel(result.personRole)}`] : []),
       '',
       'OVERVIEW',
       `${result.overview.text}${result.overview.sourceIds.length ? ` [${result.overview.sourceIds.join(', ')}]` : ''}`,
@@ -356,7 +377,9 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
         <div className="absolute -right-16 -top-24 h-64 w-64 rounded-full border border-white/10" aria-hidden="true" />
         <div className="absolute -right-2 -top-12 h-44 w-44 rounded-full border border-white/10" aria-hidden="true" />
         <div className="relative">
-          <p className="font-mono text-[10px] uppercase tracking-[.2em] text-[#c5b9e8]">{result.subjectType} briefing</p>
+          <p className="font-mono text-[10px] uppercase tracking-[.2em] text-[#c5b9e8]">
+            {result.subjectType === 'person' && result.personRole ? `${personRoleLabel(result.personRole)} · ` : ''}{result.subjectType} briefing
+          </p>
           <h2 className="mt-4 max-w-3xl font-serif text-4xl leading-[.98] tracking-[-.02em] sm:text-5xl">{result.subject}</h2>
           <div className="mt-6 flex flex-wrap gap-x-6 gap-y-3 text-xs text-[#d2d0da]">
             <span className="inline-flex items-center gap-2"><Clock3 className="h-3.5 w-3.5 text-[#c5b9e8]" />{formatDate(result.meetingAt)}</span>
@@ -455,7 +478,7 @@ function PrintOnePageBrief({ result }: { result: BriefingResult }) {
   return (
     <section className="print-only print-one-page" aria-label="One-page printable briefing" data-testid="print-one-page-brief">
       <header className="print-page-header">
-        <p>{result.subjectType} briefing · 30-day research window</p>
+        <p>{result.subjectType === 'person' && result.personRole ? `${personRoleLabel(result.personRole)} · ` : ''}{result.subjectType} briefing · 30-day research window</p>
         <h1>{result.subject}</h1>
         <div>{formatDate(result.meetingAt)} <span aria-hidden="true">·</span> {formatWindow(result.windowStart, result.windowEnd)}</div>
       </header>
@@ -510,22 +533,24 @@ function Home() {
   const mutation = useCreateBriefing({ request: { get signal() { return abortControllerRef.current?.signal; } } });
   const [subject, setSubject] = useState('');
   const [subjectType, setSubjectType] = useState<'company' | 'person'>('company');
+  const [personRole, setPersonRole] = useState<PersonRole | null>(null);
+  const [sourceMode, setSourceMode] = useState<SourceMode>('public');
   const [topics, setTopics] = useState<Topic[]>(TOPICS.map((topic) => topic.value));
   const [meetingAt, setMeetingAt] = useState('');
   const [context, setContext] = useState('');
   const [resultKey, setResultKey] = useState('');
   const [failedKey, setFailedKey] = useState('');
   const [timedOutKey, setTimedOutKey] = useState('');
-  const lastAutoRequestKey = useRef('');
   const activeRequestKey = useRef('');
   const timeoutRef = useRef<number | undefined>(undefined);
-  const requestKey = JSON.stringify([subject.trim(), subjectType, meetingAt, topics, context.trim()]);
+  const requestKey = JSON.stringify([subject.trim(), subjectType, personRole, sourceMode, meetingAt, topics, context.trim()]);
   const meetingTimeIsValid = Boolean(meetingAt && !Number.isNaN(new Date(meetingAt).getTime()));
   const hasValidSubject = subject.trim().length >= 2;
+  const hasValidRole = subjectType !== 'person' || Boolean(personRole);
   const hasTopics = topics.length > 0;
   const hasCurrentResult = Boolean(mutation.data && resultKey === requestKey);
   const result = hasCurrentResult ? mutation.data : undefined;
-  const currentRequestIsPending = mutation.isPending;
+  const currentRequestIsPending = mutation.isPending && activeRequestKey.current === requestKey;
   const currentRequestFailed = (mutation.isError && failedKey === requestKey) || timedOutKey === requestKey;
   const researchWindow = useMemo(() => {
     if (!meetingTimeIsValid) return '';
@@ -535,8 +560,7 @@ function Home() {
   }, [meetingAt, meetingTimeIsValid]);
 
   const runBriefing = useCallback((key: string) => {
-    if (!hasValidSubject || !meetingTimeIsValid || !hasTopics || mutation.isPending) return;
-    lastAutoRequestKey.current = key;
+    if (!hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || sourceMode !== 'public' || mutation.isPending) return;
     activeRequestKey.current = key;
     setFailedKey('');
     setTimedOutKey('');
@@ -550,7 +574,17 @@ function Home() {
       }
     }, 120_000);
     mutation.mutate(
-      { data: { subject: subject.trim(), subjectType, meetingAt, topics, ...(context.trim() ? { context: context.trim() } : {}) } },
+      {
+        data: {
+          subject: subject.trim(),
+          subjectType,
+          personRole: subjectType === 'person' ? personRole : null,
+          sourceMode,
+          meetingAt: new Date(meetingAt).toISOString(),
+          topics,
+          ...(context.trim() ? { context: context.trim() } : {}),
+        },
+      },
       {
         onSuccess: () => {
           if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
@@ -567,19 +601,7 @@ function Home() {
         },
       },
     );
-  }, [context, hasTopics, hasValidSubject, meetingAt, meetingTimeIsValid, mutation.isPending, mutation.mutate, subject, subjectType, topics]);
-
-  useEffect(() => {
-    if (!hasValidSubject || !meetingTimeIsValid || !hasTopics || mutation.isPending) return;
-    if (lastAutoRequestKey.current === requestKey) return;
-
-    const timeout = window.setTimeout(() => {
-      if (lastAutoRequestKey.current !== requestKey && !mutation.isPending) {
-        runBriefing(requestKey);
-      }
-    }, 650);
-    return () => window.clearTimeout(timeout);
-  }, [hasTopics, hasValidSubject, meetingTimeIsValid, mutation.isPending, requestKey, runBriefing]);
+  }, [context, hasTopics, hasValidRole, hasValidSubject, meetingAt, meetingTimeIsValid, mutation.isPending, mutation.mutate, personRole, sourceMode, subject, subjectType, topics]);
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -589,7 +611,7 @@ function Home() {
   const errorMessage = mutation.error instanceof Error
     ? mutation.error.message
     : 'The briefing could not be generated. Check your connection and try again.';
-  const readinessState = !meetingTimeIsValid || !hasValidSubject || !hasTopics
+  const readinessState = !meetingTimeIsValid || !hasValidSubject || !hasValidRole || !hasTopics || sourceMode === 'private'
     ? 'not-ready'
     : currentRequestFailed
       ? 'error'
@@ -597,26 +619,35 @@ function Home() {
         ? 'crawling'
         : hasCurrentResult
           ? 'ready'
-          : 'starting';
+          : 'not-ready';
   const readinessStyles = {
     'not-ready': 'border-[#e5c5c0] bg-[#fbefed] text-[#8f4039]',
     error: 'border-[#e5c5c0] bg-[#fbefed] text-[#8f4039]',
     crawling: 'border-[#ddd6e8] bg-[#f4f1f8] text-[#554a70]',
-    starting: 'border-[#ddd6e8] bg-[#f4f1f8] text-[#554a70]',
     ready: 'border-[#c7dfd2] bg-[#edf6f0] text-[#2f6d4c]',
   }[readinessState];
   const readinessMessage = readinessState === 'not-ready'
-    ? !hasValidSubject ? 'Not ready — enter a company or person.' : !meetingTimeIsValid ? 'Not ready — set a meeting time to start research.' : 'Not ready — select at least one topic.'
+    ? !hasValidSubject
+      ? 'Not ready — enter a company or person.'
+      : !hasValidRole
+        ? 'Not ready — choose Business Owner, MP, or Corporate.'
+        : !meetingTimeIsValid
+          ? 'Not ready — set a meeting time.'
+          : !hasTopics
+            ? 'Not ready — select at least one topic.'
+            : sourceMode === 'private'
+              ? 'Not ready — private sources need user authorization and protected sign-in.'
+              : 'Not ready — press Crawl & prepare briefing.'
     : readinessState === 'error'
       ? timedOutKey === requestKey ? 'Not ready — collection exceeded the 2-minute limit.' : 'Not ready — source collection failed. Try again.'
       : readinessState === 'crawling'
         ? 'Collecting sources — this may take up to 2 minutes.'
       : readinessState === 'ready'
           ? 'Data ready — sources collected for this meeting.'
-          : 'Starting a one-time source collection…';
+          : 'Not ready — press Crawl & prepare briefing.';
   const briefStatusClass = readinessState === 'ready'
     ? 'brief-status-ready'
-    : readinessState === 'crawling' || readinessState === 'starting'
+    : readinessState === 'crawling'
       ? 'brief-status-pending'
       : 'brief-status-not-ready';
   const handleBriefStatusClick = () => {
@@ -626,10 +657,14 @@ function Home() {
       runBriefing(requestKey);
     } else if (!hasValidSubject) {
       document.querySelector<HTMLInputElement>('#subject')?.focus();
+    } else if (!hasValidRole) {
+      document.querySelector<HTMLInputElement>('[data-testid^="radio-person-role-"]')?.focus();
     } else if (!hasTopics) {
       document.querySelector<HTMLInputElement>('[data-testid^="checkbox-topic-"]')?.focus();
+    } else if (sourceMode === 'private') {
+      document.querySelector<HTMLInputElement>('[data-testid="radio-source-mode-private"]')?.focus();
     } else {
-      document.querySelector<HTMLInputElement>('#meetingAt')?.focus();
+      document.querySelector<HTMLButtonElement>('[data-testid="button-generate-briefing"]')?.focus();
     }
   };
 
@@ -661,7 +696,7 @@ function Home() {
                   <button
                     type="button"
                     onClick={handleBriefStatusClick}
-                    disabled={readinessState === 'crawling' || readinessState === 'starting'}
+                    disabled={readinessState === 'crawling'}
                     className={`brief-status-button ${briefStatusClass}`}
                     aria-label={`Brief status: ${readinessMessage}`}
                     title={readinessMessage}
@@ -669,7 +704,7 @@ function Home() {
                   >
                     Brief
                   </button>
-                  <span className="font-mono text-[10px] text-[#968da0]">01 — 03</span>
+                  <span className="font-mono text-[10px] text-[#968da0]">30 DAYS</span>
                 </div>
               </div>
               <fieldset className="mt-4">
@@ -682,7 +717,11 @@ function Home() {
                         name="subjectType"
                         value={kind}
                         checked={subjectType === kind}
-                        onChange={() => setSubjectType(kind)}
+                        onChange={() => {
+                          setSubjectType(kind);
+                          setPersonRole(null);
+                          if (kind === 'company') setSourceMode('public');
+                        }}
                         className="accent-[#655487]"
                         data-testid={`radio-subject-type-${kind}`}
                       />
@@ -691,6 +730,90 @@ function Home() {
                   ))}
                 </div>
               </fieldset>
+
+              {subjectType === 'person' && (
+                <>
+                  <fieldset className="mt-5" aria-describedby="person-role-note">
+                    <legend className="mb-2 text-xs font-semibold text-[#35364a]">Person’s briefing context</legend>
+                    <p id="person-role-note" className="mb-2 text-[10px] leading-relaxed text-[#777280]">
+                      Choose the field to focus the public search. This does not grant access to private accounts.
+                    </p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {PERSON_ROLES.map((role) => (
+                        <label
+                          key={role.value}
+                          className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                            personRole === role.value
+                              ? 'border-[#9183ad] bg-[#f0edf6] text-[#493d65]'
+                              : 'border-[#d9d4df] bg-[#fffefa] text-[#777280] hover:border-[#bbb1cc]'
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="personRole"
+                            value={role.value}
+                            checked={personRole === role.value}
+                            onChange={() => setPersonRole(role.value)}
+                            className="accent-[#655487]"
+                            data-testid={`radio-person-role-${role.value}`}
+                          />
+                          {role.label}
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                  <fieldset className="mt-5">
+                    <legend className="mb-2 text-xs font-semibold text-[#35364a]">Source mode</legend>
+                    <div className="grid max-w-md grid-cols-2 gap-2">
+                      {(['public', 'private'] as const).map((mode) => (
+                        <label
+                          key={mode}
+                          className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                            sourceMode === mode
+                              ? mode === 'public'
+                                ? 'border-[#9183ad] bg-[#f0edf6] text-[#493d65]'
+                                : 'border-[#bd8b4a] bg-[#fff5e6] text-[#754a1f]'
+                              : 'border-[#d9d4df] bg-[#fffefa] text-[#777280] hover:border-[#bbb1cc]'
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="sourceMode"
+                            value={mode}
+                            checked={sourceMode === mode}
+                            onChange={() => setSourceMode(mode)}
+                            className="accent-[#655487]"
+                            data-testid={`radio-source-mode-${mode}`}
+                          />
+                          {mode === 'public' ? 'Public sources' : 'Private sources'}
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                  {sourceMode === 'private' && (
+                    <div
+                      className="mt-3 rounded-xl border border-[#e5c5c0] bg-[#fbefed] p-4 text-[11px] leading-relaxed text-[#7f413b]"
+                      role="status"
+                      data-testid="private-source-unavailable"
+                    >
+                      <p className="font-semibold">Private source setup is not ready. No private data is being collected.</p>
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        <div className="rounded-lg border border-[#e8d0cb] bg-white/70 p-3">
+                          <p className="font-semibold">Gmail / shared mailbox</p>
+                          <p className="mt-1">Use account-owner OAuth authorization. A generic API key cannot read a Gmail mailbox.</p>
+                          <span className="mt-2 inline-block font-mono text-[9px] uppercase tracking-wide">Not connected</span>
+                        </div>
+                        <div className="rounded-lg border border-[#e8d0cb] bg-white/70 p-3">
+                          <p className="font-semibold">WhatsApp Business</p>
+                          <p className="mt-1">OAuth or user-owned provider credentials, where supported. Personal chat history is not included.</p>
+                          <span className="mt-2 inline-block font-mono text-[9px] uppercase tracking-wide">Not connected</span>
+                        </div>
+                      </div>
+                      <p className="mt-3">Both connection methods are planned where the provider supports them. User-specific sign-in and secure credential storage must be ready before any private crawl is enabled. The account owner or authorized PA must approve access.</p>
+                    </div>
+                  )}
+                </>
+              )}
 
               <label htmlFor="subject" className="mb-1.5 mt-4 block text-xs font-semibold text-[#35364a]">
                 {subjectType === 'company' ? 'Company name' : 'Person name'}
@@ -788,10 +911,10 @@ function Home() {
               />
               <div className="mt-1 text-right font-mono text-[9px] text-[#aaa4af]">{context.length} / 1500</div>
 
-              <button type="submit" disabled={mutation.isPending || !hasValidSubject || !meetingTimeIsValid || !hasTopics} className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#2b304a] px-4 text-sm font-semibold text-[#faf7f0] transition hover:bg-[#3c4160] disabled:opacity-55" data-testid="button-generate-briefing">
-                {mutation.isPending ? <><LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />Crawling sources…</> : <><FileText className="h-4 w-4 text-[#c9b9ee]" aria-hidden="true" />{hasCurrentResult ? 'Refresh briefing' : 'Crawl & prepare briefing'}<ArrowDown className="ml-auto h-4 w-4 opacity-60" aria-hidden="true" /></>}
+              <button type="submit" disabled={mutation.isPending || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || sourceMode === 'private'} className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#2b304a] px-4 text-sm font-semibold text-[#faf7f0] transition hover:bg-[#3c4160] disabled:opacity-55" data-testid="button-generate-briefing">
+                {mutation.isPending ? <><LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />Crawling sources…</> : sourceMode === 'private' ? <><FileText className="h-4 w-4 text-[#c9b9ee]" aria-hidden="true" />Private mode unavailable</> : <><FileText className="h-4 w-4 text-[#c9b9ee]" aria-hidden="true" />{hasCurrentResult ? 'Refresh briefing' : 'Crawl & prepare briefing'}<ArrowDown className="ml-auto h-4 w-4 opacity-60" aria-hidden="true" /></>}
               </button>
-              <p id="form-note" className="mt-3 text-center text-[10px] leading-relaxed text-[#898392]">One source crawl per input set. It runs once now, never on a schedule or at meeting time. Results are limited to two minutes.</p>
+              <p id="form-note" className="mt-3 text-center text-[10px] leading-relaxed text-[#898392]">One manual crawl when you press the button. It never runs on a schedule or at meeting time, and is limited to two minutes.</p>
             </form>
 
             {mutation.isPending && (
@@ -812,12 +935,16 @@ function Home() {
 
             <div className="mt-5 flex items-start gap-2.5 px-1 text-[11px] leading-relaxed text-[#777280]">
               <span className="mt-0.5 font-mono text-[9px] text-[#897ca6]">NOTE</span>
-              <p>Public sources only. No email, WhatsApp, or private health data is collected. Each factual point links to its original reporting.</p>
+              <p>
+                {sourceMode === 'public'
+                  ? 'This crawl uses public sources only. Private mailboxes and WhatsApp messages are not read. Each factual point links to its original reporting.'
+                  : 'Private source setup is unavailable. No mailbox or WhatsApp data will be read until the account owner or authorized delegate connects and approves access.'}
+              </p>
             </div>
           </section>
 
           <section className="min-w-0" aria-live="polite" aria-label="Briefing">
-            {(currentRequestIsPending || readinessState === 'starting') && !result ? (
+            {currentRequestIsPending && !result ? (
               <LoadingBrief />
             ) : result ? (
               <BriefingDocument result={result} />
