@@ -1098,7 +1098,6 @@ function Home() {
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    runBriefing(requestKey);
   };
 
   const apiError = mutation.error as (Error & { data?: { error?: string } }) | null;
@@ -1160,30 +1159,6 @@ function Home() {
     : readinessState === 'crawling'
       ? 'brief-status-pending'
       : 'brief-status-not-ready';
-  const handleBriefStatusClick = () => {
-    if (!isSignedIn) {
-      window.location.assign(`${basePath}/sign-in`);
-    } else if (readinessState === 'ready') {
-      document.querySelector('[data-testid="briefing-result"]')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    } else if (readinessState === 'error') {
-      runBriefing(requestKey);
-    } else if (!hasValidSubject) {
-      document.querySelector<HTMLInputElement>('#subject')?.focus();
-    } else if (!hasValidRoleSelection) {
-      document.querySelector<HTMLInputElement>('[data-testid^="radio-person-role-"]')?.focus();
-    } else if (subjectType === 'person' && personRole === 'business_owner' && !hasValidPersonDetails) {
-      document.querySelector<HTMLInputElement>('#person-company')?.focus();
-    } else if (subjectType === 'person' && personRole === 'mp' && !hasValidPersonDetails) {
-      document.querySelector<HTMLInputElement>('#person-public-role')?.focus();
-    } else if (!hasTopics) {
-      document.querySelector<HTMLInputElement>('[data-testid^="checkbox-topic-"]')?.focus();
-    } else if (sourceMode === 'private') {
-      document.querySelector<HTMLInputElement>('[data-testid="radio-source-mode-private"]')?.focus();
-    } else {
-      document.querySelector<HTMLButtonElement>('[data-testid="button-generate-briefing"]')?.focus();
-    }
-  };
-
   return (
     <main className="paper-grid min-h-[100dvh] overflow-hidden">
       <div className="mx-auto max-w-[1240px] px-5 pb-16 pt-5 sm:px-8 lg:px-12">
@@ -1265,17 +1240,16 @@ function Home() {
               <div className="mb-5 flex items-center justify-between border-b border-[#e5e0e7] pb-3">
                 <span className="font-mono text-[10px] uppercase tracking-[.15em] text-[#6b6278]">New conversation</span>
                 <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={handleBriefStatusClick}
-                    disabled={readinessState === 'crawling'}
+                  <span
                     className={`brief-status-button ${briefStatusClass}`}
                     aria-label={`Brief status: ${readinessMessage}`}
+                    role="status"
+                    aria-live="polite"
                     title={readinessMessage}
-                    data-testid="button-brief-status"
+                    data-testid="status-brief-status"
                   >
                     Brief
-                  </button>
+                  </span>
                   <span className="font-mono text-[10px] text-[#968da0]">30 DAYS</span>
                 </div>
               </div>
@@ -1589,8 +1563,8 @@ function Home() {
               />
               <div className="mt-1 text-right font-mono text-[9px] text-[#aaa4af]">{context.length} / 1500</div>
 
-              <button type="submit" disabled={mutation.isPending || !tavilyConfigured || crawlBudgetExhausted || crawlAlreadyActive || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || sourceMode === 'private'} className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#2b304a] px-4 text-sm font-semibold text-[#faf7f0] transition hover:bg-[#3c4160] disabled:opacity-55" data-testid="button-generate-briefing">
-                {mutation.isPending ? <><LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />Crawling sources…</> : sourceMode === 'private' ? <><FileText className="h-4 w-4 text-[#c9b9ee]" aria-hidden="true" />Private mode unavailable</> : <><FileText className="h-4 w-4 text-[#c9b9ee]" aria-hidden="true" />{hasCurrentResult ? 'Refresh briefing' : 'Crawl & prepare briefing'}<ArrowDown className="ml-auto h-4 w-4 opacity-60" aria-hidden="true" /></>}
+              <button type="button" onClick={() => runBriefing(requestKey)} disabled={mutation.isPending || !tavilyConfigured || crawlBudgetExhausted || crawlAlreadyActive || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || sourceMode === 'private'} className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#2b304a] px-4 text-sm font-semibold text-[#faf7f0] transition hover:bg-[#3c4160] disabled:opacity-55" data-testid="button-generate-briefing">
+                {mutation.isPending ? <><LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />Crawling sources…</> : sourceMode === 'private' ? <><FileText className="h-4 w-4 text-[#c9b9ee]" aria-hidden="true" />Private mode unavailable</> : <><FileText className="h-4 w-4 text-[#c9b9ee]" aria-hidden="true" />{currentRequestFailed ? 'Start again' : hasCurrentResult ? 'Refresh briefing' : 'Start briefing'}<ArrowDown className="ml-auto h-4 w-4 opacity-60" aria-hidden="true" /></>}
               </button>
               <p id="form-note" className="mt-3 text-center text-[10px] leading-relaxed text-[#898392]" data-testid="text-tavily-setup">
                 {sourceStatusQuery.isLoading
@@ -1615,9 +1589,7 @@ function Home() {
               <div className="mt-4 rounded-xl border border-[#e4c9c3] bg-[#fbf0ed] p-4" role="alert" data-testid="status-generation-error">
                 <p className="text-xs font-semibold text-[#8b4039]">Couldn’t prepare this briefing</p>
                 <p className="mt-1 text-xs leading-relaxed text-[#795750]">{errorMessage}</p>
-                <button type="button" onClick={() => runBriefing(requestKey)} disabled={mutation.isPending} className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-[#78443f] underline underline-offset-4 hover:text-[#4a2d2a]" data-testid="button-retry-briefing">
-                  <RefreshCw className="h-3 w-3" /> Try again
-                </button>
+                <p className="mt-3 text-xs font-semibold text-[#78443f]">Press Start again when you want to retry.</p>
               </div>
             )}
 
