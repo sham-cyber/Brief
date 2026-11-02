@@ -14,4 +14,6 @@ export interface BriefSource {
   /** @nullable */
   publishedAt: string | null;
   snippet: string;
+  /** True when this source is about the selected person's associated company rather than the person. */
+  affiliatedCompanyReport: boolean;
 }

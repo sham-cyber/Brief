@@ -87,6 +87,8 @@ export interface BriefSource {
   /** @nullable */
   publishedAt: string | null;
   snippet: string;
+  /** True when this source is about the selected person's associated company rather than the person. */
+  affiliatedCompanyReport: boolean;
 }
 
 export type BriefingSourceStatusProvider = typeof BriefingSourceStatusProvider[keyof typeof BriefingSourceStatusProvider];
@@ -287,6 +289,8 @@ export interface BriefingResult {
   searchCreditsUsed: number | null;
   /** @minimum 0 */
   sourceSearchesCompleted: number;
+  /** @minimum 0 */
+  searchResultsReturned: number;
   overview: BriefingOverview;
   highlights: BriefingHighlight[];
   questions: BriefingQuestion[];

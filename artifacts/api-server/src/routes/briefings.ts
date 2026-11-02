@@ -109,6 +109,7 @@ type RawNewsItem = Omit<NewsItem, "id" | "affiliatedCompanyReport">;
 type SearchResult = { source: NewsItem; searchedAs: BriefingTopic };
 type SearchNewsResult = {
   sources: SearchResult[];
+  resultsReturned: number;
   creditsUsed: number | null;
   searchesCompleted: number;
 };
@@ -288,7 +289,7 @@ async function searchNews(
       risk: "risk lawsuit investigation recall regulator fine breach restructuring",
     };
     const query = isChairmanCompanyBrief
-      ? `${quoteSearchPhrase(companyName).trim()} ${terms[topic]} ${subject} ${ROLE_SEARCH_TERMS.business_owner}`
+      ? `${quoteSearchPhrase(companyName).trim()} ${terms[topic]}`
       : `${subject}${personTerms} ${terms[topic]}`;
     return { topic, query };
   });
@@ -393,13 +394,14 @@ async function searchNews(
     }));
   return {
     sources,
+    resultsReturned: fulfilled.reduce((total, search) => total + search.results.length, 0),
     creditsUsed,
     searchesCompleted: fulfilled.length,
   };
 }
 
 const TOPIC_MATCHERS: Record<Exclude<BriefingTopic, "news">, RegExp> = {
-  hire: /\b(?:appointed|appoints|appointment|joins?|joined|hired|hire|hiring|named\s+(?:as|to)|promoted|promotion|new\s+(?:CEO|CFO|CTO|chief executive|president|chair|director))\b/i,
+  hire: /\b(?:appointed|appoints|appointment|joins?|joined|hired|hire|hiring|open\s+roles?|job\s+openings?|vacancies|recruit(?:ing|ment)|seeking\s+candidates|named\s+(?:as|to)|promoted|promotion|new\s+(?:CEO|CFO|CTO|chief executive|president|chair|director))\b/i,
   launch: /\b(?:launch(?:es|ed)?|releas(?:e|es|ed)|introduc(?:e|es|ed|ing)|unveil(?:s|ed)?|debut(?:s|ed)?|roll(?:s)? out|now available)\b/i,
   financial: /\b(?:profit|loss|earnings|revenue|stock|shares?|share price|financial results|quarterly results|valuation|funding|investment|IPO|cost savings)\b/i,
   risk: /\b(?:risk|lawsuit|sues|sued|recall|investigation|probe|regulator|fine|penalty|restructuring|breach|complaint|layoff)\b/i,
@@ -985,6 +987,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
       windowEnd: windowEnd.toISOString(),
       searchCreditsUsed: searchResult.creditsUsed,
       sourceSearchesCompleted: searchResult.searchesCompleted,
+      searchResultsReturned: searchResult.resultsReturned,
       ...content,
       sources,
     });

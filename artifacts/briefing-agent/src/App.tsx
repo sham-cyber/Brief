@@ -490,7 +490,7 @@ function References({ sourceIds, sources }: { sourceIds: string[]; sources: Brie
 }
 
 function SourceList({ sources }: { sources: BriefSource[] }) {
-  if (!sources.length) return <p className="text-sm text-muted-foreground">Links will appear here after the source crawl.</p>;
+  if (!sources.length) return <p className="text-sm text-muted-foreground">No source links passed the checks for this briefing.</p>;
   return (
     <ol className="divide-y divide-border/80">
       {sources.map((source, index) => (
@@ -542,7 +542,15 @@ function SourceList({ sources }: { sources: BriefSource[] }) {
   );
 }
 
-function SourceColumn({ sources }: { sources: BriefSource[] }) {
+function SourceColumn({
+  sources,
+  searchResultsReturned,
+  sourceSearchesCompleted,
+}: {
+  sources: BriefSource[];
+  searchResultsReturned: number | null;
+  sourceSearchesCompleted: number;
+}) {
   const hasVideo = sources.some(isVideoSource);
   return (
     <aside className="source-column space-y-4" aria-label="Source links and video" data-testid="source-column">
@@ -554,6 +562,13 @@ function SourceColumn({ sources }: { sources: BriefSource[] }) {
           </div>
           <span className="rounded-full bg-[#f1eef7] px-3 py-1 font-mono text-[10px] text-[#5d5279]">{sources.length} links</span>
         </div>
+        {sources.length === 0 && searchResultsReturned !== null && (
+          <p className="mb-4 rounded-lg border border-[#ded9e5] bg-[#f8f6fb] px-3 py-2 text-xs leading-relaxed text-[#625d69]" role="status" data-testid="text-source-filter-diagnostic">
+            {searchResultsReturned === 0
+              ? `Tavily returned no results across ${sourceSearchesCompleted} selected-topic searches.`
+              : `Tavily returned ${searchResultsReturned} results, but none passed the 30-day, dated HTTPS link, company/person, and topic checks.`}
+          </p>
+        )}
         <div className="max-h-[280px] overflow-y-auto pr-1">
           <SourceList sources={sources} />
         </div>
@@ -1693,7 +1708,11 @@ function Home() {
                   ))}
                 </div>
               </fieldset>
-              <SourceColumn sources={result?.sources ?? []} />
+              <SourceColumn
+                sources={result?.sources ?? []}
+                searchResultsReturned={result?.searchResultsReturned ?? null}
+                sourceSearchesCompleted={result?.sourceSearchesCompleted ?? 0}
+              />
               </div>
 
               <label htmlFor="meetingAt" className="mb-1.5 mt-5 block text-xs font-semibold text-[#35364a]">When is the meeting?</label>

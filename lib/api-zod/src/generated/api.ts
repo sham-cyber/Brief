@@ -128,6 +128,8 @@ export const createBriefingResponseSearchCreditsUsedMin = 0;
 
 export const createBriefingResponseSourceSearchesCompletedMin = 0;
 
+export const createBriefingResponseSearchResultsReturnedMin = 0;
+
 
 
 
@@ -146,6 +148,7 @@ export const CreateBriefingResponse = zod.object({
   "windowEnd": zod.coerce.date(),
   "searchCreditsUsed": zod.number().int().min(createBriefingResponseSearchCreditsUsedMin).nullable(),
   "sourceSearchesCompleted": zod.number().int().min(createBriefingResponseSourceSearchesCompletedMin),
+  "searchResultsReturned": zod.number().int().min(createBriefingResponseSearchResultsReturnedMin),
   "overview": zod.object({
   "text": zod.string(),
   "sourceIds": zod.array(zod.string()),
@@ -187,7 +190,8 @@ export const CreateBriefingResponse = zod.object({
   "url": zod.string().url(),
   "publisher": zod.string(),
   "publishedAt": zod.string().nullable(),
-  "snippet": zod.string()
+  "snippet": zod.string(),
+  "affiliatedCompanyReport": zod.boolean().describe('True when this source is about the selected person\'s associated company rather than the person.')
 }))
 })
 

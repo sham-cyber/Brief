@@ -44,6 +44,8 @@ export interface BriefingResult {
   searchCreditsUsed: number | null;
   /** @minimum 0 */
   sourceSearchesCompleted: number;
+  /** @minimum 0 */
+  searchResultsReturned: number;
   overview: BriefingOverview;
   highlights: BriefingHighlight[];
   questions: BriefingQuestion[];

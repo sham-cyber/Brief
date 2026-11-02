@@ -524,6 +524,9 @@ components:
         sourceSearchesCompleted:
           type: integer
           minimum: 0
+        searchResultsReturned:
+          type: integer
+          minimum: 0
         overview:
           $ref: "#/components/schemas/BriefingOverview"
         highlights:
@@ -557,6 +560,7 @@ components:
         - windowEnd
         - searchCreditsUsed
         - sourceSearchesCompleted
+        - searchResultsReturned
         - overview
         - highlights
         - questions
