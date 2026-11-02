@@ -281,6 +281,7 @@ components:
           type: integer
           minimum: 1
           maximum: 5
+          description: One request per selected topic, up to five topics.
         searchDepth:
           type: string
           enum: [basic]

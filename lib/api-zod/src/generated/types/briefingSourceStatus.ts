@@ -29,6 +29,7 @@ export interface BriefingSourceStatus {
   /** @nullable */
   dailyCrawlResetsAt: Date | null;
   /**
+     * One request per selected topic, up to five topics.
      * @minimum 1
      * @maximum 5
      */
