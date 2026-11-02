@@ -33,6 +33,12 @@ Do not mix results for similarly named people or companies. Require the selected
 
 **How to apply:** Prefer fewer exact-name results over broad fuzzy matches. Add ticker or legal-name aliases only through an explicit alias mechanism.
 
+Topic tabs must filter the whole brief, not just the history cards. When Hire is active, the overview, positive/negative signals, speech, copy, and print must use hire evidence only; if none is found, show that clearly without substituting news.
+
+**Why:** The user corrected that a CEO selecting the Hire tab wants hire-only information, not the all-topic News summary.
+
+**How to apply:** Use the active category's own 30-day summary and signals. Return a valid empty state when that category has no matching reports.
+
 For print, use a compact one-page A4 summary with the overview, one sourced leading item per selected category, an open question, and citation links; keep the complete multi-item source view on screen.
 
 **Why:** The user explicitly requires the printed briefing to fit on one page.

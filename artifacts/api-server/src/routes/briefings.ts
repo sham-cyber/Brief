@@ -349,6 +349,13 @@ function buildBriefingContent(
     sourceIds: string[];
   }[];
   questions: { text: string; sourceIds: string[] }[];
+  topicBriefs: {
+    category: BriefingTopic;
+    text: string;
+    sourceIds: string[];
+    topPositive: BriefingSignal;
+    topNegative: BriefingSignal;
+  }[];
 } {
   const contextTerms = getContextTerms(context);
   const highlights = sources.flatMap(({ source, searchedAs }) => {
@@ -362,12 +369,14 @@ function buildBriefingContent(
       sourceIds: [source.id],
     }] : [];
   });
-  const latest = sources.reduce((newest, candidate) =>
-    new Date(candidate.source.publishedAt ?? 0).getTime() >
-    new Date(newest.source.publishedAt ?? 0).getTime()
-      ? candidate
-      : newest,
-  ).source;
+  const latest = sources.length
+    ? sources.reduce((newest, candidate) =>
+      new Date(candidate.source.publishedAt ?? 0).getTime() >
+      new Date(newest.source.publishedAt ?? 0).getTime()
+        ? candidate
+        : newest,
+    ).source
+    : undefined;
   const matchingSources = context
     ? sources
       .filter(({ source }) => contextRelevanceScore(source, contextTerms) > 0)
@@ -397,8 +406,53 @@ function buildBriefingContent(
   const overviewText = context
     ? matchingSources.length
       ? `For “${shortContext}” about ${subject}, the closest recent public ${answerSources.length === 1 ? "report is" : "reports are"}: ${answerSources.map(({ source }) => `“${sourceExcerpt(source)}”`).join(" ")}`
-      : `No recent public report directly matched “${shortContext}” about ${subject}. These are the closest selected-topic reports found in the 30-day window.`
-    : `Recent public coverage for this ${subjectType} includes ${sources.length} reports from the 30-day research window. The latest report is “${latest.title},” published by ${latest.publisher}.`;
+      : sources.length
+        ? `No recent public report directly matched “${shortContext}” about ${subject}. These are the closest selected-topic reports found in the 30-day window.`
+        : `No recent public report matched “${shortContext}” about ${subject} in the 30-day window.`
+    : latest
+      ? `Recent public coverage for this ${subjectType} includes ${sources.length} reports from the 30-day research window. The latest report is “${latest.title},” published by ${latest.publisher}.`
+      : `No recent public reports were found for ${subject} in the selected topics during the 30-day research window.`;
+  const topicLabels: Record<BriefingTopic, string> = {
+    news: "news",
+    hire: "hire",
+    launch: "launch",
+    financial: "financial",
+    risk: "risk",
+  };
+  const topicBriefs = topics.map((category) => {
+    const topicSources = sources.filter(
+      ({ source, searchedAs }) => classifySource(source, searchedAs, topics) === category,
+    );
+    const latestTopicSource = topicSources.reduce<SearchResult | undefined>(
+      (newest, candidate) =>
+        !newest ||
+        new Date(candidate.source.publishedAt ?? 0).getTime() >
+          new Date(newest.source.publishedAt ?? 0).getTime()
+          ? candidate
+          : newest,
+      undefined,
+    );
+    const label = topicLabels[category];
+    return {
+      category,
+      text: latestTopicSource
+        ? `The 30-day ${label} tab has ${topicSources.length} sourced report${topicSources.length === 1 ? "" : "s"} for ${subject}. Latest: “${latestTopicSource.source.title}.”`
+        : `No ${label} reports for ${subject} were found in the 30-day window.`,
+      sourceIds: latestTopicSource ? [latestTopicSource.source.id] : [],
+      topPositive: buildTopSignal(
+        topicSources,
+        contextTerms,
+        "positive",
+        `the 30-day ${label} reports for ${subject}`,
+      ),
+      topNegative: buildTopSignal(
+        topicSources,
+        contextTerms,
+        "negative",
+        `the 30-day ${label} reports for ${subject}`,
+      ),
+    };
+  });
   const questions = topics.includes("risk") ? highlights.slice(0, 3).map((highlight, index) => ({
     text: [
       `What has changed since “${highlight.title}” was reported, and what is the latest status?`,
@@ -420,12 +474,13 @@ function buildBriefingContent(
       text: overviewText,
       sourceIds: context
         ? answerSources.map(({ source }) => source.id)
-        : [latest.id],
+        : latest ? [latest.id] : [],
       topPositive,
       topNegative,
     },
     highlights,
     questions,
+    topicBriefs,
   };
 }
 
@@ -473,22 +528,9 @@ router.post("/briefings", async (req, res): Promise<void> => {
       input.data.context?.trim() || undefined,
     );
 
-    if (collected.length === 0) {
-      res.status(502).json({
-        error: "No recent articles were found. Try a more specific company or person name.",
-      });
-      return;
-    }
-
     const relevant = collected.filter(({ source, searchedAs }) =>
       classifySource(source, searchedAs, topics) !== null,
     );
-    if (relevant.length === 0) {
-      res.status(502).json({
-        error: "No clearly matching public reports were found for the selected topics in the last 30 days.",
-      });
-      return;
-    }
 
     const content = buildBriefingContent(
       input.data.subject.trim(),

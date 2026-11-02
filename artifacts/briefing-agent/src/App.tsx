@@ -544,30 +544,50 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
   const [copied, setCopied] = useState(false);
   const [activeTopic, setActiveTopic] = useState<'all' | Topic>('all');
   const visibleTopics = result.topics.filter((topic) => activeTopic === 'all' || activeTopic === topic);
+  const activeTopicBrief = activeTopic === 'all'
+    ? undefined
+    : result.topicBriefs.find((brief) => brief.category === activeTopic);
+  const visibleOverview = activeTopicBrief ?? result.overview;
+  const visibleHighlights = activeTopic === 'all'
+    ? result.highlights
+    : result.highlights.filter((item) => item.category === activeTopic);
+  const visibleQuestions = activeTopic === 'all' || activeTopic === 'risk'
+    ? result.questions
+    : [];
 
   useEffect(() => {
     setActiveTopic('all');
   }, [result.generatedAt]);
 
   const copyBrief = async () => {
+    const visibleSourceIds = new Set([
+      ...visibleOverview.sourceIds,
+      ...visibleOverview.topPositive.sourceIds,
+      ...visibleOverview.topNegative.sourceIds,
+      ...visibleHighlights.flatMap((item) => item.sourceIds),
+      ...visibleQuestions.flatMap((item) => item.sourceIds),
+    ]);
+    const visibleSources = activeTopic === 'all'
+      ? result.sources
+      : result.sources.filter((source) => visibleSourceIds.has(source.id));
     const lines = [
-      `${result.subject} — meeting briefing`,
+      `${result.subject} — ${activeTopic === 'all' ? 'meeting briefing' : `${TOPICS.find((topic) => topic.value === activeTopic)?.label ?? 'Topic'} briefing`}`,
       `Meeting: ${formatDate(result.meetingAt)}`,
       `Research window: ${formatWindow(result.windowStart, result.windowEnd)}`,
       ...(result.personRole ? [`Briefing context: ${personRoleLabel(result.personRole)}`] : []),
       '',
       'OVERVIEW',
-      `${result.overview.text}${result.overview.sourceIds.length ? ` [${result.overview.sourceIds.join(', ')}]` : ''}`,
-      `TOP POSITIVE: ${result.overview.topPositive.text}${result.overview.topPositive.sourceIds.length ? ` [${result.overview.topPositive.sourceIds.join(', ')}]` : ''}`,
-      `TOP NEGATIVE: ${result.overview.topNegative.text}${result.overview.topNegative.sourceIds.length ? ` [${result.overview.topNegative.sourceIds.join(', ')}]` : ''}`,
+      `${visibleOverview.text}${visibleOverview.sourceIds.length ? ` [${visibleOverview.sourceIds.join(', ')}]` : ''}`,
+      `TOP POSITIVE: ${visibleOverview.topPositive.text}${visibleOverview.topPositive.sourceIds.length ? ` [${visibleOverview.topPositive.sourceIds.join(', ')}]` : ''}`,
+      `TOP NEGATIVE: ${visibleOverview.topNegative.text}${visibleOverview.topNegative.sourceIds.length ? ` [${visibleOverview.topNegative.sourceIds.join(', ')}]` : ''}`,
       '',
       'HIGHLIGHTS',
-      ...result.highlights.flatMap((item) => [`${item.category.toUpperCase()}: ${item.title}`, `${item.summary}${item.sourceIds.length ? ` [${item.sourceIds.join(', ')}]` : ''}`, '']),
+      ...visibleHighlights.flatMap((item) => [`${item.category.toUpperCase()}: ${item.title}`, `${item.summary}${item.sourceIds.length ? ` [${item.sourceIds.join(', ')}]` : ''}`, '']),
       'QUESTIONS TO CONSIDER',
-      ...result.questions.map((item, index) => `${index + 1}. ${item.text}${item.sourceIds.length ? ` [${item.sourceIds.join(', ')}]` : ''}`),
+      ...visibleQuestions.map((item, index) => `${index + 1}. ${item.text}${item.sourceIds.length ? ` [${item.sourceIds.join(', ')}]` : ''}`),
       '',
       'SOURCES',
-      ...result.sources.map((source) => `[${source.id}] ${source.title} — ${source.url}`),
+      ...visibleSources.map((source) => `[${source.id}] ${source.title} — ${source.url}`),
     ];
     try {
       await navigator.clipboard.writeText(lines.join('\n'));
@@ -620,30 +640,34 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
           <p className="mt-2 text-sm leading-relaxed text-[#65616d]">Read this brief aloud using your device’s built-in voice. No AI voice service is connected.</p>
         </div>
         <VoiceControls text={[
-          result.overview.text,
-          `Top positive: ${result.overview.topPositive.text}`,
-          `Top negative: ${result.overview.topNegative.text}`,
-          ...result.highlights.flatMap((item) => [item.title, item.summary]),
-          ...result.questions.map((question) => question.text),
+          visibleOverview.text,
+          `Top positive: ${visibleOverview.topPositive.text}`,
+          `Top negative: ${visibleOverview.topNegative.text}`,
+          ...visibleHighlights.flatMap((item) => [item.title, item.summary]),
+          ...visibleQuestions.map((question) => question.text),
         ].join('. ')} />
       </div>
 
       <div className="mt-5" data-testid="briefing-columns">
       <section className="print-card rounded-2xl border border-border bg-card px-6 py-6 shadow-[0_8px_28px_rgba(38,37,55,.035)] sm:px-8" aria-labelledby="overview-heading">
-        <SectionEyebrow>01 / The short read</SectionEyebrow>
+        <SectionEyebrow>
+          {activeTopic === 'all'
+            ? '01 / The short read'
+            : `01 / ${TOPICS.find((topic) => topic.value === activeTopic)?.label ?? 'Topic'} · 30-day view`}
+        </SectionEyebrow>
         <h3 id="overview-heading" className="sr-only">Overview</h3>
         <p className="briefing-prose mt-4 max-w-4xl font-serif text-[22px] leading-[1.45] text-[#30334a] sm:text-[25px]">
-          {result.overview.text}
-          <References sourceIds={result.overview.sourceIds} sources={result.sources} />
+          {visibleOverview.text}
+          <References sourceIds={visibleOverview.sourceIds} sources={result.sources} />
         </p>
         <div className="mt-4 grid gap-2 md:grid-cols-2" aria-label="Top positive and negative signals">
           <p className="rounded-lg border border-[#cfe2d3] bg-[#f0f7f1] px-3 py-2 text-sm leading-relaxed text-[#315d43]">
-            <strong>Top positive:</strong> {result.overview.topPositive.text}
-            <References sourceIds={result.overview.topPositive.sourceIds} sources={result.sources} />
+            <strong>Top positive:</strong> {visibleOverview.topPositive.text}
+            <References sourceIds={visibleOverview.topPositive.sourceIds} sources={result.sources} />
           </p>
           <p className="rounded-lg border border-[#e8cfcc] bg-[#fbf1ef] px-3 py-2 text-sm leading-relaxed text-[#864941]">
-            <strong>Top negative:</strong> {result.overview.topNegative.text}
-            <References sourceIds={result.overview.topNegative.sourceIds} sources={result.sources} />
+            <strong>Top negative:</strong> {visibleOverview.topNegative.text}
+            <References sourceIds={visibleOverview.topNegative.sourceIds} sources={result.sources} />
           </p>
         </div>
       </section>
@@ -683,8 +707,8 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
             key={topic}
             topic={topic}
             title={selected.label}
-            highlights={result.highlights.filter((item) => item.category === topic)}
-            questions={topic === 'risk' ? result.questions : undefined}
+            highlights={visibleHighlights.filter((item) => item.category === topic)}
+            questions={topic === 'risk' ? visibleQuestions : undefined}
             sources={result.sources}
           />
         );
@@ -693,7 +717,7 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
       </div>
       <p className="no-print mt-5 text-right font-mono text-[10px] uppercase tracking-[.12em] text-muted-foreground">Generated {formatDate(result.generatedAt)}</p>
       </div>
-      <PrintOnePageBrief result={result} />
+      <PrintOnePageBrief result={result} activeTopic={activeTopic} />
     </article>
   );
 }
@@ -702,13 +726,17 @@ function SectionEyebrow({ children }: { children: ReactNode }) {
   return <p className="font-mono text-[10px] font-medium uppercase tracking-[.17em] text-[#71658e]">{children}</p>;
 }
 
-function PrintOnePageBrief({ result }: { result: BriefingResult }) {
-  const firstHighlights = result.topics.flatMap((topic) => result.highlights.filter((item) => item.category === topic).slice(0, 1));
-  const firstQuestion = result.topics.includes('risk') ? result.questions.slice(0, 1) : [];
+function PrintOnePageBrief({ result, activeTopic }: { result: BriefingResult; activeTopic: 'all' | Topic }) {
+  const printTopics = activeTopic === 'all' ? result.topics : [activeTopic];
+  const printBrief = activeTopic === 'all'
+    ? result.overview
+    : result.topicBriefs.find((brief) => brief.category === activeTopic) ?? result.overview;
+  const firstHighlights = printTopics.flatMap((topic) => result.highlights.filter((item) => item.category === topic).slice(0, 1));
+  const firstQuestion = printTopics.includes('risk') ? result.questions.slice(0, 1) : [];
   const sourceIds = new Set([
-    ...result.overview.sourceIds,
-    ...result.overview.topPositive.sourceIds,
-    ...result.overview.topNegative.sourceIds,
+    ...printBrief.sourceIds,
+    ...printBrief.topPositive.sourceIds,
+    ...printBrief.topNegative.sourceIds,
     ...firstHighlights.flatMap((item) => item.sourceIds),
     ...firstQuestion.flatMap((item) => item.sourceIds),
   ]);
@@ -718,18 +746,18 @@ function PrintOnePageBrief({ result }: { result: BriefingResult }) {
   return (
     <section className="print-only print-one-page" aria-label="One-page printable briefing" data-testid="print-one-page-brief">
       <header className="print-page-header">
-        <p>{result.subjectType === 'person' && result.personRole ? `${personRoleLabel(result.personRole)} · ` : ''}{result.subjectType} briefing · 30-day research window</p>
+        <p>{result.subjectType === 'person' && result.personRole ? `${personRoleLabel(result.personRole)} · ` : ''}{result.subjectType} briefing · {activeTopic === 'all' ? 'all selected topics' : `${TOPICS.find((topic) => topic.value === activeTopic)?.label} tab`} · 30-day research window</p>
         <h1>{result.subject}</h1>
         <div>{formatDate(result.meetingAt)} <span aria-hidden="true">·</span> {formatWindow(result.windowStart, result.windowEnd)}</div>
       </header>
       <section className="print-page-overview">
         <h2>Brief</h2>
-        <p>{briefLine(result.overview.text, 420)} <PrintReferences sourceIds={result.overview.sourceIds} sources={result.sources} /></p>
-        <p><strong>Top positive:</strong> {briefLine(result.overview.topPositive.text, 130)} <PrintReferences sourceIds={result.overview.topPositive.sourceIds} sources={result.sources} /></p>
-        <p><strong>Top negative:</strong> {briefLine(result.overview.topNegative.text, 130)} <PrintReferences sourceIds={result.overview.topNegative.sourceIds} sources={result.sources} /></p>
+        <p>{briefLine(printBrief.text, 420)} <PrintReferences sourceIds={printBrief.sourceIds} sources={result.sources} /></p>
+        <p><strong>Top positive:</strong> {briefLine(printBrief.topPositive.text, 130)} <PrintReferences sourceIds={printBrief.topPositive.sourceIds} sources={result.sources} /></p>
+        <p><strong>Top negative:</strong> {briefLine(printBrief.topNegative.text, 130)} <PrintReferences sourceIds={printBrief.topNegative.sourceIds} sources={result.sources} /></p>
       </section>
       <div className="print-topic-grid">
-        {result.topics.map((topic) => {
+        {printTopics.map((topic) => {
           const topicInfo = TOPICS.find((item) => item.value === topic)!;
           const highlight = result.highlights.find((item) => item.category === topic);
           const question = topic === 'risk' ? result.questions[0] : undefined;
