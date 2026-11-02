@@ -437,7 +437,9 @@ function buildBriefingContent(
       category,
       text: latestTopicSource
         ? `The 30-day ${label} tab has ${topicSources.length} sourced report${topicSources.length === 1 ? "" : "s"} for ${subject}. Latest: “${latestTopicSource.source.title}.”`
-        : `No ${label} reports for ${subject} were found in the 30-day window.`,
+        : category === "hire"
+          ? `No confirmed-hire reports for ${subject} were found in the 30-day public-news crawl.`
+          : `No ${label} reports for ${subject} were found in the 30-day window.`,
       sourceIds: latestTopicSource ? [latestTopicSource.source.id] : [],
       topPositive: buildTopSignal(
         topicSources,

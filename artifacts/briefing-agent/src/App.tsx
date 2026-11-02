@@ -473,26 +473,40 @@ function VoiceControls({ text }: { text: string }) {
   );
 }
 
+function linkedinJobsSearchUrl(subject: string, role: 'sales' | 'maintenance') {
+  const url = new URL('https://www.linkedin.com/jobs/search/');
+  url.searchParams.set('keywords', `${subject} ${role}`);
+  return url.toString();
+}
+
 function TopicBlock({
   topic,
   title,
   highlights,
   questions,
   sources,
+  openRoleSearchSubject,
 }: {
   topic: Topic;
   title: string;
   highlights: BriefingResult['highlights'];
   questions?: BriefingResult['questions'];
   sources: BriefSource[];
+  openRoleSearchSubject?: string;
 }) {
   const [filter, setFilter] = useState('');
   const filteredHighlights = highlights.filter((item) => `${item.title} ${item.summary}`.toLowerCase().includes(filter.toLowerCase()));
   const filteredQuestions = (questions ?? []).filter((item) => item.text.toLowerCase().includes(filter.toLowerCase()));
   const readable = [
+    ...(!filteredHighlights.length && !filteredQuestions.length
+      ? [topic === 'hire' ? 'No confirmed-hire reports were returned by the public-news crawl.' : `${title}. No matching items.`]
+      : []),
     ...filteredHighlights.flatMap((item) => [item.title, item.summary]),
     ...filteredQuestions.map((item) => item.text),
-  ].join('. ') || `${title}. No matching items.`;
+    ...(openRoleSearchSubject
+      ? ['Open job listings are not imported automatically. Use the LinkedIn Sales and Maintenance search links for current postings.']
+      : []),
+  ].join('. ');
   return (
     <section className="topic-block print-card mt-7 rounded-2xl border border-border bg-card px-5 py-5 sm:px-7" aria-labelledby={`topic-${topic}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -533,8 +547,28 @@ function TopicBlock({
         </div>
       ) : (
         <p className="mt-4 rounded-lg border border-dashed border-border px-4 py-5 text-sm text-muted-foreground" data-testid={`empty-topic-${topic}`}>
-          {filter ? 'No items match this filter.' : 'No items were returned in this category.'}
+          {filter
+            ? 'No items match this filter.'
+            : topic === 'hire'
+              ? 'No confirmed-hire reports were returned by the public-news crawl.'
+              : 'No items were returned in this category.'}
         </p>
+      )}
+      {openRoleSearchSubject && (
+        <section className="mt-4 rounded-xl border border-[#d8d2df] bg-[#f8f6fb] px-4 py-4" aria-label="Open job searches" data-testid="open-role-searches">
+          <h4 className="font-semibold text-[#292d43]">Open roles on LinkedIn</h4>
+          <p className="mt-1 text-xs leading-relaxed text-[#65616d]">
+            Current job postings are not imported automatically; these links open LinkedIn searches.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <a href={linkedinJobsSearchUrl(openRoleSearchSubject, 'sales')} target="_blank" rel="noreferrer" className="rounded-lg border border-[#d8d2df] bg-white px-3 py-2 text-xs font-semibold text-[#463b69] underline underline-offset-2" data-testid="link-linkedin-sales-openings">
+              Sales openings
+            </a>
+            <a href={linkedinJobsSearchUrl(openRoleSearchSubject, 'maintenance')} target="_blank" rel="noreferrer" className="rounded-lg border border-[#d8d2df] bg-white px-3 py-2 text-xs font-semibold text-[#463b69] underline underline-offset-2" data-testid="link-linkedin-maintenance-openings">
+              Maintenance openings
+            </a>
+          </div>
+        </section>
       )}
     </section>
   );
@@ -583,6 +617,14 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
       '',
       'HIGHLIGHTS',
       ...visibleHighlights.flatMap((item) => [`${item.category.toUpperCase()}: ${item.title}`, `${item.summary}${item.sourceIds.length ? ` [${item.sourceIds.join(', ')}]` : ''}`, '']),
+      ...(result.subjectType === 'company' && result.topics.includes('hire') && (activeTopic === 'all' || activeTopic === 'hire')
+        ? [
+            'OPEN ROLES — LinkedIn searches; listings are not automatically crawled',
+            `Sales: ${linkedinJobsSearchUrl(result.subject, 'sales')}`,
+            `Maintenance: ${linkedinJobsSearchUrl(result.subject, 'maintenance')}`,
+            '',
+          ]
+        : []),
       'QUESTIONS TO CONSIDER',
       ...visibleQuestions.map((item, index) => `${index + 1}. ${item.text}${item.sourceIds.length ? ` [${item.sourceIds.join(', ')}]` : ''}`),
       '',
@@ -645,6 +687,9 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
           `Top negative: ${visibleOverview.topNegative.text}`,
           ...visibleHighlights.flatMap((item) => [item.title, item.summary]),
           ...visibleQuestions.map((question) => question.text),
+          ...(result.subjectType === 'company' && result.topics.includes('hire') && (activeTopic === 'all' || activeTopic === 'hire')
+            ? ['Open job listings are not imported automatically. Use the LinkedIn Sales and Maintenance search links in Hires.']
+            : []),
         ].join('. ')} />
       </div>
 
@@ -710,6 +755,7 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
             highlights={visibleHighlights.filter((item) => item.category === topic)}
             questions={topic === 'risk' ? visibleQuestions : undefined}
             sources={result.sources}
+            openRoleSearchSubject={topic === 'hire' && result.subjectType === 'company' ? result.subject : undefined}
           />
         );
       })}
@@ -768,6 +814,15 @@ function PrintOnePageBrief({ result, activeTopic }: { result: BriefingResult; ac
                 <p><strong>{briefLine(highlight.title, 90)}.</strong> {briefLine(highlight.summary, 190)} <PrintReferences sourceIds={highlight.sourceIds} sources={result.sources} /></p>
               ) : (
                 <p>No sourced items returned for this category.</p>
+              )}
+              {topic === 'hire' && result.subjectType === 'company' && (
+                <p className="print-question">
+                  <strong>Open roles:</strong>{' '}
+                  <a href={linkedinJobsSearchUrl(result.subject, 'sales')}>LinkedIn Sales search</a>
+                  {' · '}
+                  <a href={linkedinJobsSearchUrl(result.subject, 'maintenance')}>LinkedIn Maintenance search</a>
+                  {' (live postings are not imported automatically)'}
+                </p>
               )}
               {question && <p className="print-question"><strong>Open question:</strong> {briefLine(question.text, 150)} <PrintReferences sourceIds={question.sourceIds} sources={result.sources} /></p>}
             </section>

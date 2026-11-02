@@ -39,6 +39,12 @@ Topic tabs must filter the whole brief, not just the history cards. When Hire is
 
 **How to apply:** Use the active category's own 30-day summary and signals. Return a valid empty state when that category has no matching reports.
 
+The Hires tab must distinguish confirmed hiring reports from current open roles. The user wants both; when no jobs source is connected, do not imply that no vacancies exist—provide clearly labeled LinkedIn search links and state they are not crawled automatically.
+
+**Why:** The user selected both open roles and confirmed hires, then declined the job-search integration.
+
+**How to apply:** Keep open job listings separate from sourced hiring reports. Never treat a search link as a fetched job posting or citation.
+
 For print, use a compact one-page A4 summary with the overview, one sourced leading item per selected category, an open question, and citation links; keep the complete multi-item source view on screen.
 
 **Why:** The user explicitly requires the printed briefing to fit on one page.
