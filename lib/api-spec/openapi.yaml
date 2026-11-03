@@ -395,7 +395,8 @@ components:
         dailySearchRequestsLimit:
           type: ["integer", "null"]
           minimum: 0
-          maximum: 10
+          maximum: 50
+          description: Informational maximum of five topic searches across each of ten daily briefing events; not a separate daily start limit.
         dailySearchRequestsUsed:
           type: ["integer", "null"]
           minimum: 0

@@ -402,9 +402,9 @@ function AiGuardrailPanel() {
 
   if (!isLoaded || !isSignedIn) return null;
   return (
-    <details className="no-print mt-4 rounded-xl border border-[#ded9e2] bg-[#f8f6fb] px-4 py-3" aria-label="AI activation guardrails" data-testid="ai-guardrails">
+    <details open className="no-print mt-4 rounded-xl border border-[#ded9e2] bg-[#f8f6fb] px-4 py-3" aria-label="AI activation guardrails" data-testid="ai-guardrails">
       <summary className="cursor-pointer text-base font-semibold text-[#35364a]" data-testid="summary-ai-guardrails">
-        AI settings <span className="ml-2 rounded-full border border-[#e4b7b2] bg-[#fbefed] px-2 py-1 text-sm font-bold text-[#98453e]">OFF · stopped</span>
+        AI control <span className="ml-2 rounded-full border border-[#e4b7b2] bg-[#bb5048] px-3 py-1 text-sm font-bold text-white">STOPPED · AI OFF</span>
       </summary>
       <div className="pt-3 text-base">
       <p className="leading-relaxed text-muted-foreground">
@@ -540,11 +540,27 @@ function References({ sourceIds, sources }: { sourceIds: string[]; sources: Brie
 }
 
 function SourceList({ sources }: { sources: BriefSource[] }) {
-  if (!sources.length) return <p className="text-sm text-muted-foreground">No source links passed the checks for this briefing.</p>;
+  if (!sources.length) {
+    return (
+      <div className="space-y-3">
+        <p className="text-sm text-muted-foreground">No source links passed the checks for this briefing.</p>
+        <div className="source-video video-placeholder" data-testid="video-source-empty" role="status">
+          No related video was returned for the selected topics.
+        </div>
+      </div>
+    );
+  }
+  const hasVideoSource = sources.some(isVideoSource);
   return (
-    <ol className="divide-y divide-border/80">
-      {sources.map((source, index) => (
-        <li id={`source-${encodeURIComponent(source.id)}`} key={source.id} className="scroll-mt-8 py-5 first:pt-1 last:pb-1" data-testid={`source-entry-${index + 1}`}>
+    <div>
+      {!hasVideoSource && (
+        <div className="source-video video-placeholder mb-4" data-testid="video-source-empty" role="status">
+          No related video was returned for the selected topics.
+        </div>
+      )}
+      <ol className="divide-y divide-border/80">
+        {sources.map((source, index) => (
+          <li id={`source-${encodeURIComponent(source.id)}`} key={source.id} className="scroll-mt-8 py-5 first:pt-1 last:pb-1" data-testid={`source-entry-${index + 1}`}>
           <div className="flex gap-4">
             <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[#d8d1e5] bg-[#f1eef7] font-mono text-[11px] text-[#594b87]">{source.id}</span>
             <div className="min-w-0 flex-1">
@@ -606,9 +622,10 @@ function SourceList({ sources }: { sources: BriefSource[] }) {
               </a>
             </div>
           </div>
-        </li>
-      ))}
-    </ol>
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 }
 
@@ -846,6 +863,9 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
           <button type="button" onClick={copyBrief} className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-card px-3 text-xs font-semibold text-foreground transition hover:bg-accent" data-testid="button-copy-brief">
             {copied ? <Check className="h-3.5 w-3.5" /> : <Clipboard className="h-3.5 w-3.5" />}
             {copied ? 'Copied' : 'Copy brief'}
+          </button>
+          <button type="button" onClick={() => window.print()} className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#292e46] px-3 text-xs font-semibold text-white transition hover:bg-[#3c4160]" data-testid="button-print-brief-top">
+            <Printer className="h-3.5 w-3.5" aria-hidden="true" /> Print one-page brief
           </button>
         </div>
       </div>
@@ -1185,22 +1205,11 @@ function Home() {
   const keySource = sourceStatusQuery.data?.keySource;
   const startPinConfigured = sourceStatusQuery.data?.startPinConfigured === true;
   const ownerAccountConfigured = sourceStatusQuery.data?.ownerAccountConfigured === true;
-  const dailyCrawlRemainingMs = sourceStatusQuery.data?.dailyCrawlRemainingMs ?? null;
   const dailyCrawlStartsLimit = sourceStatusQuery.data?.dailyCrawlStartsLimit ?? null;
   const dailyCrawlStartsUsed = sourceStatusQuery.data?.dailyCrawlStartsUsed ?? null;
   const dailyCrawlStartsRemaining = sourceStatusQuery.data?.dailyCrawlStartsRemaining ?? null;
-  const dailySearchRequestsLimit = sourceStatusQuery.data?.dailySearchRequestsLimit ?? null;
-  const dailySearchRequestsUsed = sourceStatusQuery.data?.dailySearchRequestsUsed ?? null;
-  const dailySearchRequestsRemaining = sourceStatusQuery.data?.dailySearchRequestsRemaining ?? null;
   const dailyCrawlActive = sourceStatusQuery.data?.dailyCrawlActive === true;
-  const dailyCrawlResetsAt = sourceStatusQuery.data?.dailyCrawlResetsAt ?? null;
-  const crawlBudgetExhausted = dailyCrawlRemainingMs === 0;
   const dailyCrawlStartLimitReached = canStart && dailyCrawlStartsRemaining === 0;
-  const dailySearchLimitInsufficient =
-    canStart &&
-    dailySearchRequestsRemaining !== null &&
-    topics.length > 0 &&
-    topics.length > dailySearchRequestsRemaining;
   const crawlAlreadyActive = dailyCrawlActive && !mutation.isPending;
   const hasCurrentResult = Boolean(mutation.data && resultKey === requestKey);
   const result = hasCurrentResult ? mutation.data : undefined;
@@ -1314,7 +1323,7 @@ function Home() {
   }, [meetingAt, meetingTimeIsValid]);
 
   const runBriefing = useCallback((key: string, pin: string) => {
-    if (!/^\d{4}$/.test(pin) || !isSignedIn || crawlBudgetExhausted || crawlAlreadyActive || !tavilyConfigured || !startPinConfigured || !ownerAccountConfigured || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || sourceMode !== 'public' || mutation.isPending) return;
+    if (!/^\d{4}$/.test(pin) || !isSignedIn || dailyCrawlStartLimitReached || crawlAlreadyActive || !tavilyConfigured || !startPinConfigured || !ownerAccountConfigured || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || sourceMode !== 'public' || mutation.isPending) return;
     activeRequestKey.current = key;
     setFailedKey('');
     setTimedOutKey('');
@@ -1370,7 +1379,7 @@ function Home() {
         },
       },
     );
-  }, [companyName, context, crawlAlreadyActive, crawlBudgetExhausted, hasTopics, hasValidRole, hasValidSubject, isSignedIn, meetingAt, meetingTimeIsValid, mutation.isPending, mutation.mutate, ownerAccountConfigured, personRole, publicRoleTitle, sourceMode, sourceStatusQuery.refetch, startPinConfigured, subject, subjectType, tavilyConfigured, topics]);
+  }, [companyName, context, crawlAlreadyActive, dailyCrawlStartLimitReached, hasTopics, hasValidRole, hasValidSubject, isSignedIn, meetingAt, meetingTimeIsValid, mutation.isPending, mutation.mutate, ownerAccountConfigured, personRole, publicRoleTitle, sourceMode, sourceStatusQuery.refetch, startPinConfigured, subject, subjectType, tavilyConfigured, topics]);
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1421,13 +1430,9 @@ function Home() {
               : !startPinConfigured
                 ? 'Not ready — configure the briefing start PIN in API Server Secrets.'
                 : crawlAlreadyActive
-                  ? 'Not ready — a Tavily crawl is already running against the shared app allowance.'
+                  ? 'Not ready — another Tavily briefing event is running. Wait for it to finish.'
                   : dailyCrawlStartLimitReached
-                    ? 'Not ready — the developer account has used all 10 crawl starts for today.'
-                    : dailySearchLimitInsufficient
-                      ? `Not ready — only ${dailySearchRequestsRemaining} Tavily search requests remain today; select fewer topic tabs.`
-                      : crawlBudgetExhausted
-                        ? `Not ready — today's app-wide Tavily allowance is used${dailyCrawlResetsAt ? `; it resets at ${new Date(dailyCrawlResetsAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST` : ''}.`
+                    ? 'Not ready — all 10 briefing events for today have been used. The counter resets at midnight IST.'
     : !hasValidSubject
       ? 'Not ready — enter a company or person.'
       : !hasValidRole
@@ -1448,7 +1453,7 @@ function Home() {
     : readinessState === 'error'
       ? timedOutKey === requestKey ? 'Not ready — the three-minute backup stop ended this crawl.' : 'Not ready — source collection failed. Try again.'
       : readinessState === 'crawling'
-        ? 'Collecting sources — up to your remaining daily allowance.'
+        ? 'Collecting sources — this briefing has up to two minutes.'
       : readinessState === 'ready'
           ? 'Brief ready — sources collected for the selected subject, meeting and topics.'
           : 'Not ready — press Brief when the settings are complete.';
@@ -1806,7 +1811,7 @@ function Home() {
                 <button
                   type="button"
                   onClick={() => { setPinDialogError(''); setStartPin(''); setPinPromptOpen(true); }}
-                  disabled={mutation.isPending || !canStart || !tavilyConfigured || !startPinConfigured || !ownerAccountConfigured || crawlBudgetExhausted || dailyCrawlStartLimitReached || dailySearchLimitInsufficient || crawlAlreadyActive || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || sourceMode === 'private'}
+                  disabled={mutation.isPending || !canStart || !tavilyConfigured || !startPinConfigured || !ownerAccountConfigured || dailyCrawlStartLimitReached || crawlAlreadyActive || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || sourceMode === 'private'}
                   className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#292e46] px-8 text-lg font-bold text-white transition hover:bg-[#3c4160] disabled:cursor-not-allowed disabled:opacity-45"
                   data-testid="button-generate-briefing"
                 >
@@ -1815,14 +1820,23 @@ function Home() {
                     : <><FileText className="h-5 w-5" aria-hidden="true" />Brief<ArrowDown className="h-4 w-4" aria-hidden="true" /></>}
                 </button>
               </div>
-              <p id="form-note" className="mt-3 text-sm leading-relaxed text-[#625d69]" data-testid="text-tavily-setup">
-                {sourceStatusQuery.isLoading
-                  ? 'Checking source search…'
-                  : !tavilyConfigured
-                    ? 'Source search key not available. Check source search key settings above.'
-                    : `Source search connected. ${dailyCrawlRemainingMs !== null ? `${Math.ceil(dailyCrawlRemainingMs / 1000)} seconds remain in today’s shared crawl allowance.` : ''}`}
-                {' '}AI remains off. Briefing starts only when you press Brief and verify the PIN.
-              </p>
+              <div id="form-note" className="mt-3 space-y-2 text-sm leading-relaxed text-[#625d69]" data-testid="text-tavily-setup">
+                <p>
+                  {sourceStatusQuery.isLoading
+                    ? 'Checking source search…'
+                    : !tavilyConfigured
+                      ? 'Source search key not available. Check source search key settings above.'
+                      : 'Source search connected.'}
+                </p>
+                {canStart && dailyCrawlStartsUsed !== null && dailyCrawlStartsLimit !== null && (
+                  <p className="rounded-lg border border-[#d7cde9] bg-[#f5f1fb] px-4 py-3 font-semibold text-[#40345f]" data-testid="text-daily-briefing-events">
+                    Today’s briefing events: {dailyCrawlStartsUsed}/{dailyCrawlStartsLimit} used · {dailyCrawlStartsRemaining ?? 0} remaining (resets at midnight IST). All selected tabs and the resulting print/copy belong to one event.
+                  </p>
+                )}
+                <p>
+                  Each event can search up to five selected topic tabs, one Tavily request per tab. A crawl can run for up to two minutes; the three-minute backup stop remains. The app-wide rate limit stays at 10 Tavily requests per five minutes. Briefing starts only when you press Brief and verify the PIN.
+                </p>
+              </div>
               <AiGuardrailPanel />
               </>
               )}

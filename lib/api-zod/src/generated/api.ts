@@ -73,7 +73,7 @@ export const getBriefingSourceStatusResponseDailyCrawlStartsUsedMin = 0;
 export const getBriefingSourceStatusResponseDailyCrawlStartsRemainingMin = 0;
 
 export const getBriefingSourceStatusResponseDailySearchRequestsLimitMin = 0;
-export const getBriefingSourceStatusResponseDailySearchRequestsLimitMax = 10;
+export const getBriefingSourceStatusResponseDailySearchRequestsLimitMax = 50;
 
 export const getBriefingSourceStatusResponseDailySearchRequestsUsedMin = 0;
 
@@ -98,7 +98,7 @@ export const GetBriefingSourceStatusResponse = zod.object({
   "dailyCrawlStartsLimit": zod.number().int().min(getBriefingSourceStatusResponseDailyCrawlStartsLimitMin).max(getBriefingSourceStatusResponseDailyCrawlStartsLimitMax).nullable(),
   "dailyCrawlStartsUsed": zod.number().int().min(getBriefingSourceStatusResponseDailyCrawlStartsUsedMin).nullable(),
   "dailyCrawlStartsRemaining": zod.number().int().min(getBriefingSourceStatusResponseDailyCrawlStartsRemainingMin).nullable(),
-  "dailySearchRequestsLimit": zod.number().int().min(getBriefingSourceStatusResponseDailySearchRequestsLimitMin).max(getBriefingSourceStatusResponseDailySearchRequestsLimitMax).nullable(),
+  "dailySearchRequestsLimit": zod.number().int().min(getBriefingSourceStatusResponseDailySearchRequestsLimitMin).max(getBriefingSourceStatusResponseDailySearchRequestsLimitMax).nullable().describe('Informational maximum of five topic searches across each of ten daily briefing events; not a separate daily start limit.'),
   "dailySearchRequestsUsed": zod.number().int().min(getBriefingSourceStatusResponseDailySearchRequestsUsedMin).nullable(),
   "dailySearchRequestsRemaining": zod.number().int().min(getBriefingSourceStatusResponseDailySearchRequestsRemainingMin).nullable(),
   "maxSearchesPerBriefing": zod.number().int().min(1).max(getBriefingSourceStatusResponseMaxSearchesPerBriefingMax).describe('One request per selected topic, up to five topics.'),

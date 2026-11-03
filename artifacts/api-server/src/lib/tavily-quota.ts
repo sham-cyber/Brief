@@ -2,15 +2,12 @@ import { pool } from "@workspace/db";
 
 export const TAVILY_DAILY_LIMIT_MS = 120_000;
 export const TAVILY_DAILY_CRAWL_START_LIMIT = 10;
-export const TAVILY_DAILY_SEARCH_REQUEST_LIMIT = 10;
 export const TAVILY_MAX_SEARCHES_PER_BRIEFING = 5;
+export const TAVILY_DAILY_SEARCH_REQUEST_LIMIT =
+  TAVILY_DAILY_CRAWL_START_LIMIT * TAVILY_MAX_SEARCHES_PER_BRIEFING;
 export const TAVILY_CRAWL_HARD_STOP_MS = 180_000;
 export const TAVILY_QUOTA_TIME_ZONE = "Asia/Kolkata";
 const STALE_RESERVATION_GRACE_MS = TAVILY_CRAWL_HARD_STOP_MS + 30_000;
-
-type UsageRow = {
-  reserved_ms: string | number;
-};
 
 type DailyUsageRow = {
   crawl_starts: string | number;
@@ -46,9 +43,7 @@ export type TavilyQuotaReservation = TavilyQuotaStatus & {
   reservationId: number | null;
   reason:
     | "active-crawl"
-    | "daily-limit"
     | "daily-start-limit"
-    | "daily-search-limit"
     | null;
 };
 
@@ -70,17 +65,7 @@ function toDate(value: Date | string | null | undefined): Date | null {
 
 async function readUsageTotals(
   executor: Pick<typeof pool, "query">,
-  dayBounds?: CalendarDayBounds,
 ): Promise<TavilyQuotaStatus> {
-  const bounds = dayBounds ?? await getCalendarDayBounds(executor);
-  const result = await executor.query<UsageRow>(
-    `SELECT reserved_ms
-     FROM briefing_tavily_usage
-     WHERE started_at >= $1
-       AND started_at < $2
-     ORDER BY started_at ASC`,
-    [bounds.dayStart, bounds.nextDayStart],
-  );
   const activeResult = await executor.query<{ active: boolean }>(
     `SELECT EXISTS (
        SELECT 1
@@ -90,23 +75,13 @@ async function readUsageTotals(
      ) AS active`,
     [STALE_RESERVATION_GRACE_MS],
   );
-  const totalUsedMs = result.rows.reduce(
-    (total, row) => total + Math.max(0, Number(row.reserved_ms)),
-    0,
-  );
-  const usedMs = Math.min(
-    TAVILY_DAILY_LIMIT_MS,
-    Math.max(0, totalUsedMs),
-  );
   const active = activeResult.rows[0]?.active ?? false;
-  const resetsAt =
-    totalUsedMs >= TAVILY_DAILY_LIMIT_MS ? bounds.nextDayStart : null;
 
   return {
     limitMs: TAVILY_DAILY_LIMIT_MS,
-    usedMs,
-    remainingMs: Math.max(0, TAVILY_DAILY_LIMIT_MS - usedMs),
-    resetsAt,
+    usedMs: 0,
+    remainingMs: TAVILY_DAILY_LIMIT_MS,
+    resetsAt: null,
     active,
   };
 }
@@ -136,7 +111,7 @@ async function readDailyUsage(
 ): Promise<TavilyDailyUsageStatus> {
   const result = await executor.query<DailyUsageRow>(
     `SELECT
-       (COUNT(*) FILTER (WHERE reserved_ms > 0 OR search_count > 0))::integer AS crawl_starts,
+       (COUNT(*) FILTER (WHERE search_count > 0))::integer AS crawl_starts,
        (
          COALESCE(SUM(search_count), 0) +
          (COUNT(*) FILTER (WHERE search_count = 0 AND reserved_ms > 0) * $4::integer)
@@ -212,20 +187,13 @@ export async function reserveTavilyQuota(
       [dayBounds.dayStart],
     );
 
-    const quota = await readUsageTotals(client, dayBounds);
+    const quota = await readUsageTotals(client);
     const dailyUsage = await readDailyUsage(client, userId, dayBounds);
-    const sharedFailure = quota.active
+    const reason = quota.active
       ? "active-crawl"
-      : quota.remainingMs <= 0
-        ? "daily-limit"
-        : null;
-    const dailyFailure =
-      dailyUsage.dailyCrawlStartsRemaining <= 0
+      : dailyUsage.dailyCrawlStartsRemaining <= 0
         ? "daily-start-limit"
-        : dailyUsage.dailySearchRequestsRemaining < searchRequestCount
-          ? "daily-search-limit"
-          : null;
-    const reason = sharedFailure ?? dailyFailure;
+        : null;
     if (reason) {
       await client.query("COMMIT");
       return {
@@ -241,7 +209,7 @@ export async function reserveTavilyQuota(
       `INSERT INTO briefing_tavily_usage (user_id, reserved_ms, search_count)
        VALUES ($1, $2, $3)
        RETURNING id`,
-      [userId, quota.remainingMs, searchRequestCount],
+      [userId, TAVILY_DAILY_LIMIT_MS, searchRequestCount],
     );
     await client.query("COMMIT");
 

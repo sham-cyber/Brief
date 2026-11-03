@@ -51,8 +51,9 @@ export interface BriefingSourceStatus {
      */
   dailyCrawlStartsRemaining: number | null;
   /**
+     * Informational maximum of five topic searches across each of ten daily briefing events; not a separate daily start limit.
      * @minimum 0
-     * @maximum 10
+     * @maximum 50
      * @nullable
      */
   dailySearchRequestsLimit: number | null;

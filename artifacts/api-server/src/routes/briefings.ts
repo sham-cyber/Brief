@@ -926,21 +926,12 @@ router.post("/briefings", async (req, res): Promise<void> => {
     }
     if (quota.reason === "daily-start-limit") {
       res.status(429).json({
-        error: `The configured developer account has reached ${TAVILY_DAILY_CRAWL_START_LIMIT} crawl starts for today's IST calendar day. It resets at midnight IST.`,
+        error: `The configured developer account has reached ${TAVILY_DAILY_CRAWL_START_LIMIT} briefing events for today's IST calendar day. It resets at midnight IST.`,
       });
       return;
     }
-    if (quota.reason === "daily-search-limit") {
-      res.status(429).json({
-        error: `Only ${quota.dailySearchRequestsRemaining} of today's ${TAVILY_DAILY_SEARCH_REQUEST_LIMIT} Tavily search requests remain for the configured developer account. Select fewer topic tabs or try again after midnight IST.`,
-      });
-      return;
-    }
-    const resetNote = quota.resetsAt
-      ? ` It resets at ${quota.resetsAt.toLocaleString("en-IN", { timeZone: TAVILY_QUOTA_TIME_ZONE })} IST.`
-      : " It resets at midnight IST.";
     res.status(429).json({
-      error: `The shared two-minute Tavily allowance for today's calendar day is used.${resetNote}`,
+      error: "The two-minute Tavily limit for this briefing was reached.",
     });
     return;
   }
@@ -978,13 +969,13 @@ router.post("/briefings", async (req, res): Promise<void> => {
   const settleQuota = async () => {
     if (quotaSettled || quota.reservationId === null) return;
     quotaSettled = true;
-    const durationMs = Math.min(quota.remainingMs, Date.now() - crawlStartedAt);
+    const durationMs = Math.min(TAVILY_DAILY_LIMIT_MS, Date.now() - crawlStartedAt);
     await finishTavilyQuotaReservation(userId, quota.reservationId, durationMs);
   };
   const dailyBudgetTimer = setTimeout(() => {
     stopReason = "daily-budget";
-    crawlController.abort(new Error("The rolling daily Tavily allowance has been reached."));
-  }, quota.remainingMs);
+    crawlController.abort(new Error("The two-minute per-briefing Tavily limit has been reached."));
+  }, TAVILY_DAILY_LIMIT_MS);
   const hardStopTimer = setTimeout(() => {
     stopReason = "hard-stop";
     crawlController.abort(new Error("The three-minute Tavily crawl hard stop has been reached."));
@@ -1013,7 +1004,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
       await settleQuota();
       if (stopReason === "daily-budget") {
         res.status(429).json({
-          error: "This crawl used today's remaining two-minute Tavily allowance and was stopped.",
+          error: "This briefing reached its two-minute Tavily crawl limit and was stopped.",
         });
       } else {
         res.status(504).json({
@@ -1071,7 +1062,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
     }
     if (stopReason === "daily-budget") {
       res.status(429).json({
-        error: "This crawl used today's remaining two-minute Tavily allowance and was stopped.",
+        error: "This briefing reached its two-minute Tavily crawl limit and was stopped.",
       });
       return;
     }
