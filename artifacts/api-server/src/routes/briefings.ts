@@ -534,32 +534,10 @@ function buildTopSignal(
   contextTerms: string[],
   polarity: "positive" | "negative",
   scopeLabel = "the selected public reports",
-  signalEntity?: string,
 ): BriefingSignal {
   const patterns = polarity === "positive"
     ? POSITIVE_SIGNAL_PATTERNS
     : NEGATIVE_SIGNAL_PATTERNS;
-  const legalSuffixes = new Set([
-    "limited",
-    "ltd",
-    "inc",
-    "incorporated",
-    "plc",
-    "company",
-    "corporation",
-    "corp",
-  ]);
-  const normalizeEntity = (value: string) =>
-    (value.match(/[\p{L}\p{N}]+/gu) ?? [])
-      .filter((token) => !legalSuffixes.has(token.toLocaleLowerCase()))
-      .join(" ")
-      .toLocaleLowerCase();
-  const normalizedEntity = signalEntity ? normalizeEntity(signalEntity) : "";
-  const phraseMatchesEntity = (phrase: string) => {
-    if (!normalizedEntity) return true;
-    const normalizedPhrase = normalizeEntity(phrase);
-    return ` ${normalizedPhrase} `.includes(` ${normalizedEntity} `);
-  };
   const signalPhrases = (source: NewsItem) => [
     ...cleanSourceTitle(source).split(/\b(?:despite|but|while|although|however)\b/i),
     ...source.snippet.split(/(?<=[.!?])\s+/),
@@ -570,7 +548,7 @@ function buildTopSignal(
       phrase,
       score: countSignalMatches(phrase, patterns),
     }))
-    .filter((candidate) => candidate.score > 0 && phraseMatchesEntity(candidate.phrase))
+    .filter((candidate) => candidate.score > 0)
     .sort((a, b) => b.score - a.score);
   const candidates = sources
     .map((entry, index) => ({
@@ -648,7 +626,6 @@ function buildBriefingContent(
   }[];
 } {
   const contextTerms = getContextTerms(context);
-  const signalEntity = subjectType === "person" && companyName ? companyName : subject;
   const researchLabel =
     subjectType === "person" && companyName
       ? `${subject} or ${companyName}`
@@ -684,15 +661,11 @@ function buildBriefingContent(
     sources,
     contextTerms,
     "positive",
-    undefined,
-    signalEntity,
   );
   const topNegative = buildTopSignal(
     sources,
     contextTerms,
     "negative",
-    undefined,
-    signalEntity,
   );
   const normalizedContext = context?.replace(/\s+/g, " ").trim();
   const shortContext = normalizedContext && normalizedContext.length > 100
@@ -756,14 +729,12 @@ function buildBriefingContent(
         contextTerms,
         "positive",
         `the 30-day ${label} reports for ${subject}`,
-        signalEntity,
       ),
       topNegative: buildTopSignal(
         topicSources,
         contextTerms,
         "negative",
         `the 30-day ${label} reports for ${subject}`,
-        signalEntity,
       ),
     };
   });

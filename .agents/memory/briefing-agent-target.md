@@ -47,11 +47,11 @@ When the user enters a direct public question (for example, â€œmarket conditionâ
 
 **How to apply:** Build the answer from recent collected source titles/excerpts, attach the original links, and do not imply AI-generated synthesis while AI remains disabled.
 
-Include one concise top-positive signal and one top-negative signal in each brief, each with its own source citation. These are source signals, not an AI sentiment judgment or investment recommendation; state when the selected reports do not support a clear signal.
+Include one concise top-positive signal and one top-negative signal in each brief, each with its own source citation. Use what is present in the collected, subject-relevant reports; do not require the individual signal sentence to repeat the subject name.
 
-**Why:** The user wants both sides of a company briefing visible at a glance, with one sourced line each.
+**Why:** The user wants both sides visible at a glance and clarified that an extra subject-name filter on positive/negative lines changes the intended result.
 
-**How to apply:** Use collected source headlines/excerpts and link each line to its supporting source; do not invent or infer missing positives or risks.
+**How to apply:** Score positive and negative language from already-relevant collected sources and link each line to its supporting source. Do not invent or infer a signal when the source text does not support one.
 
 Do not mix results for similarly named people or companies. Require the selected subject name to appear in the source title or excerpt; omit ambiguous matches rather than attributing them.
 

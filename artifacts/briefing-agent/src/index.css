@@ -241,10 +241,10 @@
     display: grid !important;
     box-sizing: border-box;
     width: 100% !important;
-    height: 246mm !important;
-    max-height: 246mm !important;
+    height: 260mm !important;
+    max-height: 260mm !important;
     margin: 0 !important;
-    grid-template-rows: 26mm 36mm minmax(0, 1fr) 24mm;
+    grid-template-rows: 26mm 36mm minmax(0, 1fr) 34mm;
     gap: 1.5mm;
     overflow: hidden !important;
     break-inside: avoid !important;
@@ -271,10 +271,11 @@
   .print-topic .print-highlight-extra { border-top: .2mm solid #e6e1ea; padding-top: 1mm; }
   .print-topic .print-question { border-top: .2mm solid #ddd8e3; padding-top: 1.5mm; -webkit-line-clamp: 3; }
   .print-page-sources { overflow: hidden; border-top: .25mm solid #d8d2df; padding-top: 1.5mm; }
-  .print-page-sources ol { display: grid; max-height: 17mm; grid-template-columns: 1fr 1fr; gap: .5mm 3mm; margin: 0; overflow: hidden; padding: 0; list-style: none; }
-  .print-page-sources li { overflow: hidden; font-size: 6pt; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+  .print-page-sources ol { display: grid; max-height: 26mm; grid-template-columns: 1fr 1fr; gap: .3mm 3mm; margin: 0; overflow: hidden; padding: 0; list-style: none; }
+  .print-page-sources li { min-width: 0; overflow: hidden; font-size: 5.4pt; line-height: 1.05; overflow-wrap: anywhere; }
   .print-page-sources li span { font-weight: 700; }
   .print-page-sources a { color: #453990 !important; }
+  .print-page-sources .print-source-url { display: block; color: #5d5966 !important; font-size: 4.4pt; line-height: 1.05; text-decoration: none; }
   .reference-pill { min-width: 0; height: auto; border: 0; padding: 0 .5mm; color: #453990 !important; font-size: 6pt; }
   a { color: inherit; }
 }

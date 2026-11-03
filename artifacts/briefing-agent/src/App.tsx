@@ -1072,7 +1072,16 @@ function PrintOnePageBrief({ result, activeTopic }: { result: BriefingResult; ac
         <h2>Sources</h2>
         <ol>
           {sources.map((source) => (
-            <li key={source.id}><span>[{source.id}]</span> <a href={source.url}>{briefLine(source.title, 100)}</a>{source.affiliatedCompanyReport ? <span> — Company-level report</span> : null}</li>
+            <li key={source.id} data-testid={`print-source-${source.id}`}>
+              <span>[{source.id}]</span>{' '}
+              <a href={source.url} title={source.url} data-testid={`print-source-title-${source.id}`}>
+                {briefLine(source.title, 74)}
+              </a>
+              {source.affiliatedCompanyReport ? <span> — Company-level report</span> : null}
+              <a className="print-source-url" href={source.url} title={source.url} data-testid={`print-source-url-${source.id}`}>
+                {briefLine(source.url, 88)}
+              </a>
+            </li>
           ))}
         </ol>
       </footer>
