@@ -1,0 +1,159 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap');
+
+:root {
+  --background: 42 35% 96%;
+  --foreground: 224 35% 18%;
+  --border: 39 20% 85%;
+  --input: 39 20% 82%;
+  --ring: 253 45% 48%;
+  --card: 42 36% 98%;
+  --card-foreground: 224 35% 18%;
+  --primary: 253 45% 42%;
+  --primary-foreground: 42 36% 98%;
+  --muted: 38 22% 92%;
+  --muted-foreground: 222 15% 47%;
+  --accent: 253 38% 93%;
+  --accent-foreground: 253 45% 34%;
+  --app-font-sans: 'DM Sans', sans-serif;
+  --app-font-serif: 'Instrument Serif', Georgia, serif;
+  --app-font-mono: 'DM Mono', monospace;
+  --radius: 0.7rem;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; font-family: var(--app-font-sans); }
+
+.current-signin-preview {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px 16px;
+  background: #f8f6f0;
+  color: #292e46;
+}
+
+.current-signin-preview .current-signin-card {
+  width: min(440px, 100%);
+  padding: 30px 38px 14px;
+  border: 1px solid rgba(41, 46, 70, .06);
+  border-radius: 20px;
+  background: #fcfbf8;
+  box-shadow: 0 2px 4px rgba(41, 46, 70, .08);
+  text-align: center;
+}
+
+.current-preview-note {
+  margin: 0 0 12px;
+  color: #655487;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .08em;
+}
+
+.current-signin-logo {
+  position: relative;
+  display: grid;
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 14px;
+  place-items: center;
+  border-radius: 13px;
+  background: #292e46;
+  color: white;
+}
+
+.current-logo-status {
+  position: absolute;
+  right: -2px;
+  bottom: 4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #5ab889;
+}
+
+.current-signin-card h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.current-signin-card .current-subtitle {
+  margin: 5px 0 28px;
+  color: #777280;
+  font-size: 13px;
+}
+
+.current-google-button,
+.current-continue-button {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid #ece9e4;
+  border-radius: 12px;
+  background: #fffefa;
+  color: #d3d0d1;
+  font: inherit;
+  font-size: 13px;
+}
+
+.current-google-button { position: relative; }
+
+.current-google-mark {
+  position: absolute;
+  left: 28%;
+  color: #4285f4;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.current-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0;
+  color: #777280;
+  font-size: 12px;
+}
+
+.current-divider::before,
+.current-divider::after {
+  height: 1px;
+  flex: 1;
+  background: #efede8;
+  content: '';
+}
+
+.current-signin-card label {
+  display: block;
+  margin-bottom: 7px;
+  text-align: left;
+  font-size: 13px;
+}
+
+.current-signin-card input {
+  width: 100%;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid #efede8;
+  border-radius: 12px;
+  background: white;
+  color: #777280;
+  font: inherit;
+  font-size: 13px;
+}
+
+.current-continue-button {
+  margin-top: 28px;
+  border-color: #594b87;
+  background: #594b87;
+  color: white;
+}
+
+.current-signin-card .current-signup {
+  margin: 42px 0 14px;
+  color: #777280;
+  font-size: 13px;
+}
+
+.current-signin-card .current-signup strong { color: #594b87; }
+.current-signin-card .current-development { margin: 0; color: #d56f47; font-size: 11px; }
