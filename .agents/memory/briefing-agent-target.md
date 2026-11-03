@@ -65,17 +65,17 @@ Topic tabs must filter the whole brief, not just the history cards. When Hire is
 
 **How to apply:** Use the active category's own 30-day summary and signals. Return a valid empty state when that category has no matching reports.
 
-The Hires tab must distinguish confirmed hiring reports from current open roles. The user wants both; when no jobs source is connected, do not imply that no vacancies exist—provide clearly labeled LinkedIn search links and state they are not crawled automatically.
+The Hires tab must distinguish confirmed hiring reports from current open roles. In Chairman / CEO person briefs, use the associated company for current-role search links. When no jobs source is connected, do not imply that no vacancies exist; clearly label LinkedIn links as searches, not crawled listings.
 
 **Why:** The user selected both open roles and confirmed hires, then declined the job-search integration.
 
-**How to apply:** Keep open job listings separate from sourced hiring reports. Never treat a search link as a fetched job posting or citation.
+**How to apply:** Keep open job listings separate from sourced hiring reports. Include company-based Sales and Maintenance searches for a Chairman / CEO profile, and never treat a search link as a fetched job posting or citation.
 
-For print, use a compact one-page A4 summary with the overview, one sourced leading item per selected category, an open question, and citation links; keep the complete multi-item source view on screen.
+For print, use a compact one-page A4 summary with the overview, up to two sourced items per selected category, an open question, and citations on the same page. Label scheduled meeting time separately from crawl start; keep the complete multi-item source view on screen.
 
-**Why:** The user explicitly requires the printed briefing to fit on one page.
+**Why:** The user reviewed a trial printout, found it too sparse, noted that Hires had no useful path, and asked for the meeting and crawl times to be clear while retaining one-page printing.
 
-**How to apply:** Preserve a concise print-only layout instead of shrinking or clipping the full interactive research view.
+**How to apply:** Show no more than two sourced highlights per category in the print view, keep source links visible on that page, and never invent hiring items to fill space.
 
 The configured developer may use the existing project-level Tavily key only on their own account. Other app accounts must never use that key; when they are permitted to crawl, they use their own saved key. Keep AI keys and model calls off until separately approved.
 

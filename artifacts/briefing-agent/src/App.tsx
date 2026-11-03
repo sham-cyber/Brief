@@ -792,6 +792,11 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
   const visibleQuestions = activeTopic === 'all' || activeTopic === 'risk'
     ? result.questions
     : [];
+  const openRoleSearchSubject = result.subjectType === 'company'
+    ? result.subject
+    : result.personRole === 'business_owner' && result.companyName
+      ? result.companyName
+      : undefined;
 
   useEffect(() => {
     setActiveTopic('all');
@@ -811,6 +816,7 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
     const lines = [
       `${result.subject} — ${activeTopic === 'all' ? 'meeting briefing' : `${TOPICS.find((topic) => topic.value === activeTopic)?.label ?? 'Topic'} briefing`}`,
       `Meeting: ${formatDate(result.meetingAt)}`,
+      `Crawl started: ${formatDate(result.generatedAt)}`,
       `Research window: ${formatWindow(result.windowStart, result.windowEnd)}`,
       ...(result.personRole ? [`Briefing context: ${personContextLabel(result.personRole, result.publicRoleTitle, result.companyName)}`] : []),
       '',
@@ -821,11 +827,11 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
       '',
       'HIGHLIGHTS',
       ...visibleHighlights.flatMap((item) => [`${item.category.toUpperCase()}: ${item.title}`, `${item.summary}${item.sourceIds.length ? ` [${item.sourceIds.join(', ')}]` : ''}`, '']),
-      ...(result.subjectType === 'company' && result.topics.includes('hire') && (activeTopic === 'all' || activeTopic === 'hire')
+      ...(openRoleSearchSubject && result.topics.includes('hire') && (activeTopic === 'all' || activeTopic === 'hire')
         ? [
             'OPEN ROLES — LinkedIn searches; listings are not automatically crawled',
-            `Sales: ${linkedinJobsSearchUrl(result.subject, 'sales')}`,
-            `Maintenance: ${linkedinJobsSearchUrl(result.subject, 'maintenance')}`,
+            `Sales: ${linkedinJobsSearchUrl(openRoleSearchSubject, 'sales')}`,
+            `Maintenance: ${linkedinJobsSearchUrl(openRoleSearchSubject, 'maintenance')}`,
             '',
           ]
         : []),
@@ -852,7 +858,7 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
           <span className="h-2 w-2 rounded-full bg-[#4c9c7b]" aria-hidden="true" />
           Briefing ready
           <span className="text-muted-foreground">·</span>
-          Prepared {formatDate(result.generatedAt)}
+          Crawl started {formatDate(result.generatedAt)}
         </div>
         <div className="flex items-center gap-2">
           <button type="button" onClick={copyBrief} className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-card px-3 text-xs font-semibold text-foreground transition hover:bg-accent" data-testid="button-copy-brief">
@@ -894,8 +900,8 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
           `Top negative: ${visibleOverview.topNegative.text}`,
           ...visibleHighlights.flatMap((item) => [item.title, item.summary]),
           ...visibleQuestions.map((question) => question.text),
-          ...(result.subjectType === 'company' && result.topics.includes('hire') && (activeTopic === 'all' || activeTopic === 'hire')
-            ? ['Open job listings are not imported automatically. Use the LinkedIn Sales and Maintenance search links in Hires.']
+          ...(openRoleSearchSubject && result.topics.includes('hire') && (activeTopic === 'all' || activeTopic === 'hire')
+            ? [`Open job listings for ${openRoleSearchSubject} are not imported automatically. Use the LinkedIn Sales and Maintenance search links in Hires.`]
             : []),
         ].join('. ')} />
       </div>
@@ -962,13 +968,13 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
             highlights={visibleHighlights.filter((item) => item.category === topic)}
             questions={topic === 'risk' ? visibleQuestions : undefined}
             sources={result.sources}
-            openRoleSearchSubject={topic === 'hire' && result.subjectType === 'company' ? result.subject : undefined}
+            openRoleSearchSubject={topic === 'hire' ? openRoleSearchSubject : undefined}
           />
         );
       })}
 
       </div>
-      <p className="no-print mt-5 text-right font-mono text-[10px] uppercase tracking-[.12em] text-muted-foreground">Generated {formatDate(result.generatedAt)}</p>
+      <p className="no-print mt-5 text-right font-mono text-[10px] uppercase tracking-[.12em] text-muted-foreground">Crawl started {formatDate(result.generatedAt)}</p>
       </div>
       <PrintOnePageBrief result={result} activeTopic={activeTopic} />
     </article>
@@ -984,13 +990,22 @@ function PrintOnePageBrief({ result, activeTopic }: { result: BriefingResult; ac
   const printBrief = activeTopic === 'all'
     ? result.overview
     : result.topicBriefs.find((brief) => brief.category === activeTopic) ?? result.overview;
-  const firstHighlights = printTopics.flatMap((topic) => result.highlights.filter((item) => item.category === topic).slice(0, 1));
+  const openRoleSearchSubject = result.subjectType === 'company'
+    ? result.subject
+    : result.personRole === 'business_owner' && result.companyName
+      ? result.companyName
+      : undefined;
+  const printHighlights = printTopics.flatMap((topic) =>
+    result.highlights
+      .filter((item) => item.category === topic)
+      .slice(0, topic === 'risk' ? 1 : 2),
+  );
   const firstQuestion = printTopics.includes('risk') ? result.questions.slice(0, 1) : [];
   const sourceIds = new Set([
     ...printBrief.sourceIds,
     ...printBrief.topPositive.sourceIds,
     ...printBrief.topNegative.sourceIds,
-    ...firstHighlights.flatMap((item) => item.sourceIds),
+    ...printHighlights.flatMap((item) => item.sourceIds),
     ...firstQuestion.flatMap((item) => item.sourceIds),
   ]);
   const sources = result.sources.filter((source) => sourceIds.has(source.id));
@@ -1001,7 +1016,11 @@ function PrintOnePageBrief({ result, activeTopic }: { result: BriefingResult; ac
       <header className="print-page-header">
         <p>{result.subjectType === 'person' && result.personRole ? `${personContextLabel(result.personRole, result.publicRoleTitle, result.companyName)} · ` : ''}{result.subjectType} briefing · {activeTopic === 'all' ? 'all selected topics' : `${TOPICS.find((topic) => topic.value === activeTopic)?.label} tab`} · 30-day research window</p>
         <h1>{result.subject}</h1>
-        <div>{formatDate(result.meetingAt)} <span aria-hidden="true">·</span> {formatWindow(result.windowStart, result.windowEnd)}</div>
+        <div className="print-date-details" data-testid="text-print-date-details">
+          <span>Meeting: {formatDate(result.meetingAt)}</span>
+          <span>Crawl started: {formatDate(result.generatedAt)}</span>
+          <span>30-day research window: {formatWindow(result.windowStart, result.windowEnd)}</span>
+        </div>
       </header>
       <section className="print-page-overview">
         <h2>Brief</h2>
@@ -1012,23 +1031,36 @@ function PrintOnePageBrief({ result, activeTopic }: { result: BriefingResult; ac
       <div className="print-topic-grid">
         {printTopics.map((topic) => {
           const topicInfo = TOPICS.find((item) => item.value === topic)!;
-          const highlight = result.highlights.find((item) => item.category === topic);
+          const highlights = result.highlights
+            .filter((item) => item.category === topic)
+            .slice(0, topic === 'risk' ? 1 : 2);
           const question = topic === 'risk' ? result.questions[0] : undefined;
           return (
             <section key={topic} className="print-topic">
               <h2>{topicInfo.label}</h2>
-              {highlight ? (
-                <p><strong>{briefLine(highlight.title, 90)}.</strong> {briefLine(highlight.summary, 190)} <PrintReferences sourceIds={highlight.sourceIds} sources={result.sources} /></p>
+              {highlights.length ? (
+                highlights.map((highlight, index) => (
+                  <p key={`${highlight.title}-${index}`} className={index > 0 ? 'print-highlight-extra' : undefined}>
+                    <strong>{briefLine(highlight.title, 100)}.</strong> {briefLine(highlight.summary, 170)}{' '}
+                    <PrintReferences sourceIds={highlight.sourceIds} sources={result.sources} />
+                  </p>
+                ))
               ) : (
-                <p>No sourced items returned for this category.</p>
+                <p>
+                  {topic === 'hire'
+                    ? 'No confirmed-hire reports were found in this 30-day public-news crawl; this does not confirm that no vacancies exist.'
+                    : topic === 'news'
+                      ? 'No separate general-news items were found in this crawl.'
+                      : `No sourced ${topicInfo.label.toLowerCase()} items were found in this 30-day crawl.`}
+                </p>
               )}
-              {topic === 'hire' && result.subjectType === 'company' && (
+              {topic === 'hire' && openRoleSearchSubject && (
                 <p className="print-question">
-                  <strong>Open roles:</strong>{' '}
-                  <a href={linkedinJobsSearchUrl(result.subject, 'sales')}>LinkedIn Sales search</a>
+                  <strong>Open-role searches:</strong>{' '}
+                  <a href={linkedinJobsSearchUrl(openRoleSearchSubject, 'sales')} data-testid="link-print-sales-openings">Sales</a>
                   {' · '}
-                  <a href={linkedinJobsSearchUrl(result.subject, 'maintenance')}>LinkedIn Maintenance search</a>
-                  {' (live postings are not imported automatically)'}
+                  <a href={linkedinJobsSearchUrl(openRoleSearchSubject, 'maintenance')} data-testid="link-print-maintenance-openings">Maintenance</a>
+                  {' on LinkedIn; listings are not crawled automatically.'}
                 </p>
               )}
               {question && <p className="print-question"><strong>Open question:</strong> {briefLine(question.text, 150)} <PrintReferences sourceIds={question.sourceIds} sources={result.sources} /></p>}

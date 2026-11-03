@@ -316,7 +316,7 @@ async function searchNews(
   const searchTerms: { topic: BriefingTopic; query: string }[] = topics.map((topic) => {
     const terms: Record<BriefingTopic, string> = {
       news: "recent news coverage",
-      hire: "hiring appointed joins named executive open roles",
+      hire: "careers recruitment hiring vacancies job openings sales maintenance roles appointed joined new executive",
       launch: "product launch released introduced unveiled",
       financial: subjectType === "company" || isChairmanCompanyBrief
         ? "share price earnings profit loss revenue financial results"
@@ -437,10 +437,10 @@ async function searchNews(
 }
 
 const TOPIC_MATCHERS: Record<Exclude<BriefingTopic, "news">, RegExp> = {
-  hire: /\b(?:appointed|appoints|appointment|joins?|joined|hired|hire|hiring|open\s+roles?|job\s+openings?|vacancies|recruit(?:ing|ment)|seeking\s+candidates|named\s+(?:as|to)|promoted|promotion|new\s+(?:CEO|CFO|CTO|chief executive|president|chair|director))\b/i,
+  hire: /\b(?:appointed|appoints|appointment|joins?|joined|hired|hire|hiring|open\s+roles?|job\s+(?:openings?|listings?)|vacancies|careers?|recruit(?:ing|ment)|seeking\s+candidates|positions?\s+available|current\s+openings?|named\s+(?:as|to)|promoted|promotion|new\s+(?:CEO|CFO|CTO|chief executive|president|chair|director))\b/i,
   launch: /\b(?:launch(?:es|ed)?|releas(?:e|es|ed)|introduc(?:e|es|ed|ing)|unveil(?:s|ed)?|debut(?:s|ed)?|roll(?:s)? out|now available)\b/i,
   financial: /\b(?:profit|loss|earnings|revenue|stock|shares?|share price|financial results|quarterly results|valuation|funding|investment|IPO|cost savings)\b/i,
-  risk: /\b(?:risk|lawsuit|sues|sued|recall|investigation|probe|regulator|fine|penalty|restructuring|breach|complaint|layoff)\b/i,
+  risk: /\b(?:risk|lawsuit|sues|sued|recall|investigation|probe|regulator|fine|penalty|violation|restructuring|breach|complaint|layoff|supply issue|supply shortage|supply disruption|temporary closure|closure|shutdown|production disruption)\b/i,
 };
 
 function classifySource(
@@ -462,14 +462,14 @@ type BriefingSignal = { text: string; sourceIds: string[] };
 
 const POSITIVE_SIGNAL_PATTERNS = [
   /\b(?:surges?|surged|soars?|soared|rises?|rose|gains?|gained|increases?|increased|grew|growth|higher|rebound(?:s|ed)?)\b/i,
-  /\b(?:record|beat(?:s)? estimates?|stronger|improves?|improvement|profitability)\b/i,
+  /\b(?:record|beat(?:s)? estimates?|stronger|improves?|improvement|profitability|opportunit(?:y|ies))\b/i,
   /\b(?:launch(?:es|ed)?|introduc(?:e|es|ed|ing)|unveil(?:s|ed)?|award(?:ed)?|wins?|won|approved|approval|expansion|expands?|appointed|appointment)\b/i,
 ];
 
 const NEGATIVE_SIGNAL_PATTERNS = [
   /\b(?:declines?|declined|falls?|fell|drops?|dropped|down|loss(?:es)?|weak(?:ness)?|lower|shortfall)\b/i,
-  /\b(?:risk(?:s)?|lawsuit|sues?|sued|investigation|probe|recall|fine|penalt(?:y|ies)|breach|fraud)\b/i,
-  /\b(?:layoffs?|cuts?|miss(?:es|ed)? estimates?|debt|delay(?:s|ed)?|slowdown|warning|concern|pressure|closure|shutdown|restructur(?:e|ing))\b/i,
+  /\b(?:risk(?:s)?|lawsuit|sues?|sued|investigation|probe|recall|fine|penalt(?:y|ies)|violation|breach|fraud)\b/i,
+  /\b(?:layoffs?|cuts?|miss(?:es|ed)? estimates?|debt|delay(?:s|ed)?|slowdown|warning|concern|pressure|supply issue|supply shortage|disruption|closure|shutdown|restructur(?:e|ing))\b/i,
 ];
 
 router.get("/briefings", async (req, res): Promise<void> => {
@@ -534,17 +534,52 @@ function buildTopSignal(
   contextTerms: string[],
   polarity: "positive" | "negative",
   scopeLabel = "the selected public reports",
+  signalEntity?: string,
 ): BriefingSignal {
   const patterns = polarity === "positive"
     ? POSITIVE_SIGNAL_PATTERNS
     : NEGATIVE_SIGNAL_PATTERNS;
+  const legalSuffixes = new Set([
+    "limited",
+    "ltd",
+    "inc",
+    "incorporated",
+    "plc",
+    "company",
+    "corporation",
+    "corp",
+  ]);
+  const normalizeEntity = (value: string) =>
+    (value.match(/[\p{L}\p{N}]+/gu) ?? [])
+      .filter((token) => !legalSuffixes.has(token.toLocaleLowerCase()))
+      .join(" ")
+      .toLocaleLowerCase();
+  const normalizedEntity = signalEntity ? normalizeEntity(signalEntity) : "";
+  const phraseMatchesEntity = (phrase: string) => {
+    if (!normalizedEntity) return true;
+    const normalizedPhrase = normalizeEntity(phrase);
+    return ` ${normalizedPhrase} `.includes(` ${normalizedEntity} `);
+  };
+  const signalPhrases = (source: NewsItem) => [
+    ...cleanSourceTitle(source).split(/\b(?:despite|but|while|although|however)\b/i),
+    ...source.snippet.split(/(?<=[.!?])\s+/),
+  ]
+    .map((phrase) => phrase.trim().replace(/^[\s,;:–—-]+|[\s,;:–—-]+$/g, ""))
+    .filter(Boolean)
+    .map((phrase) => ({
+      phrase,
+      score: countSignalMatches(phrase, patterns),
+    }))
+    .filter((candidate) => candidate.score > 0 && phraseMatchesEntity(candidate.phrase))
+    .sort((a, b) => b.score - a.score);
   const candidates = sources
     .map((entry, index) => ({
       entry,
       index,
-      signalScore: countSignalMatches(
-        `${entry.source.title} ${entry.source.snippet}`,
-        patterns,
+      phrases: signalPhrases(entry.source),
+      signalScore: Math.max(
+        ...signalPhrases(entry.source).map((candidate) => candidate.score),
+        0,
       ),
       topicScore: polarity === "positive"
         ? Number(entry.searchedAs === "launch")
@@ -553,7 +588,7 @@ function buildTopSignal(
       contextScore: contextRelevanceScore(entry.source, contextTerms),
       publishedAt: new Date(entry.source.publishedAt ?? 0).getTime(),
     }))
-    .filter((candidate) => candidate.signalScore > 0)
+    .filter((candidate) => candidate.phrases.length > 0)
     .sort((a, b) =>
       b.signalScore - a.signalScore ||
       b.topicScore - a.topicScore ||
@@ -562,7 +597,7 @@ function buildTopSignal(
       a.index - b.index,
     );
 
-  const selected = candidates[0]?.entry.source;
+  const selected = candidates[0];
   if (!selected) {
     return {
       text: `No clear ${polarity} signal was found in ${scopeLabel}.`,
@@ -570,28 +605,16 @@ function buildTopSignal(
     };
   }
 
-  const title = cleanSourceTitle(selected);
-  const phrases = [
-    ...title.split(/\b(?:despite|but|while|although|however)\b/i),
-    ...selected.snippet.split(/(?<=[.!?])\s+/),
-  ]
-    .map((phrase) => phrase.trim().replace(/^[\s,;:–—-]+|[\s,;:–—-]+$/g, ""))
-    .filter(Boolean)
-    .map((phrase) => ({
-      phrase,
-      score: countSignalMatches(phrase, patterns),
-    }))
-    .filter((candidate) => candidate.score > 0)
-    .sort((a, b) => b.score - a.score);
-  const line = phrases[0]?.phrase || title;
-  const labeledLine = selected.affiliatedCompanyReport
+  const source = selected.entry.source;
+  const line = selected.phrases[0]?.phrase || cleanSourceTitle(source);
+  const labeledLine = source.affiliatedCompanyReport
     ? `Company report: ${line}`
     : line;
   return {
     text: labeledLine.length > 130
       ? `${labeledLine.slice(0, 127).trimEnd()}…`
       : labeledLine,
-    sourceIds: [selected.id],
+    sourceIds: [source.id],
   };
 }
 
@@ -625,6 +648,7 @@ function buildBriefingContent(
   }[];
 } {
   const contextTerms = getContextTerms(context);
+  const signalEntity = subjectType === "person" && companyName ? companyName : subject;
   const researchLabel =
     subjectType === "person" && companyName
       ? `${subject} or ${companyName}`
@@ -656,8 +680,20 @@ function buildBriefingContent(
       .filter(({ source }) => contextRelevanceScore(source, contextTerms) > 0)
       .slice(0, 2)
     : [];
-  const topPositive = buildTopSignal(sources, contextTerms, "positive");
-  const topNegative = buildTopSignal(sources, contextTerms, "negative");
+  const topPositive = buildTopSignal(
+    sources,
+    contextTerms,
+    "positive",
+    undefined,
+    signalEntity,
+  );
+  const topNegative = buildTopSignal(
+    sources,
+    contextTerms,
+    "negative",
+    undefined,
+    signalEntity,
+  );
   const normalizedContext = context?.replace(/\s+/g, " ").trim();
   const shortContext = normalizedContext && normalizedContext.length > 100
     ? `${normalizedContext.slice(0, 97)}…`
@@ -720,16 +756,19 @@ function buildBriefingContent(
         contextTerms,
         "positive",
         `the 30-day ${label} reports for ${subject}`,
+        signalEntity,
       ),
       topNegative: buildTopSignal(
         topicSources,
         contextTerms,
         "negative",
         `the 30-day ${label} reports for ${subject}`,
+        signalEntity,
       ),
     };
   });
-  const questions = topics.includes("risk") ? highlights.slice(0, 3).map((highlight, index) => ({
+  const riskHighlights = highlights.filter((highlight) => highlight.category === "risk");
+  const questions = topics.includes("risk") ? riskHighlights.slice(0, 3).map((highlight, index) => ({
     text: [
       `What has changed since “${highlight.title}” was reported, and what is the latest status?`,
       `What should we understand about the next steps related to “${highlight.title}”?`,
@@ -740,8 +779,8 @@ function buildBriefingContent(
 
   if (topics.includes("risk") && context && !questions.some((question) => question.text.includes(context))) {
     questions.push({
-      text: `How does the meeting context (“${context}”) connect to these recent developments?`,
-      sourceIds: highlights.slice(0, 2).flatMap((highlight) => highlight.sourceIds),
+      text: `How does the meeting context (“${context}”) affect the risks to review?`,
+      sourceIds: riskHighlights.slice(0, 2).flatMap((highlight) => highlight.sourceIds),
     });
   }
 
