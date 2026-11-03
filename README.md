@@ -98,10 +98,14 @@ Hackathon rules differ, so follow the event's submission form and deadline. A ty
 - A working demo URL, if the event requires one.
 - A short demo video or screenshots showing the workflow and cited sources.
 - This README with setup, run, and test instructions.
-- Any required team, project, and license information.
+- Project, team, and license information required by the event.
 - If judges need access, share a dedicated demo account through the event's private submission field and configure its own key.
 
-Before public release, confirm that the repository contains only intended source files. Add a license when the team selects one or the event requires it.
+## License
+
+This repository is licensed under the MIT License. See [LICENSE](./LICENSE). Third-party packages and assets remain subject to their respective licenses.
+
+Before public release, review the repository contents and include the information required by the event.
 
 ## Project layout
 
