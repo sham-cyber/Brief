@@ -1,0 +1,31 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap');
+
+:root {
+  --background: 42 35% 96%;
+  --foreground: 224 35% 18%;
+  --border: 39 20% 85%;
+  --input: 39 20% 82%;
+  --ring: 253 45% 48%;
+  --card: 42 36% 98%;
+  --card-foreground: 224 35% 18%;
+  --primary: 253 45% 42%;
+  --primary-foreground: 42 36% 98%;
+  --muted: 38 22% 92%;
+  --muted-foreground: 222 15% 47%;
+  --accent: 253 38% 93%;
+  --accent-foreground: 253 45% 34%;
+  --app-font-sans: 'DM Sans', sans-serif;
+  --app-font-serif: 'Instrument Serif', Georgia, serif;
+  --app-font-mono: 'DM Mono', monospace;
+  --radius: 0.7rem;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; font-family: var(--app-font-sans); }
+.paper-grid {
+  background-color: #f8f6f0;
+  background-image:
+    linear-gradient(to right, rgba(76, 67, 104, .035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(76, 67, 104, .035) 1px, transparent 1px);
+  background-size: 34px 34px;
+}

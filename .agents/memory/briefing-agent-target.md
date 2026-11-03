@@ -142,3 +142,9 @@ The current Briefing Agent preview is the app being developed and will become th
 **Why:** The user clarified that work should be done in the current preview, not in a separate mockup.
 
 **How to apply:** Make requested product UI changes in the existing Briefing Agent artifact and verify them in its preview. Do not treat a separate sandbox mockup as the product.
+
+Keep the authenticated Settings screen high-contrast and easy for older users to read; the user supplied a dark navy and vivid-accent reference for this screen.
+
+**Why:** The user asked for larger, clearer lettering for an older person and provided this visual reference for Settings.
+
+**How to apply:** Keep labels and controls legible on mobile and desktop, and scope this treatment to signed-in Settings unless the user asks to extend it.

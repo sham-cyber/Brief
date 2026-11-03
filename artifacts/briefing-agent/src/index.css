@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@500;600;700&display=swap');
 @layer theme, base, clerk, components, utilities;
 @import 'tailwindcss';
 @import '@clerk/themes/shadcn.css';
@@ -130,6 +130,192 @@
     linear-gradient(to bottom, rgba(76, 67, 104, .035) 1px, transparent 1px);
   background-size: 34px 34px;
 }
+
+/* The signed-in Settings workspace borrows the user's high-contrast,
+   technical palette reference without changing the public sign-in screen. */
+.settings-neon {
+  color-scheme: dark;
+  color: #e9efff;
+  background-color: #090e1b;
+  background-image:
+    radial-gradient(ellipse at 52% 20%, rgba(100, 54, 183, .18), transparent 42%),
+    linear-gradient(to right, rgba(87, 109, 161, .09) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(87, 109, 161, .09) 1px, transparent 1px);
+  background-size: auto, 42px 42px, 42px 42px;
+  font-family: var(--app-font-sans);
+}
+.settings-neon nav { border-color: #283451 !important; }
+.settings-neon nav a { color: #f1f5ff !important; }
+.settings-neon nav a > span:first-child {
+  border: 1px solid #2e456c;
+  background: #101a36 !important;
+  color: #36d1e3 !important;
+  box-shadow: 0 0 18px rgba(36, 196, 221, .12);
+}
+.settings-neon nav a > span:last-child { color: #f1f5ff !important; }
+.settings-neon nav > div > span:first-child { color: #b7c3dc !important; }
+.settings-neon nav > div > span:first-child > span { background: #34d17b !important; }
+.settings-neon nav button,
+.settings-neon nav > div > a { color: #aab7d1 !important; }
+.settings-neon nav > div > button { color: #c5cce1 !important; }
+.settings-neon h1,
+.settings-neon h2,
+.settings-neon h3,
+.settings-neon legend,
+.settings-neon summary { color: #f3f6ff !important; }
+.settings-neon h1 {
+  font-family: 'Space Grotesk', var(--app-font-sans) !important;
+  font-size: clamp(2rem, 4vw, 2.75rem) !important;
+  font-weight: 700 !important;
+  letter-spacing: -.035em !important;
+}
+.settings-neon p,
+.settings-neon label,
+.settings-neon span { color: #c8d2e7; }
+.settings-neon .font-mono {
+  font-family: var(--app-font-mono);
+  letter-spacing: .06em;
+}
+.settings-neon [class*="text-[9px]"],
+.settings-neon [class*="text-[10px]"],
+.settings-neon [class*="text-[11px]"],
+.settings-neon [class*="text-xs"] {
+  font-size: .8125rem !important;
+  line-height: 1.4 !important;
+}
+.settings-neon [class*="text-[#"] { color: #c8d2e7 !important; }
+.settings-neon .font-mono[class*="text-[#"],
+.settings-neon p.font-mono { color: #9d95ff !important; }
+.settings-neon form[aria-describedby="form-note"] {
+  border-color: #2a385b !important;
+  background: linear-gradient(155deg, #111a34, #0d142a 75%) !important;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .3), 0 0 34px rgba(67, 73, 195, .08) !important;
+}
+.settings-neon form[aria-describedby="form-note"] > div:first-child {
+  border-color: #2b3859 !important;
+}
+.settings-neon details {
+  border-color: #2b395b !important;
+  background: #121b34 !important;
+}
+.settings-neon details[open] { box-shadow: 0 0 0 1px rgba(92, 103, 224, .16); }
+.settings-neon details summary { min-height: 28px; }
+.settings-neon details summary::marker { color: #a89cff; }
+.settings-neon input:not([type="checkbox"]):not([type="radio"]),
+.settings-neon select,
+.settings-neon textarea {
+  border-color: #344466 !important;
+  background-color: #0a1127 !important;
+  color: #f0f4ff !important;
+  color-scheme: dark;
+}
+.settings-neon input::placeholder,
+.settings-neon textarea::placeholder { color: #9aa7c2 !important; opacity: 1; }
+.settings-neon input[type="checkbox"],
+.settings-neon input[type="radio"] {
+  width: 1.2rem;
+  height: 1.2rem;
+  accent-color: #40d47f;
+}
+.settings-neon input:focus-visible,
+.settings-neon select:focus-visible,
+.settings-neon textarea:focus-visible {
+  outline: 3px solid rgba(49, 202, 227, .85) !important;
+  outline-offset: 2px;
+}
+.settings-neon label:has(input[type="radio"]),
+.settings-neon [data-testid^="topic-card-"] {
+  border-color: #303d5d !important;
+  background: #0e1730 !important;
+  color: #d5def0 !important;
+  transition: border-color .18s ease, background-color .18s ease, box-shadow .18s ease;
+}
+.settings-neon label:has(input[type="radio"]:checked),
+.settings-neon [data-testid^="topic-card-"]:has(input[type="checkbox"]:checked) {
+  border-color: #8178ff !important;
+  background: linear-gradient(145deg, rgba(77, 66, 160, .28), rgba(13, 29, 53, .94)) !important;
+  color: #f4f5ff !important;
+  box-shadow: inset 0 0 0 1px rgba(145, 135, 255, .16), 0 0 18px rgba(111, 91, 239, .08);
+}
+.settings-neon [data-testid="topic-card-news"] > span > span:first-child { color: #2dc7dc !important; }
+.settings-neon [data-testid="topic-card-hire"] > span > span:first-child { color: #42d17b !important; }
+.settings-neon [data-testid="topic-card-launch"] > span > span:first-child { color: #aa78ff !important; }
+.settings-neon [data-testid="topic-card-financial"] > span > span:first-child { color: #ffb43c !important; }
+.settings-neon [data-testid="topic-card-risk"] > span > span:first-child { color: #f17aa3 !important; }
+.settings-neon #meeting-readiness {
+  border-color: #b94a4a !important;
+  background: rgba(130, 32, 43, .2) !important;
+  color: #ffc1c4 !important;
+}
+.settings-neon #meeting-readiness > span {
+  background: #f0545b !important;
+  box-shadow: 0 0 12px rgba(240, 84, 91, .45);
+}
+.settings-neon #meeting-readiness[data-state="ready"] {
+  border-color: #16884f !important;
+  background: rgba(22, 136, 79, .18) !important;
+  color: #a8f3c0 !important;
+}
+.settings-neon #meeting-readiness[data-state="ready"] > span {
+  background: #3ce17c !important;
+  box-shadow: 0 0 14px rgba(60, 225, 124, .75);
+}
+.settings-neon #meeting-readiness[data-state="crawling"] {
+  border-color: #7863d3 !important;
+  background: rgba(99, 73, 194, .2) !important;
+  color: #d9d0ff !important;
+}
+.settings-neon #meeting-readiness[data-state="crawling"] > span {
+  background: #aa91ff !important;
+  box-shadow: 0 0 14px rgba(170, 145, 255, .65);
+}
+.settings-neon #meeting-readiness[data-state="error"] {
+  border-color: #bf4f55 !important;
+  background: rgba(143, 40, 49, .25) !important;
+  color: #ffc1c4 !important;
+}
+.settings-neon #meeting-readiness + button[data-testid="button-generate-briefing"] {
+  border: 1px solid #bb4650;
+  background: #8f2936 !important;
+  color: #fff !important;
+  box-shadow: 0 0 0 3px rgba(214, 65, 80, .12), 0 0 20px rgba(214, 65, 80, .2);
+}
+.settings-neon #meeting-readiness[data-state="ready"] + button[data-testid="button-generate-briefing"] {
+  border-color: #28bd67;
+  background: #21894b !important;
+  box-shadow: 0 0 0 4px rgba(60, 225, 124, .2), 0 0 24px rgba(60, 225, 124, .48);
+}
+.settings-neon #meeting-readiness[data-state="crawling"] + button[data-testid="button-generate-briefing"] {
+  border-color: #8e79ed;
+  background: #5744b2 !important;
+  box-shadow: 0 0 16px rgba(142, 121, 237, .3);
+}
+.settings-neon button:not(:disabled):hover { filter: brightness(1.12); }
+.settings-neon button:focus-visible,
+.settings-neon a:focus-visible {
+  outline-color: #35cfe2 !important;
+}
+.settings-neon [data-testid="ai-guardrails"] > summary > span {
+  border-color: #bd4e57 !important;
+  background: rgba(146, 42, 52, .28) !important;
+  color: #ffb4b9 !important;
+  box-shadow: 0 0 12px rgba(229, 70, 84, .15);
+}
+.settings-neon [data-testid="tavily-key-status"] {
+  border: 1px solid #334361;
+  background: #101a31 !important;
+  color: #b5c4df !important;
+}
+.settings-neon [role="status"] { line-height: 1.5; }
+.settings-neon a:not([href^="#"]) { color: #54cee0 !important; }
+
+@media (max-width: 640px) {
+  .settings-neon { background-size: auto, 32px 32px, 32px 32px; }
+  .settings-neon form[aria-describedby="form-note"] { padding: 1rem !important; }
+  .settings-neon label:has(input[type="radio"]),
+  .settings-neon [data-testid^="topic-card-"] { min-height: 52px; }
+}
+
 .fade-up { animation: fade-up .5s cubic-bezier(.2,.7,.25,1) both; }
 .fade-up-delay { animation: fade-up .6s .12s cubic-bezier(.2,.7,.25,1) both; }
 @keyframes fade-up { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }

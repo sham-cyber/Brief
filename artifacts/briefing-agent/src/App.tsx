@@ -1453,7 +1453,7 @@ function Home() {
           ? 'Brief ready — sources collected for the selected subject, meeting and topics.'
           : 'Not ready — press Brief when the settings are complete.';
   return (
-    <main className="paper-grid min-h-[100dvh] overflow-hidden">
+    <main className={`paper-grid min-h-[100dvh] overflow-hidden ${isSignedIn ? 'settings-neon' : ''}`}>
       <div className="mx-auto max-w-[1240px] px-5 pb-16 pt-5 sm:px-8 lg:px-12">
         <nav className="no-print flex items-center justify-between border-b border-[#d9d4df] pb-4" aria-label="Main">
           <a href={`${basePath}/`} className="inline-flex items-center gap-2.5 text-foreground no-underline" aria-label="Briefing Agent home" data-testid="link-home">
