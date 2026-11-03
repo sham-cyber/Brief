@@ -200,7 +200,7 @@
     width: clamp(12rem, 20vw, 18rem);
     max-width: 100%;
     height: auto;
-    aspect-ratio: 2 / 3;
+    aspect-ratio: 3 / 2;
   }
 }
 .reference-pill {

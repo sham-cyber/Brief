@@ -5,7 +5,7 @@ import type { BriefingResult, BriefSource } from '@workspace/api-client-react';
 import { ClerkProvider, SignIn, SignUp, Show, useClerk, useUser } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
-import { ArrowDown, ArrowUpRight, Check, Clipboard, Clock3, FileText, Link2, LoaderCircle, Play, Printer, Radio, RefreshCw, Search, Square, Volume2 } from 'lucide-react';
+import { ArrowDown, ArrowUpRight, Check, Clipboard, Clock3, FileText, Link2, LoaderCircle, Printer, Radio, Search, Square, Volume2 } from 'lucide-react';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -351,15 +351,13 @@ function AiGuardrailPanel() {
 
   if (!isLoaded || !isSignedIn) return null;
   return (
-    <section className="no-print mt-4 rounded-xl border border-[#ded9e5] bg-[#f8f6fb] p-3 text-[11px]" aria-label="AI activation guardrails" data-testid="ai-guardrails">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <strong className="font-mono uppercase tracking-[.1em] text-[#443a66]">AI guardrails</strong>
-        <span className={`rounded-full px-2 py-1 font-mono text-[9px] uppercase tracking-[.12em] ${status?.activated ? 'bg-[#e7f2eb] text-[#2f6d4c]' : 'bg-[#fbefed] text-[#98453e]'}`}>
-          {status?.activated ? 'Account active' : 'Stopped'}
-        </span>
-      </div>
-      <p className="mt-2 leading-relaxed text-muted-foreground">
-        AI is currently stopped. If enabled later, the limit is {status?.requestsPerTab ?? AI_REQUESTS_PER_TAB} request per selected tab, with a {Math.floor((status?.speechLimitSeconds ?? AI_SPEECH_LIMIT_SECONDS) / 60)}-minute total speech cap. Your phone number is not used as a password.
+    <details className="no-print mt-4 rounded-xl border border-[#ded9e2] bg-[#f8f6fb] px-4 py-3" aria-label="AI activation guardrails" data-testid="ai-guardrails">
+      <summary className="cursor-pointer text-base font-semibold text-[#35364a]" data-testid="summary-ai-guardrails">
+        AI settings <span className="ml-2 rounded-full border border-[#e4b7b2] bg-[#fbefed] px-2 py-1 text-sm font-bold text-[#98453e]">OFF · stopped</span>
+      </summary>
+      <div className="pt-3 text-base">
+      <p className="leading-relaxed text-muted-foreground">
+        No AI model or provider is connected. If configured later, limits are {status?.requestsPerTab ?? AI_REQUESTS_PER_TAB} request per selected tab and a {Math.floor((status?.speechLimitSeconds ?? AI_SPEECH_LIMIT_SECONDS) / 60)}-minute speech cap.
       </p>
       {status ? (
         <>
@@ -373,7 +371,7 @@ function AiGuardrailPanel() {
               value={passcode}
               onChange={(event) => setPasscode(event.target.value)}
               placeholder="New activation passcode"
-              className="h-9 min-w-0 rounded-lg border border-[#d8d1e5] bg-white px-3 text-xs text-[#292e46] outline-none focus:ring-2 focus:ring-[#887ba7]"
+              className="h-11 min-w-0 rounded-lg border border-[#d8d1e5] bg-white px-3 text-base text-[#292e46] outline-none focus:ring-2 focus:ring-[#887ba7]"
             />
             <input
               aria-label="Confirm AI activation passcode"
@@ -384,13 +382,13 @@ function AiGuardrailPanel() {
               value={confirmPasscode}
               onChange={(event) => setConfirmPasscode(event.target.value)}
               placeholder="Confirm passcode"
-              className="h-9 min-w-0 rounded-lg border border-[#d8d1e5] bg-white px-3 text-xs text-[#292e46] outline-none focus:ring-2 focus:ring-[#887ba7]"
+              className="h-11 min-w-0 rounded-lg border border-[#d8d1e5] bg-white px-3 text-base text-[#292e46] outline-none focus:ring-2 focus:ring-[#887ba7]"
             />
-            <button type="submit" disabled={busy} className="h-9 rounded-lg bg-[#292e46] px-3 text-xs font-semibold text-white disabled:opacity-50">Save passcode</button>
+            <button type="submit" disabled={busy} className="h-11 rounded-lg bg-[#292e46] px-4 text-base font-semibold text-white disabled:opacity-50">Save passcode</button>
           </form>
           <div className="mt-2 flex flex-wrap gap-2">
-            <button type="button" onClick={() => void activate()} disabled={busy || !status.serverEnabled || !status.passcodeConfigured || !status.aiProviderConnected || !passcode} className="h-9 rounded-lg border border-[#d7b3ae] bg-[#fbefed] px-3 text-xs font-semibold text-[#98453e] disabled:cursor-not-allowed disabled:opacity-50">Activate AI</button>
-            <button type="button" onClick={() => void deactivate()} disabled={busy || !status.activated} className="h-9 rounded-lg border border-[#d8d1e5] bg-white px-3 text-xs font-semibold text-[#443a66] disabled:cursor-not-allowed disabled:opacity-50">Stop AI</button>
+            <button type="button" onClick={() => void activate()} disabled={busy || !status.serverEnabled || !status.passcodeConfigured || !status.aiProviderConnected || !passcode} className="h-11 rounded-lg border border-[#d7b3ae] bg-[#fbefed] px-4 text-base font-semibold text-[#98453e] disabled:cursor-not-allowed disabled:opacity-50">Activate AI</button>
+            <button type="button" onClick={() => void deactivate()} disabled={busy || !status.activated} className="h-11 rounded-lg border border-[#d8d1e5] bg-white px-4 text-base font-semibold text-[#443a66] disabled:cursor-not-allowed disabled:opacity-50">Stop AI</button>
           </div>
           {!status.serverEnabled && <p className="mt-2 text-[#98453e]">The server switch is off. No AI request can run.</p>}
           {!status.aiProviderConnected && <p className="mt-1 text-muted-foreground">Per-user AI key setup is not available yet; AI remains stopped and no AI request can run.</p>}
@@ -399,7 +397,8 @@ function AiGuardrailPanel() {
         <p className="mt-2 text-[#98453e]" role="status">{message || 'AI access settings are unavailable.'}</p>
       )}
       {message && status && <p className="mt-2 text-muted-foreground" role="status">{message}</p>}
-    </section>
+      </div>
+    </details>
   );
 }
 
@@ -545,65 +544,20 @@ function SourceList({ sources }: { sources: BriefSource[] }) {
                   />
                 </a>
               )}
-              <div className="mt-1.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+              <div className="mt-2 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
                 <span className="font-medium text-[#655b7a]">{source.publisher}</span>
                 <span aria-hidden="true">·</span>
                 <time dateTime={source.publishedAt ?? undefined}>{formatDate(source.publishedAt, { dateStyle: 'medium' })}</time>
               </div>
-              {source.snippet && <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">{source.snippet}</p>}
-              <a className="mt-2 inline-flex max-w-full items-center gap-1.5 truncate font-mono text-[10px] text-[#71658e] underline decoration-[#c7bfd7] underline-offset-2 hover:text-primary" href={source.url} target="_blank" rel="noreferrer" aria-label={`Open URL for ${source.title}`} data-testid={`link-source-url-${index + 1}`}>
-                <Link2 className="h-3 w-3 shrink-0" aria-hidden="true" /><span className="truncate">{source.url}</span>
+              {source.snippet && <p className="mt-2 max-w-3xl text-base leading-relaxed text-muted-foreground">{source.snippet}</p>}
+              <a className="mt-3 inline-flex max-w-full items-start gap-2 break-all text-sm text-[#594b87] underline decoration-[#c7bfd7] underline-offset-2 hover:text-primary" href={source.url} target="_blank" rel="noreferrer" aria-label={`Open URL for ${source.title}`} data-testid={`link-source-url-${index + 1}`}>
+                <Link2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" /><span className="break-all">{source.url}</span>
               </a>
             </div>
           </div>
         </li>
       ))}
     </ol>
-  );
-}
-
-function SourceColumn({
-  sources,
-  searchResultsReturned,
-  sourceSearchesCompleted,
-}: {
-  sources: BriefSource[];
-  searchResultsReturned: number | null;
-  sourceSearchesCompleted: number;
-}) {
-  const hasVideo = sources.some(isVideoSource);
-  return (
-    <aside className="source-column space-y-4" aria-label="Source links and video" data-testid="source-column">
-      <section className="rounded-2xl border border-border bg-card px-5 py-5 sm:px-6" aria-labelledby="source-column-heading" data-testid="links-box">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <div>
-            <SectionEyebrow>Trace every claim</SectionEyebrow>
-            <h3 id="source-column-heading" className="mt-2 font-serif text-2xl text-foreground">Links</h3>
-          </div>
-          <span className="rounded-full bg-[#f1eef7] px-3 py-1 font-mono text-[10px] text-[#5d5279]">{sources.length} links</span>
-        </div>
-        {sources.length === 0 && searchResultsReturned !== null && (
-          <p className="mb-4 rounded-lg border border-[#ded9e5] bg-[#f8f6fb] px-3 py-2 text-xs leading-relaxed text-[#625d69]" role="status" data-testid="text-source-filter-diagnostic">
-            {searchResultsReturned === 0
-              ? `Tavily returned no results across ${sourceSearchesCompleted} selected-topic searches.`
-              : `Tavily returned ${searchResultsReturned} results, but none passed the 30-day, dated HTTPS link, company/person, and topic checks.`}
-          </p>
-        )}
-        <div className="max-h-[280px] overflow-y-auto pr-1">
-          <SourceList sources={sources} />
-        </div>
-      </section>
-      {!hasVideo && (
-        <section className="rounded-2xl border border-border bg-card px-5 py-5 sm:px-6" aria-labelledby="video-column-heading">
-          <SectionEyebrow>Source media</SectionEyebrow>
-          <h3 id="video-column-heading" className="mt-2 font-serif text-2xl text-foreground">Video box</h3>
-          <div className="source-video video-placeholder mt-4" data-testid="video-placeholder">
-            <Play className="h-4 w-4 shrink-0" aria-hidden="true" />
-            <span>{sources.length ? 'No video source found in this crawl.' : 'A playable video appears here when found.'}</span>
-          </div>
-        </section>
-      )}
-    </aside>
   );
 }
 
@@ -621,58 +575,48 @@ function VoiceControls({ text }: { text: string }) {
   const seconds = Math.ceil(estimate.words / 2.5);
   const hasText = Boolean(text.trim());
   return (
-    <div className="grid grid-cols-[96px_minmax(0,1fr)] items-start gap-3" data-testid="voice-controls">
-      <button
-        type="button"
-        disabled
-        title="AI voice is stopped and not connected. It stays off until you ask for AI integration."
-        aria-describedby="ai-voice-status"
-        className="voice-button voice-button-stopped flex h-24 w-24 shrink-0 flex-col items-center justify-center gap-1 rounded-full text-[11px] font-bold text-white"
-        aria-label="AI voice stopped and not connected"
-        data-testid="button-ai-voice"
+    <div className="flex flex-wrap items-center gap-2" data-testid="voice-controls">
+      <span
+        id="ai-voice-status"
+        className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#e4b7b2] bg-[#fbefed] px-4 text-sm font-bold text-[#98453e]"
+        aria-label="AI is off and stopped"
+        data-testid="status-ai-off"
       >
-        <Volume2 className="h-5 w-5" aria-hidden="true" />
-        AI voice
-      </button>
-      <div className="min-w-0">
-        <div className="flex flex-col items-start gap-2">
+        <span className="h-2 w-2 rounded-full bg-[#c45b50]" aria-hidden="true" /> AI off · stopped
+      </span>
+      <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => window.speechSynthesis?.cancel()}
-            className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#e4b7b2] bg-[#fbefed] px-3 text-xs font-semibold text-[#98453e] transition hover:bg-[#f7e1de]"
+            className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#e4b7b2] bg-[#fbefed] px-4 text-sm font-semibold text-[#98453e] transition hover:bg-[#f7e1de]"
             data-testid="button-stop-speech"
           >
-            <Square className="h-3.5 w-3.5 fill-current" aria-hidden="true" /> Stop
+            <Square className="h-4 w-4 fill-current" aria-hidden="true" /> Stop
           </button>
           <button
             type="button"
             disabled={!hasText}
             onClick={() => speakBlock(text)}
-            className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#cde0d4] bg-[#edf6f0] px-3 text-xs font-semibold text-[#32634a] transition hover:bg-[#e2f0e7] disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#cde0d4] bg-[#edf6f0] px-4 text-sm font-semibold text-[#32634a] transition hover:bg-[#e2f0e7] disabled:cursor-not-allowed disabled:opacity-50"
             data-testid="button-read-briefing"
           >
-            <Volume2 className="h-3.5 w-3.5" aria-hidden="true" /> Read aloud
+            <Volume2 className="h-4 w-4" aria-hidden="true" /> Read aloud
           </button>
           <button
             type="button"
-            disabled
-            title="AI Q&A is stopped until you authorize the app user's AI connection."
-            className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#e4b7b2] bg-[#fbefed] px-3 text-xs font-semibold text-[#98453e] disabled:cursor-not-allowed"
-            data-testid="button-ask-ai-question"
+            onClick={() => window.print()}
+            className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#292e46] px-4 text-sm font-semibold text-white transition hover:bg-[#3c4160]"
+            data-testid="button-print-brief"
           >
-            Ask a spoken question
+            <Printer className="h-4 w-4" aria-hidden="true" /> Print brief
           </button>
-        </div>
-        <p id="ai-voice-status" className="mt-2 max-w-52 text-[10px] leading-relaxed text-muted-foreground">
-          AI voice and Q&A are stopped. If enabled later, they will use your own AI credentials; none are connected.
-        </p>
-        <p className="mt-1 max-w-60 text-[10px] leading-relaxed text-muted-foreground" data-testid="status-speech-estimate">
-          {hasText
-            ? `Speech preview: ${estimate.words}/${SPEECH_WORD_LIMIT} words spoken, ${text.length} characters; ${estimate.totalWords} words total${estimate.clipped ? ' — capped at 2 minutes' : ''}. Device estimate: about ${seconds}s. AI provider calls are off, so no AI speech cost is incurred.`
-            : `0/${SPEECH_WORD_LIMIT} speech words, 0 characters. AI voice is off; device read-aloud starts after the crawl.`}
-        </p>
-        <AiGuardrailPanel />
       </div>
+      <p className="basis-full text-sm leading-relaxed text-[#625d69]" data-testid="status-speech-estimate">
+        {hasText
+          ? `Device read-aloud: about ${seconds} seconds${estimate.clipped ? ' (limited to 2 minutes)' : ''}.`
+          : 'Device read-aloud is available after a brief is prepared.'}
+        <span className="sr-only"> {estimate.words} of {SPEECH_WORD_LIMIT} words spoken out of {estimate.totalWords}; {text.length} characters.</span>
+      </p>
     </div>
   );
 }
@@ -701,16 +645,6 @@ function TopicBlock({
   const [filter, setFilter] = useState('');
   const filteredHighlights = highlights.filter((item) => `${item.title} ${item.summary}`.toLowerCase().includes(filter.toLowerCase()));
   const filteredQuestions = (questions ?? []).filter((item) => item.text.toLowerCase().includes(filter.toLowerCase()));
-  const readable = [
-    ...(!filteredHighlights.length && !filteredQuestions.length
-      ? [topic === 'hire' ? 'No confirmed-hire reports were returned by the public-news crawl.' : `${title}. No matching items.`]
-      : []),
-    ...filteredHighlights.flatMap((item) => [item.title, item.summary]),
-    ...filteredQuestions.map((item) => item.text),
-    ...(openRoleSearchSubject
-      ? ['Open job listings are not imported automatically. Use the LinkedIn Sales and Maintenance search links for current postings.']
-      : []),
-  ].join('. ');
   return (
     <section className="topic-block print-card mt-7 rounded-2xl border border-border bg-card px-5 py-5 sm:px-7" aria-labelledby={`topic-${topic}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -718,9 +652,6 @@ function TopicBlock({
           <SectionEyebrow>{TOPICS.find((item) => item.value === topic)?.label}</SectionEyebrow>
           <h3 id={`topic-${topic}`} className="mt-2 font-serif text-3xl text-foreground">{title}</h3>
         </div>
-        <button type="button" onClick={() => speakBlock(readable)} className="no-print inline-flex h-9 items-center gap-2 rounded-lg border border-[#cde0d4] bg-[#edf6f0] px-3 text-xs font-semibold text-[#32634a] hover:bg-[#e2f0e7]" data-testid={`button-repeat-${topic}`}>
-          <Volume2 className="h-3.5 w-3.5" aria-hidden="true" /> Repeat
-        </button>
       </div>
       <label className="no-print relative mt-4 block max-w-sm">
         <span className="sr-only">Filter {title}</span>
@@ -738,13 +669,13 @@ function TopicBlock({
           {filteredHighlights.map((item, index) => (
             <article key={`${item.title}-${index}`} className="rounded-xl border border-border/80 bg-[#fbfaf7] px-4 py-4" data-testid={`highlight-${topic}-${index + 1}`}>
               <h4 className="font-semibold leading-snug text-[#292d43]">{item.title}</h4>
-              <p className="briefing-prose mt-2 text-sm leading-[1.75] text-[#5f6070]">
+            <p className="briefing-prose mt-2 text-base leading-[1.75] text-[#5f6070]">
                 {item.summary}<References sourceIds={item.sourceIds} sources={sources} />
               </p>
             </article>
           ))}
           {filteredQuestions.map((question, index) => (
-            <p key={`${question.text}-${index}`} className="briefing-prose border-t border-[#ded9e5] pt-3 text-sm leading-relaxed text-[#454151]" data-testid={`question-${topic}-${index + 1}`}>
+            <p key={`${question.text}-${index}`} className="briefing-prose border-t border-[#ded9e5] pt-3 text-base leading-relaxed text-[#454151]" data-testid={`question-${topic}-${index + 1}`}>
               {question.text}<References sourceIds={question.sourceIds} sources={sources} />
             </p>
           ))}
@@ -865,9 +796,6 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
             {copied ? <Check className="h-3.5 w-3.5" /> : <Clipboard className="h-3.5 w-3.5" />}
             {copied ? 'Copied' : 'Copy brief'}
           </button>
-          <button type="button" onClick={() => window.print()} className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-card px-3 text-xs font-semibold text-foreground transition hover:bg-accent" data-testid="button-print-brief">
-            <Printer className="h-3.5 w-3.5" /> Print
-          </button>
         </div>
       </div>
 
@@ -889,24 +817,8 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
         </div>
       </header>
 
-      <div className="no-print mt-5 flex flex-wrap items-center justify-between gap-5 rounded-2xl border border-[#d8d2df] bg-[#f4f1e9] p-5 sm:p-6" data-testid="voice-summary">
-        <div className="max-w-md">
-          <SectionEyebrow>Listen before you walk in</SectionEyebrow>
-          <p className="mt-2 text-sm leading-relaxed text-[#65616d]">Read this brief aloud using your device’s built-in voice. No AI voice service is connected.</p>
-        </div>
-        <VoiceControls text={[
-          visibleOverview.text,
-          `Top positive: ${visibleOverview.topPositive.text}`,
-          `Top negative: ${visibleOverview.topNegative.text}`,
-          ...visibleHighlights.flatMap((item) => [item.title, item.summary]),
-          ...visibleQuestions.map((question) => question.text),
-          ...(openRoleSearchSubject && result.topics.includes('hire') && (activeTopic === 'all' || activeTopic === 'hire')
-            ? [`Open job listings for ${openRoleSearchSubject} are not imported automatically. Use the LinkedIn Sales and Maintenance search links in Hires.`]
-            : []),
-        ].join('. ')} />
-      </div>
-
-      <div className="mt-5" data-testid="briefing-columns">
+      <div className="mt-5 grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(300px,0.72fr)] lg:items-start" data-testid="briefing-columns">
+      <div className="min-w-0" data-testid="briefing-content-column">
       <section className="print-card rounded-2xl border border-border bg-card px-6 py-6 shadow-[0_8px_28px_rgba(38,37,55,.035)] sm:px-8" aria-labelledby="overview-heading">
         <SectionEyebrow>
           {activeTopic === 'all'
@@ -974,6 +886,41 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
       })}
 
       </div>
+
+      <aside className="min-w-0" aria-label="Brief sources and media" data-testid="source-column">
+      <section className="print-card rounded-2xl border border-border bg-card px-5 py-5 sm:px-7" aria-labelledby="all-source-links-heading" data-testid="links-box">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <SectionEyebrow>Trace every claim</SectionEyebrow>
+            <h3 id="all-source-links-heading" className="mt-2 font-serif text-2xl text-foreground">Source links</h3>
+          </div>
+          <span className="rounded-full bg-[#f1eef7] px-3 py-1 text-sm font-semibold text-[#5d5279]" data-testid="text-source-count">{result.sources.length} sources</span>
+        </div>
+        {result.sources.length === 0 && result.searchResultsReturned !== null && (
+          <p className="mb-4 rounded-lg border border-[#ded9e5] bg-[#f8f6fb] px-4 py-3 text-base leading-relaxed text-[#625d69]" role="status" data-testid="text-source-filter-diagnostic">
+            {result.searchResultsReturned === 0
+              ? `No results were returned across ${result.sourceSearchesCompleted} selected-topic searches.`
+              : `${result.searchResultsReturned} results were checked, but none passed the source date, link, subject, and topic checks.`}
+          </p>
+        )}
+        <SourceList sources={result.sources} />
+      </section>
+      </aside>
+
+      </div>
+      <section className="no-print mt-7 rounded-xl border border-[#ded9e2] bg-[#f8f6f2] px-4 py-4" aria-label="Read aloud controls" data-testid="voice-summary">
+        <p className="mb-3 text-base font-semibold text-[#292e46]">Read this brief aloud</p>
+        <VoiceControls text={[
+          visibleOverview.text,
+          `Top positive: ${visibleOverview.topPositive.text}`,
+          `Top negative: ${visibleOverview.topNegative.text}`,
+          ...visibleHighlights.flatMap((item) => [item.title, item.summary]),
+          ...visibleQuestions.map((question) => question.text),
+          ...(openRoleSearchSubject && result.topics.includes('hire') && (activeTopic === 'all' || activeTopic === 'hire')
+            ? [`Open job listings for ${openRoleSearchSubject} are not imported automatically. Use the LinkedIn Sales and Maintenance search links in Hires.`]
+            : []),
+        ].join('. ')} />
+      </section>
       <p className="no-print mt-5 text-right font-mono text-[10px] uppercase tracking-[.12em] text-muted-foreground">Crawl started {formatDate(result.generatedAt)}</p>
       </div>
       <PrintOnePageBrief result={result} activeTopic={activeTopic} />
@@ -1414,19 +1361,14 @@ function Home() {
             ? 'Not ready — select at least one topic.'
             : sourceMode === 'private'
               ? 'Not ready — private sources need user authorization and protected sign-in.'
-              : 'Not ready — press Crawl & prepare briefing.'
+              : 'Not ready — press Brief when the settings are complete.'
     : readinessState === 'error'
       ? timedOutKey === requestKey ? 'Not ready — the three-minute backup stop ended this crawl.' : 'Not ready — source collection failed. Try again.'
       : readinessState === 'crawling'
         ? 'Collecting sources — up to your remaining daily allowance.'
       : readinessState === 'ready'
           ? 'Brief ready — sources collected for the selected subject, meeting and topics.'
-          : 'Not ready — press Crawl & prepare briefing.';
-  const briefStatusClass = readinessState === 'ready'
-    ? 'brief-status-ready'
-    : readinessState === 'crawling'
-      ? 'brief-status-pending'
-      : 'brief-status-not-ready';
+          : 'Not ready — press Brief when the settings are complete.';
   return (
     <main className="paper-grid min-h-[100dvh] overflow-hidden">
       <div className="mx-auto max-w-[1240px] px-5 pb-16 pt-5 sm:px-8 lg:px-12">
@@ -1443,90 +1385,51 @@ function Home() {
           </div>
         </nav>
 
-        <div className="mt-8 space-y-8 lg:mt-12">
+        <div className="mt-5 space-y-6 lg:mt-8">
           <section className="no-print fade-up" aria-labelledby="create-heading">
-            <div className="mb-5">
-              <p className="font-mono text-[10px] uppercase tracking-[.17em] text-[#766a93]">Your source-first briefing assistant</p>
-              <h1 id="create-heading" className="mt-2 font-serif text-[38px] leading-[1.02] tracking-[-.02em] text-[#282d43]">Know what changed<br /><em className="font-normal text-[#655487]">before you meet.</em></h1>
-              <p className="mt-3 max-w-2xl text-[13px] leading-[1.7] text-[#666675]">Choose a company or person for a user-triggered, rolling 30-day brief: news, hires, launches, financial facts, risks and open questions—with links to the reporting behind each item.</p>
-            </div>
-
-            <section className="mb-5" aria-label="How the briefing assistant supports each role" data-testid="trust-and-role-guide">
-              <div className="grid gap-2 sm:grid-cols-3">
-                <article className="rounded-xl border border-[#d8d2df] bg-[#fbfaf6] p-3">
-                  <p className="font-mono text-[9px] uppercase tracking-[.14em] text-[#766a93]">Chairman / CEO</p>
-                  <p className="mt-2 text-[11px] leading-relaxed text-[#555463]">Add the company. Review reported share-price and profit/loss facts, hires, launches and risks before plant, board or partner discussions.</p>
-                </article>
-                <article className="rounded-xl border border-[#d8d2df] bg-[#fbfaf6] p-3">
-                  <p className="font-mono text-[9px] uppercase tracking-[.14em] text-[#766a93]">MP / public office</p>
-                  <p className="mt-2 text-[11px] leading-relaxed text-[#555463]">Choose MP and enter the public-office title, such as Corporator. Review sourced reporting tied to the person and prepare questions.</p>
-                </article>
-                <article className="rounded-xl border border-[#d8d2df] bg-[#fbfaf6] p-3">
-                  <p className="font-mono text-[9px] uppercase tracking-[.14em] text-[#766a93]">Corporate person</p>
-                  <p className="mt-2 text-[11px] leading-relaxed text-[#555463]">For a private-entity person: scan role-related reporting, hires, launches and risks before client or leadership conversations.</p>
-                </article>
-              </div>
-
-              <div className="mt-3 rounded-xl border border-[#d8d2df] bg-[#f3f0f7] p-4">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <p className="font-mono text-[9px] uppercase tracking-[.14em] text-[#766a93]">The 30-day method</p>
-                    <ol className="mt-2 space-y-1.5 text-[10px] leading-relaxed text-[#555463]">
-                      <li><strong>1.</strong> Choose a company or person and set the meeting time.</li>
-                      <li><strong>2.</strong> Press Crawl to collect public reports from the 30 days ending now. It does not run automatically.</li>
-                      <li><strong>3.</strong> Review five focused blocks, then print a one-page brief or use the capped read-aloud.</li>
-                    </ol>
-                  </div>
-                  <div>
-                    <p className="font-mono text-[9px] uppercase tracking-[.14em] text-[#766a93]">What makes it checkable</p>
-                    <ul className="mt-2 space-y-1.5 text-[10px] leading-relaxed text-[#555463]">
-                      <li>Every reported item links to its source; you can check the original context.</li>
-                      <li>Financial facts and positive/negative signals appear only when reporting supports them.</li>
-                      <li>Missing evidence is shown as not found or an open question—not filled in by guesswork.</li>
-                    </ul>
-                  </div>
+            {isSignedIn ? (
+              <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <p className="font-mono text-xs uppercase tracking-[.14em] text-[#655487]">30-day meeting brief</p>
+                  <h1 id="create-heading" className="mt-1 font-serif text-3xl leading-tight tracking-[-.02em] text-[#282d43]">Settings</h1>
                 </div>
-                <p className="mt-3 border-t border-[#ddd6e8] pt-3 text-[10px] leading-relaxed text-[#625d69]">
-                  AI is currently off. This assistant does not generate or invent claims; the crawl starts only when you request it.
-                </p>
+                <p className="text-base font-medium text-[#625d69]">Start a crawl only when you press Brief.</p>
               </div>
-            </section>
-
+            ) : (
+              <div className="mb-5 rounded-2xl border border-[#d8d2df] bg-[#f4f1f8] px-5 py-6 sm:px-8 sm:py-8">
+                <p className="font-mono text-xs uppercase tracking-[.14em] text-[#655487]">Briefing Agent · source-first research</p>
+                <h1 id="create-heading" className="mt-2 max-w-3xl font-serif text-4xl leading-tight tracking-[-.025em] text-[#282d43] sm:text-5xl">A short brief for the meeting ahead.</h1>
+                <p className="mt-4 max-w-2xl text-lg leading-relaxed text-[#514e5c]">Review a company or person’s latest 30 days with factual links to the reporting. AI stays off; nothing runs until you request a brief.</p>
+              </div>
+            )}
             <form onSubmit={submit} className="rounded-2xl border border-[#d8d2df] bg-[#fbfaf6] p-5 shadow-[0_12px_35px_rgba(38,37,55,.06)] sm:p-6" aria-describedby={isSignedIn ? 'form-note' : undefined}>
               {!isSignedIn ? (
                 <section className="rounded-xl border border-[#d8d2df] bg-[#f4f1f8] px-5 py-6 sm:px-7" aria-label="Sign in before starting a briefing" data-testid="signin-before-briefing">
-                  <p className="font-mono text-[10px] uppercase tracking-[.15em] text-[#766a93]">Account required</p>
+                  <p className="text-sm font-semibold uppercase tracking-[.12em] text-[#655487]">Account required</p>
                   <h2 className="mt-2 font-serif text-2xl text-[#292e46]">Sign in before you brief.</h2>
-                  <p className="mt-2 max-w-xl text-sm leading-relaxed text-[#625d69]">The configured owner can use the existing project Tavily key; it is never shared with other accounts. Personal keys are kept separate and billed by their owners. Only the configured owner can start a crawl. The app-wide 120-second runtime limit resets at midnight IST.</p>
+                  <p className="mt-2 max-w-xl text-base leading-relaxed text-[#514e5c]">Sign in to create a short, cited brief. Source connections stay separate for each account.</p>
                   <div className="mt-5 flex flex-wrap items-center gap-3">
-                    <a href={`${basePath}/sign-in`} className="inline-flex h-10 items-center justify-center rounded-lg bg-[#292e46] px-4 text-sm font-semibold text-white transition hover:bg-[#3c4160]" data-testid="button-sign-in-before-briefing">Sign in to use the briefing</a>
-                    <a href={`${basePath}/sign-up`} className="text-sm font-semibold text-[#594b87] underline underline-offset-4" data-testid="button-create-account-before-briefing">Create an account</a>
+                    <a href={`${basePath}/sign-in`} className="inline-flex h-11 items-center justify-center rounded-lg bg-[#292e46] px-5 text-base font-semibold text-white transition hover:bg-[#3c4160]" data-testid="button-sign-in-before-briefing">Sign in</a>
+                    <a href={`${basePath}/sign-up`} className="text-base font-semibold text-[#594b87] underline underline-offset-4" data-testid="button-create-account-before-briefing">Create an account</a>
                   </div>
                 </section>
               ) : (
               <>
-              <div className="mb-5 flex items-center justify-between border-b border-[#e5e0e7] pb-3">
-                <span className="font-mono text-[10px] uppercase tracking-[.15em] text-[#6b6278]">New conversation</span>
-                <div className="flex items-center gap-3">
-                  <span
-                    className={`brief-status-button ${briefStatusClass}`}
-                    aria-label={`Brief status: ${readinessMessage}`}
-                    role="status"
-                    aria-live="polite"
-                    title={readinessMessage}
-                    data-testid="status-brief-status"
-                  >
-                    Brief
-                  </span>
-                  <span className="font-mono text-[10px] text-[#968da0]">30 DAYS</span>
-                </div>
+              <div className="mb-4 flex items-center justify-between border-b border-[#e5e0e7] pb-3">
+                <span className="text-base font-semibold text-[#292e46]">Briefing details</span>
+                <span className="rounded-full bg-[#eeeaf4] px-3 py-1 font-mono text-xs font-semibold text-[#594b87]">30 DAYS</span>
               </div>
-              <TavilyKeySettings
-                onChanged={() => { void sourceStatusQuery.refetch(); }}
-                projectKeyActive={keySource === 'project-owner'}
-              />
+              <details className="mb-4 rounded-xl border border-[#ded9e2] bg-white/65 px-4 py-3" data-testid="details-source-key-settings">
+                <summary className="cursor-pointer text-base font-semibold text-[#35364a]">Source search key settings</summary>
+                <div className="pt-3">
+                  <TavilyKeySettings
+                    onChanged={() => { void sourceStatusQuery.refetch(); }}
+                    projectKeyActive={keySource === 'project-owner'}
+                  />
+                </div>
+              </details>
               <fieldset className="mt-4">
-                <legend className="mb-2 text-xs font-semibold text-[#35364a]">Briefing subject</legend>
+                    <legend className="mb-2 text-base font-semibold text-[#35364a]">Briefing subject</legend>
                 <div className="grid max-w-md grid-cols-2 gap-2">
                   {(['company', 'person'] as const).map((kind) => (
                     <label key={kind} className={`flex h-10 cursor-pointer items-center gap-2 rounded-lg border px-3 text-xs font-semibold transition ${subjectType === kind ? 'border-[#9183ad] bg-[#f0edf6] text-[#493d65]' : 'border-[#d9d4df] bg-[#fffefa] text-[#777280]'}`}>
@@ -1552,15 +1455,15 @@ function Home() {
               {subjectType === 'person' && (
                 <>
                   <fieldset className="mt-5" aria-describedby="person-role-note">
-                    <legend className="mb-2 text-xs font-semibold text-[#35364a]">Person’s briefing context</legend>
-                    <p id="person-role-note" className="mb-2 text-[10px] leading-relaxed text-[#777280]">
+                    <legend className="mb-2 text-base font-semibold text-[#35364a]">Relevant role</legend>
+                    <p id="person-role-note" className="mb-2 text-sm leading-relaxed text-[#625d69]">
                       MP is the government/public-office path; Corporate means a private-entity person. These choices only focus public-source research.
                     </p>
                     <div className="grid grid-cols-3 gap-2">
                       {PERSON_ROLES.map((role) => (
                         <label
                           key={role.value}
-                          className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                          className={`flex min-h-12 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-base font-semibold transition ${
                             personRole === role.value
                               ? 'border-[#9183ad] bg-[#f0edf6] text-[#493d65]'
                               : 'border-[#d9d4df] bg-[#fffefa] text-[#777280] hover:border-[#bbb1cc]'
@@ -1586,7 +1489,7 @@ function Home() {
                   </fieldset>
                   {personRole === 'business_owner' && (
                     <label htmlFor="person-company" className="mt-4 block">
-                      <span className="mb-1.5 block text-xs font-semibold text-[#35364a]">Chairman / CEO company</span>
+                      <span className="mb-1.5 block text-base font-semibold text-[#35364a]">Relevant company</span>
                       <input
                         id="person-company"
                         value={companyName}
@@ -1595,14 +1498,14 @@ function Home() {
                         minLength={2}
                         maxLength={200}
                         placeholder="For example, Finolex Cables"
-                        className="h-11 w-full rounded-lg border border-[#d9d4df] bg-[#fffefa] px-3 text-sm text-foreground placeholder:text-[#aaa4af] focus:border-[#8c7dae] focus:outline-none"
+                        className="h-12 w-full rounded-lg border border-[#d9d4df] bg-[#fffefa] px-3 text-base text-foreground placeholder:text-[#777280] focus:border-[#8c7dae] focus:outline-none"
                         data-testid="input-person-company"
                       />
                     </label>
                   )}
                   {personRole === 'mp' && (
                     <label htmlFor="person-public-role" className="mt-4 block">
-                      <span className="mb-1.5 block text-xs font-semibold text-[#35364a]">Government office or title</span>
+                      <span className="mb-1.5 block text-base font-semibold text-[#35364a]">Relevant office or title</span>
                       <input
                         id="person-public-role"
                         value={publicRoleTitle}
@@ -1611,7 +1514,7 @@ function Home() {
                         minLength={2}
                         maxLength={80}
                         placeholder="MP or Corporator"
-                        className="h-11 w-full rounded-lg border border-[#d9d4df] bg-[#fffefa] px-3 text-sm text-foreground placeholder:text-[#aaa4af] focus:border-[#8c7dae] focus:outline-none"
+                        className="h-12 w-full rounded-lg border border-[#d9d4df] bg-[#fffefa] px-3 text-base text-foreground placeholder:text-[#777280] focus:border-[#8c7dae] focus:outline-none"
                         data-testid="input-person-public-role"
                       />
                     </label>
@@ -1619,11 +1522,11 @@ function Home() {
                   <section className="mt-4 rounded-xl border border-[#e2dde8] bg-white/70 p-3" aria-label="Saved person details">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
-                        <h3 className="text-xs font-semibold text-[#35364a]">Saved person details</h3>
-                        <p className="mt-1 text-[10px] leading-relaxed text-[#777280]">Optional. Saved only to your signed-in account when you choose Save.</p>
+                        <h3 className="text-base font-semibold text-[#35364a]">Saved person details</h3>
+                        <p className="mt-1 text-sm leading-relaxed text-[#625d69]">Optional. Saved only to your account when you choose Save.</p>
                       </div>
                       {accountLoaded && !isSignedIn && (
-                        <a href={`${basePath}/sign-in`} className="font-mono text-[9px] uppercase tracking-wide text-[#655487] underline underline-offset-4">
+                        <a href={`${basePath}/sign-in`} className="text-base font-semibold text-[#655487] underline underline-offset-4" data-testid="link-sign-in-save-person">
                           Sign in to save
                         </a>
                       )}
@@ -1632,11 +1535,11 @@ function Home() {
                       <>
                         {savedPersonProfiles.length > 0 ? (
                           <label className="mt-3 block">
-                            <span className="mb-1 block text-[10px] font-semibold text-[#625d69]">Load a saved person</span>
+                            <span className="mb-1 block text-base font-semibold text-[#35364a]">Load a saved person</span>
                             <select
                               value={selectedSavedProfileId}
                               onChange={(event) => loadSavedPersonProfile(event.target.value)}
-                              className="h-10 w-full rounded-lg border border-[#d9d4df] bg-[#fffefa] px-3 text-xs text-foreground focus:border-[#8c7dae] focus:outline-none"
+                              className="h-12 w-full rounded-lg border border-[#d9d4df] bg-[#fffefa] px-3 text-base text-foreground focus:border-[#8c7dae] focus:outline-none"
                               data-testid="select-saved-person-profile"
                             >
                               <option value="">Choose saved person details</option>
@@ -1655,7 +1558,7 @@ function Home() {
                             </select>
                           </label>
                         ) : (
-                          <p className="mt-2 text-[10px] text-[#777280]">
+                          <p className="mt-2 text-base text-[#625d69]">
                             {profileRequestPending ? 'Loading saved details…' : 'No saved person details yet.'}
                           </p>
                         )}
@@ -1664,7 +1567,7 @@ function Home() {
                             type="button"
                             onClick={() => void savePersonProfile()}
                             disabled={profileRequestPending || !personRole || !hasValidSubject || !hasValidPersonDetails}
-                            className="h-9 rounded-lg bg-[#292e46] px-3 text-[10px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                            className="h-11 rounded-lg bg-[#292e46] px-4 text-base font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                             data-testid="button-save-person-profile"
                           >
                             {profileRequestPending ? 'Saving…' : selectedProfileMatchesForm ? 'Update saved details' : 'Save person details'}
@@ -1674,7 +1577,7 @@ function Home() {
                               type="button"
                               onClick={() => void forgetSavedPersonProfile()}
                               disabled={profileRequestPending}
-                              className="h-9 rounded-lg border border-[#e5c5c0] px-3 text-[10px] font-semibold text-[#8f4039] disabled:cursor-not-allowed disabled:opacity-50"
+                              className="h-11 rounded-lg border border-[#e5c5c0] px-4 text-base font-semibold text-[#8f4039] disabled:cursor-not-allowed disabled:opacity-50"
                               data-testid="button-remove-person-profile"
                             >
                               Remove saved details
@@ -1683,15 +1586,15 @@ function Home() {
                         </div>
                       </>
                     )}
-                    {profileMessage && <p className="mt-2 text-[10px] text-[#625d69]" role="status" aria-live="polite">{profileMessage}</p>}
+                    {profileMessage && <p className="mt-2 text-base text-[#625d69]" role="status" aria-live="polite">{profileMessage}</p>}
                   </section>
                   <fieldset className="mt-5">
-                    <legend className="mb-2 text-xs font-semibold text-[#35364a]">Source mode</legend>
+                  <legend className="mb-2 text-base font-semibold text-[#35364a]">Source mode</legend>
                     <div className="grid max-w-md grid-cols-2 gap-2">
                       {(['public', 'private'] as const).map((mode) => (
                         <label
                           key={mode}
-                          className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                          className={`flex min-h-12 cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-base font-semibold transition ${
                             sourceMode === mode
                               ? mode === 'public'
                                 ? 'border-[#9183ad] bg-[#f0edf6] text-[#493d65]'
@@ -1714,31 +1617,14 @@ function Home() {
                     </div>
                   </fieldset>
                   {sourceMode === 'private' && (
-                    <div
-                      className="mt-3 rounded-xl border border-[#e5c5c0] bg-[#fbefed] p-4 text-[11px] leading-relaxed text-[#7f413b]"
-                      role="status"
-                      data-testid="private-source-unavailable"
-                    >
-                      <p className="font-semibold">Private source setup is not ready. No private data is being collected.</p>
-                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                        <div className="rounded-lg border border-[#e8d0cb] bg-white/70 p-3">
-                          <p className="font-semibold">Gmail / shared mailbox</p>
-                          <p className="mt-1">Use account-owner OAuth authorization. A generic API key cannot read a Gmail mailbox.</p>
-                          <span className="mt-2 inline-block font-mono text-[9px] uppercase tracking-wide">Not connected</span>
-                        </div>
-                        <div className="rounded-lg border border-[#e8d0cb] bg-white/70 p-3">
-                          <p className="font-semibold">WhatsApp Business</p>
-                          <p className="mt-1">OAuth or user-owned provider credentials, where supported. Personal chat history is not included.</p>
-                          <span className="mt-2 inline-block font-mono text-[9px] uppercase tracking-wide">Not connected</span>
-                        </div>
-                      </div>
-                      <p className="mt-3">Each signed-in user will use their own provider connection or credentials, and provider charges stay on that user’s provider account. Both connection methods are planned where supported. Secure per-user sign-in and credential storage must be ready before any private crawl is enabled. The account owner or authorized PA must approve access.</p>
+                    <div className="mt-3 rounded-lg border border-[#e5c5c0] bg-[#fbefed] px-4 py-3 text-base leading-relaxed text-[#7f413b]" role="status" data-testid="private-source-unavailable">
+                      Private sources are not connected. No email, mailbox, or WhatsApp data will be collected.
                     </div>
                   )}
                 </>
               )}
 
-              <label htmlFor="subject" className="mb-1.5 mt-4 block text-xs font-semibold text-[#35364a]">
+              <label htmlFor="subject" className="mb-1.5 mt-4 block text-base font-semibold text-[#35364a]">
                 {subjectType === 'company' ? 'Company name' : 'Person name'}
               </label>
               <input
@@ -1749,21 +1635,21 @@ function Home() {
                 minLength={2}
                 maxLength={200}
                 placeholder={subjectType === 'company' ? 'Enter a company name' : 'Enter a person’s name'}
-                className="h-11 w-full rounded-lg border border-[#d9d4df] bg-[#fffefa] px-3 text-sm text-foreground placeholder:text-[#aaa4af] focus:border-[#8c7dae] focus:outline-none"
+                className="h-12 w-full rounded-lg border border-[#d9d4df] bg-[#fffefa] px-3 text-base text-foreground placeholder:text-[#777280] focus:border-[#8c7dae] focus:outline-none"
                 data-testid="input-subject"
               />
 
-              <div className="mt-5 grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_320px]" data-testid="topics-and-links-row">
+              <div className="mt-5" data-testid="topics-and-links-row">
               <fieldset className="min-w-0">
-                <legend className="mb-2 flex w-full items-center justify-between gap-2 text-xs font-semibold text-[#35364a]">
+                <legend className="mb-3 flex w-full items-center justify-between gap-2 text-base font-semibold text-[#35364a]">
                   <span>Choose what to include</span>
-                  <span className="font-mono text-[9px] font-normal text-[#8d8694]">{topics.length} of 5 selected</span>
+                  <span className="font-mono text-xs font-normal text-[#6d6576]">{topics.length} of 5 selected</span>
                 </legend>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
                   {TOPICS.map((topic, index) => (
                     <label
                       key={topic.value}
-                      className={`flex min-h-[68px] cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 text-xs transition ${
+                      className={`flex min-h-[58px] cursor-pointer items-center gap-3 rounded-xl border px-3 py-2.5 text-base transition ${
                         topics.includes(topic.value)
                           ? 'border-[#9284ae] bg-[#f0edf6] text-[#493d65]'
                           : 'border-[#ded9e2] bg-[#fffefa] text-[#777280] hover:border-[#bbb1cc]'
@@ -1778,55 +1664,35 @@ function Home() {
                         data-testid={`checkbox-topic-${topic.value}`}
                       />
                       <span className="min-w-0">
-                        <span className="block font-mono text-[9px] text-[#8b819a]">0{index + 1}</span>
+                        <span className="block font-mono text-xs text-[#71658e]">0{index + 1}</span>
                         <span className="mt-0.5 block font-semibold leading-tight">{topic.label}</span>
                       </span>
                     </label>
                   ))}
                 </div>
               </fieldset>
-              <SourceColumn
-                sources={result?.sources ?? []}
-                searchResultsReturned={result?.searchResultsReturned ?? null}
-                sourceSearchesCompleted={result?.sourceSearchesCompleted ?? 0}
-              />
               </div>
 
-              <label htmlFor="meetingAt" className="mb-1.5 mt-5 block text-xs font-semibold text-[#35364a]">When is the meeting?</label>
+              <label htmlFor="meetingAt" className="mb-1.5 mt-5 block text-base font-semibold text-[#35364a]">Meeting time</label>
               <input
                 id="meetingAt"
                 type="datetime-local"
                 value={meetingAt}
                 onChange={(event) => setMeetingAt(event.target.value)}
                 required
-                className="h-11 w-full rounded-lg border border-[#d9d4df] bg-[#fffefa] px-3 text-sm text-foreground focus:border-[#8c7dae] focus:outline-none"
+                className="h-12 w-full rounded-lg border border-[#d9d4df] bg-[#fffefa] px-3 text-base text-foreground focus:border-[#8c7dae] focus:outline-none"
                 data-testid="input-meeting-time"
               />
               {researchWindow && (
-                <p className="mt-2 rounded-lg bg-[#f2efe8] px-3 py-2 text-[10px] leading-relaxed text-[#625d69]" data-testid="text-research-window">
-                  Exact 30-day research range: <strong>{researchWindow}</strong>
+                <p className="mt-2 text-sm text-[#625d69]" data-testid="text-research-window">
+                  30-day research window ending today: <strong>{researchWindow}</strong>
                 </p>
               )}
-              <div
-                className={`mt-3 flex min-h-9 items-center gap-2 rounded-lg border px-3 py-2 text-[11px] font-medium ${readinessStyles}`}
-                id="meeting-readiness"
-                role="status"
-                aria-live="polite"
-                data-testid="status-meeting-readiness"
-                data-state={readinessState}
-              >
-                <span
-                  className={`h-2 w-2 shrink-0 rounded-full ${readinessState === 'ready' ? 'bg-[#4c966f]' : readinessState === 'not-ready' || readinessState === 'error' ? 'bg-[#c45b50]' : 'animate-pulse bg-[#796a9d]'}`}
-                  aria-hidden="true"
-                />
-                <span>{readinessMessage}</span>
-              </div>
 
-              <div className="mb-1.5 mt-4 flex items-center justify-between">
-                <label htmlFor="context" className="text-xs font-semibold text-[#35364a]">Question or meeting context</label>
-                <span className="font-mono text-[10px] text-[#9992a0]">Optional</span>
+              <div className="mb-1.5 mt-5 flex items-center justify-between">
+                <label htmlFor="context" className="text-base font-semibold text-[#35364a]">Optional context</label>
+                <span className="text-sm text-[#625d69]">Optional</span>
               </div>
-              <p className="mb-1.5 text-[10px] leading-relaxed text-[#777280]">Ask a public question or add a priority, such as “market condition” or “new cable plant.” Matching source excerpts appear first with links; the 30-day window stays the same.</p>
               <textarea
                 id="context"
                 value={context}
@@ -1834,26 +1700,47 @@ function Home() {
                 maxLength={1500}
                 rows={3}
                 placeholder="For example: market condition, new cable plant"
-                className="w-full resize-y rounded-lg border border-[#d9d4df] bg-[#fffefa] px-3 py-2.5 text-sm leading-relaxed text-foreground placeholder:text-[#aaa4af] focus:border-[#8c7dae] focus:outline-none"
+                className="w-full resize-y rounded-lg border border-[#d9d4df] bg-[#fffefa] px-3 py-3 text-base leading-relaxed text-foreground placeholder:text-[#777280] focus:border-[#8c7dae] focus:outline-none"
                 data-testid="input-context"
               />
-              <div className="mt-1 text-right font-mono text-[9px] text-[#aaa4af]">{context.length} / 1500</div>
+              <div className="mt-1 text-right text-sm text-[#625d69]">{context.length} / 1500</div>
 
-              <button type="button" onClick={() => { setPinDialogError(''); setStartPin(''); setPinPromptOpen(true); }} disabled={mutation.isPending || !canStart || !tavilyConfigured || !startPinConfigured || !ownerAccountConfigured || crawlBudgetExhausted || dailyCrawlStartLimitReached || dailySearchLimitInsufficient || crawlAlreadyActive || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || sourceMode === 'private'} className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#2b304a] px-4 text-sm font-semibold text-[#faf7f0] transition hover:bg-[#3c4160] disabled:opacity-55" data-testid="button-generate-briefing">
-                {mutation.isPending ? <><LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />Crawling sources…</> : sourceMode === 'private' ? <><FileText className="h-4 w-4 text-[#c9b9ee]" aria-hidden="true" />Private mode unavailable</> : <><FileText className="h-4 w-4 text-[#c9b9ee]" aria-hidden="true" />{currentRequestFailed ? 'Start again' : hasCurrentResult ? 'Refresh briefing' : 'Start briefing'}<ArrowDown className="ml-auto h-4 w-4 opacity-60" aria-hidden="true" /></>}
-              </button>
-              <p id="form-note" className="mt-3 text-center text-[10px] leading-relaxed text-[#898392]" data-testid="text-tavily-setup">
+              <div className="mt-5 flex flex-col gap-3 border-t border-[#e5e0e7] pt-4 sm:flex-row sm:items-center" data-testid="brief-action-row">
+                <div
+                  className={`flex min-h-12 flex-1 items-center gap-3 rounded-xl border px-4 py-3 text-base font-semibold ${readinessStyles}`}
+                  id="meeting-readiness"
+                  role="status"
+                  aria-live="polite"
+                  data-testid="status-meeting-readiness"
+                  data-state={readinessState}
+                >
+                  <span
+                    className={`h-3 w-3 shrink-0 rounded-full ${readinessState === 'ready' ? 'bg-[#4c966f]' : readinessState === 'not-ready' || readinessState === 'error' ? 'bg-[#c45b50]' : 'animate-pulse bg-[#796a9d]'}`}
+                    aria-hidden="true"
+                  />
+                  <span>{readinessMessage}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setPinDialogError(''); setStartPin(''); setPinPromptOpen(true); }}
+                  disabled={mutation.isPending || !canStart || !tavilyConfigured || !startPinConfigured || !ownerAccountConfigured || crawlBudgetExhausted || dailyCrawlStartLimitReached || dailySearchLimitInsufficient || crawlAlreadyActive || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || sourceMode === 'private'}
+                  className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#292e46] px-8 text-lg font-bold text-white transition hover:bg-[#3c4160] disabled:cursor-not-allowed disabled:opacity-45"
+                  data-testid="button-generate-briefing"
+                >
+                  {mutation.isPending
+                    ? <><LoaderCircle className="h-5 w-5 animate-spin" aria-hidden="true" />Preparing brief…</>
+                    : <><FileText className="h-5 w-5" aria-hidden="true" />Brief<ArrowDown className="h-4 w-4" aria-hidden="true" /></>}
+                </button>
+              </div>
+              <p id="form-note" className="mt-3 text-sm leading-relaxed text-[#625d69]" data-testid="text-tavily-setup">
                 {sourceStatusQuery.isLoading
-                  ? 'Checking Tavily source-search connection…'
-                  : tavilyConfigured
-                    ? keySource === 'project-owner'
-                      ? 'The configured owner is using the existing project Tavily key. It is restricted to that account; Tavily bills the account that owns the project key. Each selected tab sends one basic search request (up to 5 per crawl and 8 results per tab). Positive and negative signals are scored locally from cited source text. AI stays off.'
-                      : 'Your personal Tavily key is connected and billed to its Tavily account. Each selected tab sends one basic search request (up to 5 per crawl and 8 results per tab). Positive and negative signals are scored locally from cited source text. AI stays off.'
-                    : 'The owner project key is unavailable for this account. Add a personal Tavily API key in account settings; keys are encrypted and are not shared across accounts.'}
-                {' '}The app-wide safety limit remains 120 seconds of crawl runtime per calendar day in IST, resetting at midnight, with a three-minute backup hard stop. Only the configured owner account can currently start crawls.
-                {dailyCrawlRemainingMs !== null && ` ${Math.ceil(dailyCrawlRemainingMs / 1000)} seconds remain in the shared allowance.`}
-                 {canStart && dailyCrawlStartsLimit !== null && dailyCrawlStartsUsed !== null && dailySearchRequestsLimit !== null && dailySearchRequestsUsed !== null && ` Developer daily limits: ${dailyCrawlStartsUsed}/${dailyCrawlStartsLimit} crawl starts and ${dailySearchRequestsUsed}/${dailySearchRequestsLimit} Tavily search requests used; resets at midnight IST.`}
+                  ? 'Checking source search…'
+                  : !tavilyConfigured
+                    ? 'Source search key not available. Check source search key settings above.'
+                    : `Source search connected. ${dailyCrawlRemainingMs !== null ? `${Math.ceil(dailyCrawlRemainingMs / 1000)} seconds remain in today’s shared crawl allowance.` : ''}`}
+                {' '}AI remains off. Briefing starts only when you press Brief and verify the PIN.
               </p>
+              <AiGuardrailPanel />
               </>
               )}
             </form>
@@ -1943,14 +1830,6 @@ function Home() {
               </div>
             )}
 
-            <div className="mt-5 flex items-start gap-2.5 px-1 text-[11px] leading-relaxed text-[#777280]">
-              <span className="mt-0.5 font-mono text-[9px] text-[#897ca6]">NOTE</span>
-              <p>
-                {sourceMode === 'public'
-                  ? 'This crawl uses public sources only. Private mailboxes and WhatsApp messages are not read. Each factual point links to its original reporting.'
-                  : 'Private source setup is unavailable. No mailbox or WhatsApp data will be read until the account owner or authorized delegate connects and approves access.'}
-              </p>
-            </div>
           </section>
 
           <section className="min-w-0" aria-live="polite" aria-label="Briefing">
@@ -1958,12 +1837,9 @@ function Home() {
               <LoadingBrief />
             ) : result ? (
               <BriefingDocument result={result} />
-            ) : (
-              <EmptyBriefing isSignedIn={isSignedIn === true} />
-            )}
+            ) : null}
           </section>
         </div>
-        <footer className="no-print mt-14 border-t border-[#d9d4df] pt-4 text-center font-mono text-[9px] uppercase tracking-[.14em] text-[#898392]">A clearer first five minutes</footer>
       </div>
     </main>
   );
@@ -1985,36 +1861,6 @@ function LoadingBrief() {
         <div className="mt-3 h-5 w-2/3 animate-pulse rounded bg-[#efecf1]" />
       </div>
       <p className="text-center font-mono text-[10px] uppercase tracking-[.14em] text-[#71658e]">Gathering what’s worth your attention</p>
-    </div>
-  );
-}
-
-function EmptyBriefing({ isSignedIn }: { isSignedIn: boolean }) {
-  return (
-    <div className="fade-up space-y-5" data-testid="empty-briefing">
-      {isSignedIn && (
-        <section className="flex flex-wrap items-center justify-between gap-5 rounded-2xl border border-border bg-card px-5 py-5 sm:px-6" aria-labelledby="voice-empty-heading">
-          <div className="max-w-md">
-            <SectionEyebrow>Voice controls</SectionEyebrow>
-            <h3 id="voice-empty-heading" className="mt-2 font-serif text-2xl text-foreground">AI and device speech</h3>
-            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">The AI voice button is shown but disabled. Device read-aloud becomes available after a briefing is collected.</p>
-          </div>
-          <VoiceControls text="" />
-        </section>
-      )}
-      <div className="flex min-h-[420px] flex-col items-center justify-center rounded-2xl border border-dashed border-[#d1cad9] bg-[#f8f6f2]/80 px-6 py-12 text-center">
-        <div className="relative flex h-24 w-24 items-center justify-center">
-          <span className="absolute inset-1 rounded-full border border-[#ded8e5]" aria-hidden="true" />
-          <span className="absolute inset-4 rounded-full border border-[#ded8e5]" aria-hidden="true" />
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#292e46] text-[#d9cef3]"><FileText className="h-5 w-5" aria-hidden="true" /></span>
-        </div>
-        <p className="mt-7 font-mono text-[10px] uppercase tracking-[.18em] text-[#7a6e95]">Ready when you are</p>
-        <h2 className="mt-3 max-w-sm font-serif text-3xl leading-tight text-[#2e3147]">Start with the conversation ahead.</h2>
-        <p className="mt-3 max-w-sm text-sm leading-relaxed text-[#777280]">Add a name and meeting time. Your sourced briefing will appear here, ready to scan or print.</p>
-        <div className="mt-8 flex items-center gap-3 text-[10px] text-[#8f8996]">
-          <span className="h-px w-8 bg-[#d8d1df]" /><span className="font-mono uppercase tracking-[.13em]">Context in, clarity out</span><span className="h-px w-8 bg-[#d8d1df]" />
-        </div>
-      </div>
     </div>
   );
 }

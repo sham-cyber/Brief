@@ -136,3 +136,9 @@ Keep the README's wording positive and neutral while accurately describing the c
 **Why:** The user asked not to put negative wording in the README.
 
 **How to apply:** Describe current capabilities and setup affirmatively; preserve factual security, billing, and scope details without unnecessary negative phrasing.
+
+The current Briefing Agent preview is the app being developed and will become the live app; there is no separate live app to target.
+
+**Why:** The user clarified that work should be done in the current preview, not in a separate mockup.
+
+**How to apply:** Make requested product UI changes in the existing Briefing Agent artifact and verify them in its preview. Do not treat a separate sandbox mockup as the product.
