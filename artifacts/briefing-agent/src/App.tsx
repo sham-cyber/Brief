@@ -1983,7 +1983,24 @@ function UserPortal() {
 function SignInPage() {
   return (
     <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4 py-8">
-      <SignIn routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} />
+      <div className="w-full max-w-[440px]">
+        <SignIn routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} />
+        <section className="mt-4 rounded-xl border border-[#ded9e2] bg-white px-5 py-4" aria-label="Account help">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-base font-semibold text-[#292e46]">New to Briefing Agent?</p>
+            <a
+              href={`${basePath}/sign-up`}
+              className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[#292e46] px-5 text-base font-semibold text-white transition hover:bg-[#3c4160]"
+              data-testid="button-create-account-sign-in"
+            >
+              Create account
+            </a>
+          </div>
+          <p className="mt-3 text-sm leading-relaxed text-[#625d69]" data-testid="text-password-reset-help">
+            Forgot your password? For email-and-password sign-in, enter your email above and choose Continue; use the reset option on the password step. For Google sign-in, reset it with Google.
+          </p>
+        </section>
+      </div>
     </div>
   );
 }
