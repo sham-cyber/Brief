@@ -26,11 +26,19 @@ The PIN and owner email are server-side secrets. Configure their values in Repli
 
 ### Crawl guardrails
 
-- Meeting-time edits prepare the brief; the search begins when the user presses **Start/Crawl**.
+- Meeting-time edits prepare the brief; the search begins when the user presses **Brief**.
 - One Tavily request is sent for each selected topic, up to five per crawl and eight results per topic.
 - The configured developer account is limited to 10 crawl starts and 10 search requests per Asia/Kolkata calendar day.
 - The app also enforces a shared 120-second crawl runtime per Asia/Kolkata calendar day, one active crawl at a time, a three-minute hard stop, and a maximum of 10 Tavily requests per five minutes.
 - Provider usage is charged to the Tavily account whose key is used. Store the project key in the hosting secret manager.
+
+### Personal Tavily key security
+
+- A personal key is sent to the authenticated API server and encrypted at rest with AES-256-GCM, scoped to the signed-in account. The app returns connection status only; it never returns the saved key to the browser.
+- This is not end-to-end encryption: the server decrypts a saved key to call Tavily. An app operator with access to both the database and server encryption secret could decrypt it, so users should save keys only when they trust the operator.
+- The key is held temporarily in the entry field, is not saved in browser storage, and the field clears after a successful save. Credential responses are marked non-cacheable.
+- **Remove saved key** deletes the app's encrypted copy only. It does not revoke or disable the provider key. To stop the key from working, delete it from the [Tavily dashboard](https://app.tavily.com/home), then remove its saved copy in the app. See [Tavily's key deletion instructions](https://help.tavily.com/articles/4695639825-how-can-i-delete-my-api-key).
+- The configured owner's crawls use the project key when available. Removing a personal key will not disable that project key; remove it from Replit Secrets and revoke it in Tavily.
 
 ## Run in Replit
 

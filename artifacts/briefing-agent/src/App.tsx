@@ -99,6 +99,8 @@ async function sendAccountRequest(path: string, method: string, body?: unknown) 
   const response = await fetch(apiUrl(path), {
     method,
     credentials: 'include',
+    cache: 'no-store',
+    referrerPolicy: 'no-referrer',
     headers: body ? { 'content-type': 'application/json' } : undefined,
     body: body ? JSON.stringify(body) : undefined,
   });
@@ -126,11 +128,12 @@ type TavilyCredentialStatus = {
 };
 
 function TavilyKeySettings({ onChanged, projectKeyActive }: { onChanged: () => void; projectKeyActive: boolean }) {
-  const { isLoaded, isSignedIn } = useUser();
+  const { isLoaded, isSignedIn, user } = useUser();
   const [status, setStatus] = useState<TavilyCredentialStatus | null>(null);
   const [apiKey, setApiKey] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const [confirmRemove, setConfirmRemove] = useState(false);
 
   const refreshStatus = useCallback(async () => {
     const payload = await sendAccountRequest('tavily-credentials', 'GET') as TavilyCredentialStatus;
@@ -142,12 +145,25 @@ function TavilyKeySettings({ onChanged, projectKeyActive }: { onChanged: () => v
       setStatus(null);
       setApiKey('');
       setMessage('');
+      setConfirmRemove(false);
       return;
     }
-    void refreshStatus().catch((error: unknown) => {
-      setMessage(error instanceof Error ? error.message : 'Tavily connection status could not be loaded.');
-    });
-  }, [isLoaded, isSignedIn, refreshStatus]);
+    let active = true;
+    setStatus(null);
+    setApiKey('');
+    setMessage('');
+    setConfirmRemove(false);
+    void sendAccountRequest('tavily-credentials', 'GET')
+      .then((payload) => {
+        if (active) setStatus(payload as TavilyCredentialStatus);
+      })
+      .catch((error: unknown) => {
+        if (active) setMessage(error instanceof Error ? error.message : 'Tavily connection status could not be loaded.');
+      });
+    return () => {
+      active = false;
+    };
+  }, [isLoaded, isSignedIn, user?.id]);
 
   const saveKey = async () => {
     setMessage('');
@@ -159,7 +175,7 @@ function TavilyKeySettings({ onChanged, projectKeyActive }: { onChanged: () => v
     try {
       await sendAccountRequest('tavily-credentials', 'PUT', { apiKey: apiKey.trim() });
       setApiKey('');
-      setMessage('Your Tavily key is saved securely for this account.');
+      setMessage('Saved. The app cleared the field; your key is stored encrypted on the server for this account.');
       await refreshStatus();
       onChanged();
     } catch (error) {
@@ -175,7 +191,8 @@ function TavilyKeySettings({ onChanged, projectKeyActive }: { onChanged: () => v
     try {
       await sendAccountRequest('tavily-credentials', 'DELETE');
       setApiKey('');
-      setMessage('Your Tavily key has been removed from this account.');
+      setConfirmRemove(false);
+      setMessage('The saved copy was deleted from this app. Revoke the key at Tavily too if you want it disabled.');
       await refreshStatus();
       onChanged();
     } catch (error) {
@@ -188,65 +205,98 @@ function TavilyKeySettings({ onChanged, projectKeyActive }: { onChanged: () => v
   if (!isLoaded || !isSignedIn) return null;
 
   return (
-    <section className="mb-5 rounded-xl border border-[#ded9e2] bg-[#f8f6fb] p-4" aria-label="Tavily account key" data-testid="tavily-key-settings">
+    <section className="mb-5 rounded-xl border border-[#ded9e2] bg-[#f8f6fb] p-5 sm:p-6" aria-label="Tavily account key" data-testid="tavily-key-settings">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h3 className="text-xs font-semibold text-[#35364a]">Your Tavily key</h3>
-          <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-[#777280]">
-            Personal keys are encrypted, account-scoped, and billed to their Tavily account. The configured owner uses the project key when available; that key is never shared with other accounts.
+          <h3 className="text-base font-semibold text-[#292e46]">Tavily key and billing</h3>
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[#625d69]">
+            A personal key is sent to this app’s server and encrypted before it is saved to your account. The app does not persist it in browser storage or return it to the page, and the entry field clears after saving. Your Tavily account pays for searches using this key.
           </p>
         </div>
-        <span className={`rounded-full px-2 py-1 font-mono text-[9px] uppercase tracking-wide ${projectKeyActive || status?.connected ? 'bg-[#e8f3eb] text-[#32634a]' : 'bg-[#f3eee3] text-[#7b6338]'}`} data-testid="tavily-key-status">
+        <span className={`rounded-full px-3 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-wide ${projectKeyActive || status?.connected ? 'bg-[#e8f3eb] text-[#32634a]' : 'bg-[#f3eee3] text-[#7b6338]'}`} data-testid="tavily-key-status">
           {projectKeyActive ? 'Project key active' : status?.connected ? 'Personal key connected' : 'Not connected'}
         </span>
       </div>
       {projectKeyActive && (
-        <p className="mt-3 rounded-lg border border-[#c7dfd2] bg-[#edf6f0] px-3 py-2 text-[10px] text-[#32634a]" role="status" data-testid="project-tavily-key-notice">
-          The existing project Tavily key is being used only for the configured owner account. Other accounts cannot use it.
-          {status?.connected ? ' A personal key is also saved, but the project key takes priority for this account.' : ''}
+        <p className="mt-4 rounded-lg border border-[#c7dfd2] bg-[#edf6f0] px-4 py-3 text-sm leading-relaxed text-[#32634a]" role="status" data-testid="project-tavily-key-notice">
+          This account is using the project key, not a saved personal key. Only the configured owner account can use that project key; other accounts cannot.
+          {status?.connected ? ' Your personal key is also saved, but it is not active while the project key takes priority.' : ''}
+          {' '}Removing a personal key here will not disable the project key. To disable the project key, remove it from the server’s Replit Secrets and revoke it in Tavily.
         </p>
       )}
       {!status?.storageReady && (
-        <p className="mt-3 rounded-lg border border-[#e5c5c0] bg-[#fbefed] px-3 py-2 text-[10px] text-[#7f413b]" role="status">
+        <p className="mt-4 rounded-lg border border-[#e5c5c0] bg-[#fbefed] px-4 py-3 text-sm leading-relaxed text-[#7f413b]" role="status">
           Secure key storage is not configured on the server yet. You cannot save a key until the app owner configures it.
         </p>
       )}
-      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-        <input
-          type="password"
-          autoComplete="new-password"
-          spellCheck={false}
-          value={apiKey}
-          onChange={(event) => setApiKey(event.target.value)}
-          minLength={20}
-          maxLength={4096}
-          placeholder={status?.connected ? 'Enter a replacement key' : 'Paste your Tavily API key'}
-          aria-label="Your Tavily API key"
-          className="h-10 min-w-0 flex-1 rounded-lg border border-[#d9d4df] bg-white px-3 text-xs text-foreground placeholder:text-[#aaa4af] focus:border-[#8c7dae] focus:outline-none"
-          data-testid="input-user-tavily-key"
-        />
-        <button
-          type="button"
-          onClick={() => void saveKey()}
-          disabled={busy || !status?.storageReady || apiKey.trim().length < 20}
-          className="h-10 rounded-lg bg-[#292e46] px-4 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-          data-testid="button-save-user-tavily-key"
-        >
-          {busy ? 'Saving…' : 'Save key'}
-        </button>
-        {status?.connected && (
+      <p className="mt-4 rounded-lg border border-[#e5c5c0] bg-[#fff8f7] px-4 py-3 text-sm leading-relaxed text-[#713c38]" role="note" data-testid="tavily-key-trust-boundary">
+        <span className="font-semibold">Trust boundary:</span> this is server-side encryption, not end-to-end encryption. The server decrypts the key to search, so an app operator with access to both the database and server encryption secret could decrypt saved keys. Save a key only if you trust the operator.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm font-semibold">
+        <a href="https://app.tavily.com/home" target="_blank" rel="noopener noreferrer" className="text-[#594b87] underline underline-offset-2" data-testid="link-tavily-key-dashboard">
+          Manage or delete keys at Tavily
+        </a>
+        <a href="https://help.tavily.com/articles/4695639825-how-can-i-delete-my-api-key" target="_blank" rel="noopener noreferrer" className="text-[#594b87] underline underline-offset-2" data-testid="link-tavily-key-revocation-help">
+          Tavily’s key deletion instructions
+        </a>
+      </div>
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+        <label className="min-w-0 flex-1">
+          <span className="mb-1.5 block text-sm font-medium text-[#35364a]">API key</span>
+          <input
+            type="password"
+            autoComplete="off"
+            spellCheck={false}
+            value={apiKey}
+            onChange={(event) => setApiKey(event.target.value)}
+            minLength={20}
+            maxLength={4096}
+            placeholder={status?.connected ? 'Enter a replacement key' : 'Paste your Tavily API key'}
+            aria-label="Your Tavily API key"
+            className="h-12 w-full min-w-0 rounded-lg border border-[#d9d4df] bg-white px-4 text-base text-foreground placeholder:text-[#898392] focus:border-[#594b87] focus:outline-none focus:ring-2 focus:ring-[#594b87]/20"
+            data-testid="input-user-tavily-key"
+          />
+        </label>
+        <div className="flex items-end gap-2">
           <button
             type="button"
-            onClick={() => void removeKey()}
-            disabled={busy}
-            className="h-10 rounded-lg border border-[#e4b7b2] bg-white px-4 text-xs font-semibold text-[#98453e] disabled:cursor-not-allowed disabled:opacity-50"
-            data-testid="button-remove-user-tavily-key"
+            onClick={() => void saveKey()}
+            disabled={busy || !status?.storageReady || apiKey.trim().length < 20}
+            className="h-12 rounded-lg bg-[#292e46] px-5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            data-testid="button-save-user-tavily-key"
           >
-            Remove
+            {busy ? 'Saving…' : 'Save key'}
           </button>
-        )}
+          {status?.connected && !confirmRemove && (
+            <button
+              type="button"
+              onClick={() => setConfirmRemove(true)}
+              disabled={busy}
+              className="h-12 rounded-lg border border-[#c98e87] bg-white px-4 text-sm font-semibold text-[#8e3f39] disabled:cursor-not-allowed disabled:opacity-50"
+              data-testid="button-remove-user-tavily-key"
+            >
+              Remove saved key
+            </button>
+          )}
+        </div>
       </div>
-      {message && <p className="mt-2 text-[10px] text-[#625d69]" role="status" aria-live="polite">{message}</p>}
+      {confirmRemove && (
+        <div className="mt-4 rounded-lg border border-[#e4b7b2] bg-[#fff8f7] p-4" role="alert" data-testid="confirm-remove-tavily-key">
+          <p className="text-sm font-semibold text-[#713c38]">Remove the saved copy from this app?</p>
+          <p className="mt-1 text-sm leading-relaxed text-[#713c38]">
+            This deletes the encrypted copy from your app account. It does not disable the key at Tavily. Use the Tavily links above to delete the provider key first, then remove the saved copy here.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button type="button" onClick={() => setConfirmRemove(false)} disabled={busy} className="h-10 rounded-lg border border-[#d9d4df] bg-white px-4 text-sm font-semibold text-[#35364a]" data-testid="button-cancel-remove-user-tavily-key">
+              Keep key
+            </button>
+            <button type="button" onClick={() => void removeKey()} disabled={busy} className="h-10 rounded-lg bg-[#8e3f39] px-4 text-sm font-semibold text-white disabled:opacity-50" data-testid="button-confirm-remove-user-tavily-key">
+              {busy ? 'Removing…' : 'Delete saved copy'}
+            </button>
+          </div>
+        </div>
+      )}
+      {message && <p className="mt-3 text-sm text-[#4e4957]" role="status" aria-live="polite" data-testid="status-tavily-key-message">{message}</p>}
     </section>
   );
 }

@@ -15,6 +15,12 @@ import {
 
 const router: IRouter = Router();
 
+router.use((_req, res, next) => {
+  res.setHeader("Cache-Control", "private, no-store, max-age=0");
+  res.setHeader("Pragma", "no-cache");
+  next();
+});
+
 function authenticatedUserId(req: Request): string | null {
   return getAuth(req).userId ?? null;
 }

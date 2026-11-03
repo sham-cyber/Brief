@@ -81,7 +81,7 @@ The configured developer may use the existing project-level Tavily key only on t
 
 **Why:** The user clarified that the old project-wide key should remain available for the developer's own sign-in only, while other accounts' credentials stay separate.
 
-**How to apply:** Verify the signed-in account is the configured owner before selecting the project key. Keep personal keys encrypted, account-scoped, and hidden from the browser. Preserve the owner-only crawl restriction unless the user changes it.
+**How to apply:** Verify the signed-in account is the configured owner before selecting the project key. Store personal keys encrypted at rest and account-scoped, but disclose that server-side encryption is not end-to-end: an operator with access to the database and server encryption secret can decrypt them. Distinguish deleting the app's saved copy from deleting/revoking the provider key, and link to the provider's instructions. Disabling the project key requires removing its server secret and deleting the key at Tavily. Preserve the owner-only crawl restriction unless the user changes it.
 
 Add relevant photos alongside video previews within existing topic results; do not create a media tab or extra Tavily search. Media must come from an accepted source for the selected topic, and the user chooses whether to open or play it.
 
