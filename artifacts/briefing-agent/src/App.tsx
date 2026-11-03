@@ -69,6 +69,7 @@ const PERSON_ROLES = [
 type PersonRole = typeof PERSON_ROLES[number]['value'];
 type SourceMode = 'public' | 'private';
 const SPEECH_WORD_LIMIT = 280;
+const PRINT_WORD_LIMIT = 400;
 const AI_REQUESTS_PER_TAB = 1;
 const AI_SPEECH_LIMIT_SECONDS = 120;
 
@@ -945,7 +946,7 @@ function PrintOnePageBrief({ result, activeTopic }: { result: BriefingResult; ac
   const printHighlights = printTopics.flatMap((topic) =>
     result.highlights
       .filter((item) => item.category === topic)
-      .slice(0, topic === 'risk' ? 1 : 2),
+      .slice(0, 1),
   );
   const firstQuestion = printTopics.includes('risk') ? result.questions.slice(0, 1) : [];
   const sourceIds = new Set([
@@ -957,6 +958,48 @@ function PrintOnePageBrief({ result, activeTopic }: { result: BriefingResult; ac
   ]);
   const sources = result.sources.filter((source) => sourceIds.has(source.id));
   const briefLine = (text: string, maxLength: number) => text.length > maxLength ? `${text.slice(0, maxLength).trimEnd()}…` : text;
+  const printText = (text: string, maxLength: number, maxWords: number) => {
+    const limited = briefLine(text, maxLength).trim();
+    const words = limited.match(/\S+/g) ?? [];
+    return words.length > maxWords ? `${words.slice(0, maxWords).join(' ')}…` : limited;
+  };
+  const overviewText = printText(printBrief.text, 420, 70);
+  const topPositiveText = printText(printBrief.topPositive.text, 130, 18);
+  const topNegativeText = printText(printBrief.topNegative.text, 130, 18);
+  const printTopicBlocks = printTopics.map((topic) => {
+    const topicInfo = TOPICS.find((item) => item.value === topic)!;
+    const highlights = printHighlights
+      .filter((item) => item.category === topic)
+      .map((highlight) => ({
+        ...highlight,
+        printTitle: printText(highlight.title, 100, 14),
+        printSummary: printText(highlight.summary, 170, 34),
+      }));
+    const emptyMessage = topic === 'hire'
+      ? 'No confirmed-hire reports were found in this 30-day public-news crawl; this does not confirm that no vacancies exist.'
+      : topic === 'news'
+        ? 'No separate general-news items were found in this crawl.'
+        : `No sourced ${topicInfo.label.toLowerCase()} items were found in this 30-day crawl.`;
+    const question = topic === 'risk' ? result.questions[0] : undefined;
+    return {
+      topic,
+      topicInfo,
+      highlights,
+      emptyMessage: highlights.length ? undefined : printText(emptyMessage, 120, 18),
+      question,
+      questionText: question ? printText(question.text, 150, 20) : '',
+    };
+  });
+  const printedWordCount = [
+    overviewText,
+    topPositiveText,
+    topNegativeText,
+    ...printTopicBlocks.flatMap((block) => [
+      ...block.highlights.flatMap((highlight) => [highlight.printTitle, highlight.printSummary]),
+      block.emptyMessage ?? '',
+      block.questionText,
+    ]),
+  ].reduce((count, text) => count + (text.match(/\S+/g)?.length ?? 0), 0);
 
   return (
     <section className="print-only print-one-page" aria-label="One-page printable briefing" data-testid="print-one-page-brief">
@@ -967,39 +1010,29 @@ function PrintOnePageBrief({ result, activeTopic }: { result: BriefingResult; ac
           <span>Meeting: {formatDate(result.meetingAt)}</span>
           <span>Crawl started: {formatDate(result.generatedAt)}</span>
           <span>30-day research window: {formatWindow(result.windowStart, result.windowEnd)}</span>
+          <span data-testid="text-print-word-count">Brief text: {printedWordCount} / {PRINT_WORD_LIMIT} words; sources listed separately</span>
         </div>
       </header>
       <section className="print-page-overview">
         <h2>Brief</h2>
-        <p>{briefLine(printBrief.text, 420)} <PrintReferences sourceIds={printBrief.sourceIds} sources={result.sources} /></p>
-        <p><strong>Top positive:</strong> {briefLine(printBrief.topPositive.text, 130)} <PrintReferences sourceIds={printBrief.topPositive.sourceIds} sources={result.sources} /></p>
-        <p><strong>Top negative:</strong> {briefLine(printBrief.topNegative.text, 130)} <PrintReferences sourceIds={printBrief.topNegative.sourceIds} sources={result.sources} /></p>
+        <p>{overviewText} <PrintReferences sourceIds={printBrief.sourceIds} sources={result.sources} /></p>
+        <p><strong>Top positive:</strong> {topPositiveText} <PrintReferences sourceIds={printBrief.topPositive.sourceIds} sources={result.sources} /></p>
+        <p><strong>Top negative:</strong> {topNegativeText} <PrintReferences sourceIds={printBrief.topNegative.sourceIds} sources={result.sources} /></p>
       </section>
       <div className="print-topic-grid">
-        {printTopics.map((topic) => {
-          const topicInfo = TOPICS.find((item) => item.value === topic)!;
-          const highlights = result.highlights
-            .filter((item) => item.category === topic)
-            .slice(0, topic === 'risk' ? 1 : 2);
-          const question = topic === 'risk' ? result.questions[0] : undefined;
+        {printTopicBlocks.map(({ topic, topicInfo, highlights, emptyMessage, question, questionText }) => {
           return (
             <section key={topic} className="print-topic">
               <h2>{topicInfo.label}</h2>
               {highlights.length ? (
                 highlights.map((highlight, index) => (
                   <p key={`${highlight.title}-${index}`} className={index > 0 ? 'print-highlight-extra' : undefined}>
-                    <strong>{briefLine(highlight.title, 100)}.</strong> {briefLine(highlight.summary, 170)}{' '}
+                    <strong>{highlight.printTitle}.</strong> {highlight.printSummary}{' '}
                     <PrintReferences sourceIds={highlight.sourceIds} sources={result.sources} />
                   </p>
                 ))
               ) : (
-                <p>
-                  {topic === 'hire'
-                    ? 'No confirmed-hire reports were found in this 30-day public-news crawl; this does not confirm that no vacancies exist.'
-                    : topic === 'news'
-                      ? 'No separate general-news items were found in this crawl.'
-                      : `No sourced ${topicInfo.label.toLowerCase()} items were found in this 30-day crawl.`}
-                </p>
+                <p>{emptyMessage}</p>
               )}
               {topic === 'hire' && openRoleSearchSubject && (
                 <p className="print-question">
@@ -1010,7 +1043,7 @@ function PrintOnePageBrief({ result, activeTopic }: { result: BriefingResult; ac
                   {' on LinkedIn; listings are not crawled automatically.'}
                 </p>
               )}
-              {question && <p className="print-question"><strong>Open question:</strong> {briefLine(question.text, 150)} <PrintReferences sourceIds={question.sourceIds} sources={result.sources} /></p>}
+              {question && <p className="print-question"><strong>Open question:</strong> {questionText} <PrintReferences sourceIds={question.sourceIds} sources={result.sources} /></p>}
             </section>
           );
         })}

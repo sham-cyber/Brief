@@ -8,9 +8,9 @@ A source-first pre-meeting briefing app. Choose a company or person, select the 
 
 - Supports Company and Person briefs, with role context for Chairman / CEO, MP / public office, and Corporate person.
 - Searches up to five selectable blocks: News, Hires, Launches, Financial Facts, and Risks & Open Questions.
-- Uses Tavily for one news search per selected block; validates dates, links, subject match, and topic relevance before including results.
+- Uses Tavily for one basic search per selected topic, up to eight results per topic; validates dates, links, subject match, and topic relevance before including results.
 - Shows source links and, when Tavily returns them for an accepted source, a photo or supported video preview.
-- Provides a concise brief, a one-page print layout, and browser read-aloud.
+- Provides a concise brief and a one-page print with up to 400 words of briefing text, plus its cited source list, and browser read-aloud.
 
 Current flow centers on cited public-source results, on-demand briefings, and transient output. Separate future work may cover AI and user-authorized private-source connections.
 
@@ -18,11 +18,11 @@ Current flow centers on cited public-source results, on-demand briefings, and tr
 
 1. Open the app and sign in through Clerk. Sign-up is available for reviewers.
 2. Enter a company or person, complete the required role details, set the meeting time, and choose at least one topic. Context is optional.
-3. Press **Start/Crawl**. The app prompts for the four-digit start PIN.
+3. Press **Brief**. The app prompts for the four-digit start PIN.
 4. The configured developer account and `BRIEFING_START_PIN` are required to start a crawl. This keeps use of the project Tavily key with its owner.
 5. After a successful crawl, follow source links to verify claims. Use Print for the one-page layout.
 
-The PIN and owner email are server-side secrets. Store their values in the hosting secret manager and share them only through a private channel when needed. Repeated incorrect PIN attempts are temporarily rate-limited.
+The PIN and owner email are server-side secrets. Configure their values in Replit Secrets or your hosting provider's secret manager; never put the PIN value in the README, source code, or Git history. Repeated incorrect PIN attempts are temporarily rate-limited.
 
 ### Crawl guardrails
 
@@ -84,7 +84,7 @@ Set values in Replit Secrets or your hosting provider's secret manager. This tab
 | `CLERK_SECRET_KEY` | Server-side Clerk authentication |
 | `VITE_CLERK_PUBLISHABLE_KEY` | Clerk sign-in UI |
 | `BRIEFING_OWNER_EMAIL` | Email allowed to start crawls |
-| `BRIEFING_START_PIN` | Four-digit server-side crawl PIN |
+| `BRIEFING_START_PIN` | Four-digit server-side crawl PIN; store its value only in the secret manager |
 | `TAVILY_API_KEY` | Project Tavily key, restricted to the configured owner |
 | `USER_CREDENTIALS_ENCRYPTION_KEY` | Encryption key for securely saved user Tavily credentials |
 
