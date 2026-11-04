@@ -1,3 +1,6 @@
+// Copyright 2026 Sham Mohite
+// SPDX-License-Identifier: Apache-2.0
+
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { getGetBriefingSourceStatusQueryKey, useCreateBriefing, useGetBriefingSourceStatus } from '@workspace/api-client-react';

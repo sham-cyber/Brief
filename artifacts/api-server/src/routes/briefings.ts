@@ -1,3 +1,6 @@
+// Copyright 2026 Sham Mohite
+// SPDX-License-Identifier: Apache-2.0
+
 import { Router, type IRouter } from "express";
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import {

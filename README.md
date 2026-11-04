@@ -1,5 +1,9 @@
 # Briefing Agent
 
+**Author:** Sham Mohite
+
+**Copyright:** © 2026 Sham Mohite
+
 A source-first pre-meeting briefing app. Choose a company or person, select the topics that matter, and manually gather public reporting from the 30 days ending when the briefing starts. Each factual item links to its source.
 
 > **Hackathon prototype:** Add the demo URL and presentation links here when they are ready for submission.
@@ -111,7 +115,7 @@ Hackathon rules differ, so follow the event's submission form and deadline. A ty
 
 ## License
 
-This repository is licensed under the MIT License. See [LICENSE](./LICENSE). Third-party packages and assets remain subject to their respective licenses.
+This repository is licensed under the Apache License 2.0. See [LICENSE](./LICENSE) and [NOTICE](./NOTICE). Third-party packages and assets remain subject to their respective licenses.
 
 Before public release, review the repository contents and include the information required by the event.
 
