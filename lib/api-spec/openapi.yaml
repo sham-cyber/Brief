@@ -14,6 +14,8 @@ tags:
     description: Source-grounded pre-meeting briefings
   - name: person-profiles
     description: Optional account-scoped person details
+  - name: sap-connection
+    description: Owner-managed SAP S/4HANA OData connection
 paths:
   /tavily-credentials:
     get:
@@ -110,6 +112,130 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /sap-connection:
+    get:
+      operationId: getSapConnectionSettings
+      tags: [sap-connection]
+      summary: Get safe SAP connection settings for the configured app owner
+      responses:
+        "200":
+          description: Connection details without OAuth credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SapConnectionSettings"
+        "401":
+          description: Sign-in is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Only the configured app owner can manage this connection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    put:
+      operationId: saveSapConnectionSettings
+      tags: [sap-connection]
+      summary: Save an owner-managed SAP S/4HANA OData connection
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SapConnectionInput"
+      responses:
+        "200":
+          description: Saved status without returning OAuth credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SapConnectionSettings"
+        "400":
+          description: Invalid SAP connection settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Sign-in is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Only the configured app owner can manage this connection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: Encrypted credential storage is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: deleteSapConnectionSettings
+      tags: [sap-connection]
+      summary: Delete the configured owner's saved SAP connection
+      responses:
+        "200":
+          description: Saved SAP connection deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SapConnectionDeleteResult"
+        "401":
+          description: Sign-in is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Only the configured app owner can manage this connection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /sap-connection/test:
+    post:
+      operationId: testSapConnection
+      tags: [sap-connection]
+      summary: Test saved SAP OAuth and OData metadata without reading business records
+      responses:
+        "200":
+          description: SAP connection test result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SapConnectionTestResult"
+        "401":
+          description: Sign-in is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Only the configured app owner can test this connection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Wait before testing the SAP connection again
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: SAP connection is not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /briefings:
     get:
       operationId: getBriefingSourceStatus
@@ -326,6 +452,135 @@ components:
     SapDataArea:
       type: string
       enum: [store, production, maintenance, inventory, sales, hr, power_electrical_solar]
+    SapConnectionAreaMapping:
+      type: object
+      properties:
+        area:
+          $ref: "#/components/schemas/SapDataArea"
+        resourcePath:
+          type: string
+          minLength: 1
+          maxLength: 300
+        filterTemplate:
+          type: string
+          maxLength: 1000
+          description: OData filter expression using {start}, {end}, and {organization} placeholders.
+        dateField:
+          type: string
+          pattern: "^[A-Za-z_][A-Za-z0-9_]*$"
+        idField:
+          type: string
+          pattern: "^[A-Za-z_][A-Za-z0-9_]*$"
+        titleField:
+          type: string
+          pattern: "^[A-Za-z_][A-Za-z0-9_]*$"
+        summaryFields:
+          type: array
+          maxItems: 12
+          items:
+            type: string
+            pattern: "^[A-Za-z_][A-Za-z0-9_]*$"
+        topic:
+          type: string
+          enum: [news, hire, launch, financial, risk]
+      required: [area, resourcePath, filterTemplate, dateField, idField, titleField, summaryFields, topic]
+    SapConnectionInput:
+      type: object
+      properties:
+        serviceRoot:
+          type: string
+          format: uri
+          maxLength: 2048
+        tokenUrl:
+          type: string
+          format: uri
+          maxLength: 2048
+        fioriUrl:
+          type: string
+          format: uri
+          maxLength: 2048
+        clientId:
+          type: string
+          maxLength: 512
+        clientSecret:
+          type: string
+          maxLength: 4096
+        scope:
+          type: string
+          maxLength: 1024
+        organizations:
+          type: array
+          minItems: 1
+          maxItems: 50
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 120
+        areas:
+          type: array
+          minItems: 1
+          maxItems: 7
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/SapConnectionAreaMapping"
+      required: [serviceRoot, tokenUrl, fioriUrl, organizations, areas]
+    SapConnectionSettings:
+      type: object
+      properties:
+        configured:
+          type: boolean
+        storageReady:
+          type: boolean
+        clientCredentialsConfigured:
+          type: boolean
+        hasSavedConnection:
+          type: boolean
+        legacyEnvironmentConfig:
+          type: boolean
+          description: Whether a legacy server-managed SAP config is also present.
+        legacyEnvironmentConfigActive:
+          type: boolean
+        serviceRoot:
+          type: ["string", "null"]
+          format: uri
+        tokenUrl:
+          type: ["string", "null"]
+          format: uri
+        fioriUrl:
+          type: ["string", "null"]
+          format: uri
+        scope:
+          type: ["string", "null"]
+        organizations:
+          type: array
+          items:
+            type: string
+        areas:
+          type: array
+          items:
+            $ref: "#/components/schemas/SapConnectionAreaMapping"
+        updatedAt:
+          type: ["string", "null"]
+          format: date-time
+      required: [configured, storageReady, clientCredentialsConfigured, hasSavedConnection, legacyEnvironmentConfig, legacyEnvironmentConfigActive, serviceRoot, tokenUrl, fioriUrl, scope, organizations, areas, updatedAt]
+    SapConnectionTestResult:
+      type: object
+      properties:
+        connected:
+          type: boolean
+        checkedAt:
+          type: string
+          format: date-time
+        message:
+          type: string
+      required: [connected, checkedAt, message]
+    SapConnectionDeleteResult:
+      type: object
+      properties:
+        deleted:
+          type: boolean
+      required: [deleted]
     BriefSource:
       type: object
       properties:

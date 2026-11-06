@@ -148,3 +148,9 @@ Keep the authenticated Settings screen high-contrast and easy for older users to
 **Why:** The user asked for larger, clearer lettering for an older person and provided this visual reference for Settings.
 
 **How to apply:** Keep labels and controls legible on mobile and desktop, and scope this treatment to signed-in Settings unless the user asks to extend it.
+
+Treat SAP connection setup as generic per-clone configuration, not Finolex-specific. A GitHub clone provides code; its authorized owner connects that deployment to its own SAP system in app settings.
+
+**Why:** The user corrected the scope to SAP HANA generally and said a cloned app should connect to its own SAP server.
+
+**How to apply:** Do not hard-code company hosts or credentials. Use released S/4HANA OData business APIs by default; direct HANA SQL access is a separate connection type and is not enabled unless requested.

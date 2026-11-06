@@ -6,6 +6,13 @@ import type {
   SapBriefingDataItem,
   SapDataArea,
 } from "@workspace/api-zod";
+import {
+  deleteUserSapConfig,
+  getUserSapConfig,
+  getUserSapConfigUpdatedAt,
+  isSapCredentialStorageReady,
+  saveUserSapConfig,
+} from "./user-sap-connection.ts";
 
 export const SAP_DATA_AREAS: SapDataArea[] = [
   "store",
@@ -145,12 +152,12 @@ function parseAreaMapping(value: unknown): SapAreaMapping | null {
   };
 }
 
-function readSapConfig(): SapConfig | null {
-  const raw = process.env.SAP_S4HANA_CONFIG?.trim();
-  if (!raw) return null;
-
+function parseSapConfig(value: unknown): SapConfig | null {
   try {
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const parsed = typeof value === "string"
+      ? JSON.parse(value) as Record<string, unknown>
+      : value as Record<string, unknown>;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
     const serviceRoot = httpsUrl(parsed.serviceRoot);
     const tokenUrl = httpsUrl(parsed.tokenUrl);
     const fioriUrl = httpsUrl(parsed.fioriUrl);
@@ -211,11 +218,24 @@ function readSapConfig(): SapConfig | null {
   }
 }
 
-export function getSapConfigurationStatus(): {
+function readLegacySapConfig(): SapConfig | null {
+  const raw = process.env.SAP_S4HANA_CONFIG?.trim();
+  return raw ? parseSapConfig(raw) : null;
+}
+
+async function readSapConfig(userId?: string): Promise<SapConfig | null> {
+  if (userId) {
+    const saved = await getUserSapConfig(userId);
+    if (saved) return parseSapConfig(saved);
+  }
+  return readLegacySapConfig();
+}
+
+export async function getSapConfigurationStatus(userId?: string): Promise<{
   configured: boolean;
   availableAreas: SapDataArea[];
-} {
-  const config = readSapConfig();
+}> {
+  const config = await readSapConfig(userId);
   const availableAreas = config
     ? SAP_DATA_AREAS.filter((area) => Boolean(config.areas[area]))
     : [];
@@ -223,6 +243,103 @@ export function getSapConfigurationStatus(): {
     configured: availableAreas.length > 0,
     availableAreas,
   };
+}
+
+export async function getSapConnectionSettings(userId: string) {
+  const saved = await getUserSapConfig(userId);
+  const legacyConfig = readLegacySapConfig();
+  const config = saved ? parseSapConfig(saved) : legacyConfig;
+  const updatedAt = saved
+    ? await getUserSapConfigUpdatedAt(userId)
+    : null;
+  const areas = config
+    ? SAP_DATA_AREAS.flatMap((area) => {
+        const mapping = config.areas[area];
+        return mapping ? [{ area, ...mapping }] : [];
+      })
+    : [];
+  return {
+    configured: Boolean(config && areas.length > 0),
+    storageReady: isSapCredentialStorageReady(),
+    clientCredentialsConfigured: Boolean(saved && config?.clientId && config.clientSecret),
+    hasSavedConnection: Boolean(saved),
+    legacyEnvironmentConfig: Boolean(legacyConfig),
+    legacyEnvironmentConfigActive: Boolean(!saved && legacyConfig),
+    serviceRoot: config?.serviceRoot.toString() ?? null,
+    tokenUrl: config?.tokenUrl.toString() ?? null,
+    fioriUrl: config?.fioriUrl.toString() ?? null,
+    scope: config?.scope ?? null,
+    organizations: config?.organizations ?? [],
+    areas,
+    updatedAt,
+  };
+}
+
+export async function saveSapConnectionSettings(
+  userId: string,
+  input: {
+    serviceRoot: string;
+    tokenUrl: string;
+    fioriUrl: string;
+    clientId?: string;
+    clientSecret?: string;
+    scope?: string;
+    organizations: string[];
+    areas: Array<{
+      area: SapDataArea;
+      resourcePath: string;
+      filterTemplate: string;
+      dateField: string;
+      idField: string;
+      titleField: string;
+      summaryFields: string[];
+      topic: BriefingInputTopicsItem;
+    }>;
+  },
+): Promise<string> {
+  const existingRaw = await getUserSapConfig(userId);
+  const existing = existingRaw ? parseSapConfig(existingRaw) : null;
+  const clientId = input.clientId?.trim() || existing?.clientId;
+  const clientSecret = input.clientSecret || existing?.clientSecret;
+  if (!clientId || !clientSecret) {
+    throw new Error("Enter both OAuth client ID and client secret for the first save.");
+  }
+  if (new Set(input.areas.map(({ area }) => area)).size !== input.areas.length) {
+    throw new Error("The SAP settings must contain only one mapping per data area.");
+  }
+
+  const areas = Object.fromEntries(input.areas.map(({ area, ...mapping }) => [
+    area,
+    mapping,
+  ]));
+  const config = parseSapConfig({
+    ...input,
+    clientId,
+    clientSecret,
+    areas,
+  });
+  if (!config) {
+    throw new Error("The SAP settings are incomplete or contain an unsupported OData mapping.");
+  }
+
+  const serializedConfig = {
+    serviceRoot: config.serviceRoot.toString(),
+    tokenUrl: config.tokenUrl.toString(),
+    fioriUrl: config.fioriUrl.toString(),
+    clientId: config.clientId,
+    clientSecret: config.clientSecret,
+    ...(config.scope ? { scope: config.scope } : {}),
+    organizations: config.organizations,
+    areas: Object.fromEntries(SAP_DATA_AREAS.flatMap((area) => {
+      const mapping = config.areas[area];
+      return mapping ? [[area, mapping]] : [];
+    })),
+  };
+  return saveUserSapConfig(userId, serializedConfig);
+}
+
+export async function deleteSapConnectionSettings(userId: string): Promise<boolean> {
+  return deleteUserSapConfig(userId);
 }
 
 function organizationFilterValue(value: string): string {
@@ -293,6 +410,39 @@ async function fetchAccessToken(config: SapConfig, signal: AbortSignal): Promise
   return tokenPayload.access_token;
 }
 
+export async function testSapConnection(userId: string): Promise<{
+  connected: boolean;
+  checkedAt: string;
+  message: string;
+}> {
+  const config = await readSapConfig(userId);
+  if (!config) throw new Error("The SAP connection is not configured.");
+  const signal = AbortSignal.timeout(SAP_REQUEST_TIMEOUT_MS);
+  const token = await fetchAccessToken(config, signal);
+  const metadataUrl = new URL("$metadata", config.serviceRoot);
+  const response = await fetch(metadataUrl, {
+    headers: {
+      accept: "application/xml",
+      authorization: `Bearer ${token}`,
+      "cache-control": "no-store",
+    },
+    signal: AbortSignal.any([
+      signal,
+      AbortSignal.timeout(SAP_REQUEST_TIMEOUT_MS),
+    ]),
+    redirect: "error",
+  });
+  if (!response.ok) {
+    throw new Error(`SAP metadata check returned HTTP ${response.status}.`);
+  }
+  await response.body?.cancel();
+  return {
+    connected: true,
+    checkedAt: new Date().toISOString(),
+    message: "OAuth and the OData metadata endpoint responded. No business records were read.",
+  };
+}
+
 function makeFilter(
   template: string,
   start: Date,
@@ -310,6 +460,7 @@ function findRecordSourceUrl(config: SapConfig): string {
 }
 
 export async function searchSapS4Hana(input: {
+  userId: string;
   areas: SapDataArea[];
   topics: BriefingInputTopicsItem[];
   organization: string;
@@ -318,7 +469,7 @@ export async function searchSapS4Hana(input: {
   affiliatedCompanyReport: boolean;
   signal: AbortSignal;
 }): Promise<SapSearchResult> {
-  const config = readSapConfig();
+  const config = await readSapConfig(input.userId);
   if (!config) throw new Error("SAP S/4HANA is not configured.");
   if (!input.organization.trim()) throw new Error("An SAP company or plant scope is required.");
   const approvedOrganization = config.organizations.find(

@@ -10,6 +10,7 @@ import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
 import { ArrowDown, ArrowUpRight, Check, Clipboard, Clock3, FileText, Link2, LoaderCircle, Printer, Radio, Search, Square, Volume2 } from 'lucide-react';
 import { ErrorBoundary } from '@/components/error-boundary';
+import { SapConnectionSettings } from '@/components/sap-connection-settings';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
@@ -1665,6 +1666,12 @@ function Home() {
                 <span className="text-base font-semibold text-[#292e46]">Briefing details</span>
                 <span className="rounded-full bg-[#eeeaf4] px-3 py-1 font-mono text-xs font-semibold text-[#594b87]">30 DAYS</span>
               </div>
+              {canStart && (
+                <SapConnectionSettings
+                  basePath={basePath}
+                  onChanged={() => { void sourceStatusQuery.refetch(); }}
+                />
+              )}
               {sourceMode === 'public' && (
               <details className="mb-4 rounded-xl border border-[#ded9e2] bg-white/65 px-4 py-3" data-testid="details-source-key-settings">
                 <summary className="cursor-pointer text-base font-semibold text-[#35364a]">Source search key settings</summary>
@@ -1890,13 +1897,13 @@ function Home() {
                 <section className="mt-3 rounded-xl border border-[#c2ddda] bg-[#f2f9f8] p-4 sm:p-5" aria-labelledby="sap-area-heading" data-testid="sap-source-settings">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <h2 id="sap-area-heading" className="text-base font-semibold text-[#245d5b]">SAP S/4HANA data areas</h2>
+                      <h2 id="sap-area-heading" className="text-base font-semibold text-[#245d5b]">SAP business-data areas</h2>
                       <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[#486d6b]">
                         Choose the internal records to include. SAP is read only; it does not use Tavily. The selection is not read until you press Brief.
                       </p>
                     </div>
                     <span className={`rounded-full px-3 py-1.5 text-sm font-semibold ${sapConfigured ? 'bg-[#e5f2e9] text-[#32634a]' : 'bg-[#fff2de] text-[#79531f]'}`} data-testid="sap-connection-status">
-                      {sapConfigured ? 'Server connection configured' : 'Setup required'}
+                      {sapConfigured ? 'SAP connection configured' : 'Setup required'}
                     </span>
                   </div>
                   <fieldset className="mt-4">
@@ -1938,7 +1945,7 @@ function Home() {
                   <p className="mt-3 text-sm leading-relaxed text-[#486d6b]" role="status" data-testid="sap-setup-guidance">
                     {sapConfigured
                       ? `The server connection exposes ${sapAvailableAreas.length} approved data area${sapAvailableAreas.length === 1 ? '' : 's'}. HR appears only when the SAP administrator enables it for this read-only connection.`
-                      : 'An administrator must configure the approved S/4HANA read-only connection in API Server Secrets. Until then, SAP data is not accessed.'}
+                      : 'The app owner must configure an approved SAP OData connection in the SAP connection settings above. Until then, SAP data is not accessed.'}
                   </p>
                 </section>
               )}

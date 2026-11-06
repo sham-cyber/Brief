@@ -98,6 +98,102 @@ export interface BriefingInput {
   topics: BriefingInputTopicsItem[];
 }
 
+export type SapConnectionAreaMappingTopic = typeof SapConnectionAreaMappingTopic[keyof typeof SapConnectionAreaMappingTopic];
+
+
+export const SapConnectionAreaMappingTopic = {
+  news: 'news',
+  hire: 'hire',
+  launch: 'launch',
+  financial: 'financial',
+  risk: 'risk',
+} as const;
+
+export interface SapConnectionAreaMapping {
+  area: SapDataArea;
+  /**
+     * @minLength 1
+     * @maxLength 300
+     */
+  resourcePath: string;
+  /**
+     * OData filter expression using {start}, {end}, and {organization} placeholders.
+     * @maxLength 1000
+     */
+  filterTemplate: string;
+  /** @pattern ^[A-Za-z_][A-Za-z0-9_]*$ */
+  dateField: string;
+  /** @pattern ^[A-Za-z_][A-Za-z0-9_]*$ */
+  idField: string;
+  /** @pattern ^[A-Za-z_][A-Za-z0-9_]*$ */
+  titleField: string;
+  /**
+     * @maxItems 12
+     * @items.pattern ^[A-Za-z_][A-Za-z0-9_]*$
+     */
+  summaryFields: string[];
+  topic: SapConnectionAreaMappingTopic;
+}
+
+export interface SapConnectionInput {
+  /** @maxLength 2048 */
+  serviceRoot: string;
+  /** @maxLength 2048 */
+  tokenUrl: string;
+  /** @maxLength 2048 */
+  fioriUrl: string;
+  /** @maxLength 512 */
+  clientId?: string;
+  /** @maxLength 4096 */
+  clientSecret?: string;
+  /** @maxLength 1024 */
+  scope?: string;
+  /**
+     * @minItems 1
+     * @maxItems 50
+     * @items.minLength 1
+     * @items.maxLength 120
+     */
+  organizations: string[];
+  /**
+     * @minItems 1
+     * @maxItems 7
+     */
+  areas: SapConnectionAreaMapping[];
+}
+
+export interface SapConnectionSettings {
+  configured: boolean;
+  storageReady: boolean;
+  clientCredentialsConfigured: boolean;
+  hasSavedConnection: boolean;
+  /** Whether a legacy server-managed SAP config is also present. */
+  legacyEnvironmentConfig: boolean;
+  legacyEnvironmentConfigActive: boolean;
+  /** @nullable */
+  serviceRoot: string | null;
+  /** @nullable */
+  tokenUrl: string | null;
+  /** @nullable */
+  fioriUrl: string | null;
+  /** @nullable */
+  scope: string | null;
+  organizations: string[];
+  areas: SapConnectionAreaMapping[];
+  /** @nullable */
+  updatedAt: string | null;
+}
+
+export interface SapConnectionTestResult {
+  connected: boolean;
+  checkedAt: string;
+  message: string;
+}
+
+export interface SapConnectionDeleteResult {
+  deleted: boolean;
+}
+
 export type BriefSourceImagesItem = {
   url: string;
   description: string;

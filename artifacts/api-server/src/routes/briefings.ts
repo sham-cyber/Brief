@@ -8,7 +8,7 @@ import {
   CreateBriefingResponse,
   GetBriefingSourceStatusResponse,
 } from "@workspace/api-zod";
-import { clerkClient, getAuth } from "@clerk/express";
+import { getAuth } from "@clerk/express";
 import {
   cancelTavilyQuotaReservation,
   finishTavilyQuotaReservation,
@@ -31,6 +31,7 @@ import {
   getTavilyCredentialStatus,
   getUserTavilyApiKey,
 } from "../lib/user-tavily-credentials";
+import { resolveOwnerUserId } from "../lib/briefing-owner";
 import {
   getSapConfigurationStatus,
   searchSapS4Hana,
@@ -48,34 +49,6 @@ const startPinFailures = new Map<
   string,
   { attempts: number; windowStartedAt: number; lockedUntil: number }
 >();
-let ownerIdentityCache:
-  | { email: string; userId: string; expiresAt: number }
-  | null = null;
-
-async function resolveOwnerUserId(email: string): Promise<string | null> {
-  if (
-    ownerIdentityCache?.email === email &&
-    ownerIdentityCache.expiresAt > Date.now()
-  ) {
-    return ownerIdentityCache.userId;
-  }
-  const result = await clerkClient.users.getUserList({
-    emailAddress: [email],
-    limit: 1,
-  });
-  const owner = result.data.find((user) =>
-    user.emailAddresses.some(
-      (address) => address.emailAddress.trim().toLowerCase() === email,
-    ),
-  );
-  if (!owner) return null;
-  ownerIdentityCache = {
-    email,
-    userId: owner.id,
-    expiresAt: Date.now() + 5 * 60_000,
-  };
-  return owner.id;
-}
 
 function startPinLockSeconds(userId: string): number {
   const now = Date.now();
@@ -505,7 +478,9 @@ router.get("/briefings", async (req, res): Promise<void> => {
   const dailyUsage = canStart && userId
     ? await getTavilyDailyUsageStatus(userId)
     : null;
-  const sapStatus = getSapConfigurationStatus();
+  const sapStatus = await getSapConfigurationStatus(
+    canStart ? userId ?? undefined : undefined,
+  );
   res.json(GetBriefingSourceStatusResponse.parse({
     provider: "tavily",
     configured: keySource !== "missing",
@@ -936,10 +911,10 @@ router.post("/briefings", async (req, res): Promise<void> => {
       });
       return;
     }
-    const sapStatus = getSapConfigurationStatus();
+    const sapStatus = await getSapConfigurationStatus(userId);
     if (!sapStatus.configured) {
       res.status(503).json({
-        error: "SAP S/4HANA is not configured on the server. No SAP data was requested.",
+        error: "The app owner has not configured an SAP connection. No SAP data was requested.",
       });
       return;
     }
@@ -978,6 +953,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
       const windowStart = new Date(windowEnd.getTime() - 30 * 86_400_000);
       const topics = input.data.topics as BriefingTopic[];
       const sapResult = await searchSapS4Hana({
+        userId,
         areas: sapAreas,
         topics,
         organization,

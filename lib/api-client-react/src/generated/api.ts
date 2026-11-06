@@ -29,6 +29,10 @@ import type {
   PersonProfileDeleteResult,
   PersonProfileInput,
   PersonProfileList,
+  SapConnectionDeleteResult,
+  SapConnectionInput,
+  SapConnectionSettings,
+  SapConnectionTestResult,
   TavilyCredentialInput,
   TavilyCredentialStatus
 } from './api.schemas';
@@ -376,6 +380,319 @@ export function useHealthCheck<TData = Awaited<ReturnType<typeof healthCheck>>, 
 
 
 
+
+export const getGetSapConnectionSettingsUrl = () => {
+
+
+
+
+  return `/api/sap-connection`
+}
+
+/**
+ * @summary Get safe SAP connection settings for the configured app owner
+ */
+export const getSapConnectionSettings = async ( options?: Parameters<typeof customFetch>[1]): Promise<SapConnectionSettings> => {
+
+  return customFetch<SapConnectionSettings>(getGetSapConnectionSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSapConnectionSettingsQueryKey = () => {
+    return [
+    `/api/sap-connection`
+    ] as const;
+    }
+
+
+export const getGetSapConnectionSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getSapConnectionSettings>>, TError = ErrorType<Error>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSapConnectionSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSapConnectionSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSapConnectionSettings>>> = ({ signal }) => getSapConnectionSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSapConnectionSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSapConnectionSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getSapConnectionSettings>>>
+export type GetSapConnectionSettingsQueryError = ErrorType<Error>
+
+
+/**
+ * @summary Get safe SAP connection settings for the configured app owner
+ */
+
+export function useGetSapConnectionSettings<TData = Awaited<ReturnType<typeof getSapConnectionSettings>>, TError = ErrorType<Error>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSapConnectionSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSapConnectionSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSaveSapConnectionSettingsUrl = () => {
+
+
+
+
+  return `/api/sap-connection`
+}
+
+/**
+ * @summary Save an owner-managed SAP S/4HANA OData connection
+ */
+export const saveSapConnectionSettings = async (sapConnectionInput: SapConnectionInput, options?: Parameters<typeof customFetch>[1]): Promise<SapConnectionSettings> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<SapConnectionSettings>(getSaveSapConnectionSettingsUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(sapConnectionInput)
+  }
+);}
+
+
+
+
+
+export const getSaveSapConnectionSettingsMutationKey = () => ['saveSapConnectionSettings'] as const;
+
+export const getSaveSapConnectionSettingsMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveSapConnectionSettings>>, TError,SaveSapConnectionSettingsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof saveSapConnectionSettings>>, TError,SaveSapConnectionSettingsMutationVariables, TContext> => {
+
+const mutationKey = getSaveSapConnectionSettingsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof saveSapConnectionSettings>>, SaveSapConnectionSettingsMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  saveSapConnectionSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SaveSapConnectionSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof saveSapConnectionSettings>>>
+    export type SaveSapConnectionSettingsMutationBody = BodyType<SapConnectionInput>
+    export type SaveSapConnectionSettingsMutationError = ErrorType<Error>
+    export type SaveSapConnectionSettingsMutationVariables = {data: BodyType<SapConnectionInput>}
+
+    /**
+ * @summary Save an owner-managed SAP S/4HANA OData connection
+ */
+export const useSaveSapConnectionSettings = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveSapConnectionSettings>>, TError,SaveSapConnectionSettingsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof saveSapConnectionSettings>>,
+        TError,
+        SaveSapConnectionSettingsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSaveSapConnectionSettingsMutationOptions(options));
+    }
+
+export const getDeleteSapConnectionSettingsUrl = () => {
+
+
+
+
+  return `/api/sap-connection`
+}
+
+/**
+ * @summary Delete the configured owner's saved SAP connection
+ */
+export const deleteSapConnectionSettings = async ( options?: Parameters<typeof customFetch>[1]): Promise<SapConnectionDeleteResult> => {
+
+  return customFetch<SapConnectionDeleteResult>(getDeleteSapConnectionSettingsUrl(),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteSapConnectionSettingsMutationKey = () => ['deleteSapConnectionSettings'] as const;
+
+export const getDeleteSapConnectionSettingsMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteSapConnectionSettings>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteSapConnectionSettings>>, TError,void, TContext> => {
+
+const mutationKey = getDeleteSapConnectionSettingsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteSapConnectionSettings>>, void> = () => {
+
+
+          return  deleteSapConnectionSettings(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteSapConnectionSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof deleteSapConnectionSettings>>>
+
+    export type DeleteSapConnectionSettingsMutationError = ErrorType<Error>
+
+
+    /**
+ * @summary Delete the configured owner's saved SAP connection
+ */
+export const useDeleteSapConnectionSettings = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteSapConnectionSettings>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteSapConnectionSettings>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getDeleteSapConnectionSettingsMutationOptions(options));
+    }
+
+export const getTestSapConnectionUrl = () => {
+
+
+
+
+  return `/api/sap-connection/test`
+}
+
+/**
+ * @summary Test saved SAP OAuth and OData metadata without reading business records
+ */
+export const testSapConnection = async ( options?: Parameters<typeof customFetch>[1]): Promise<SapConnectionTestResult> => {
+
+  return customFetch<SapConnectionTestResult>(getTestSapConnectionUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getTestSapConnectionMutationKey = () => ['testSapConnection'] as const;
+
+export const getTestSapConnectionMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testSapConnection>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof testSapConnection>>, TError,void, TContext> => {
+
+const mutationKey = getTestSapConnectionMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof testSapConnection>>, void> = () => {
+
+
+          return  testSapConnection(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type TestSapConnectionMutationResult = NonNullable<Awaited<ReturnType<typeof testSapConnection>>>
+
+    export type TestSapConnectionMutationError = ErrorType<Error>
+
+
+    /**
+ * @summary Test saved SAP OAuth and OData metadata without reading business records
+ */
+export const useTestSapConnection = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testSapConnection>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof testSapConnection>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getTestSapConnectionMutationOptions(options));
+    }
 
 export const getGetBriefingSourceStatusUrl = () => {
 

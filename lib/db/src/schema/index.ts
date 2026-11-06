@@ -21,4 +21,5 @@ export * from "./ai-guardrails";
 export * from "./briefing-tavily-request-usage";
 export * from "./briefing-tavily-usage";
 export * from "./person-profiles";
+export * from "./sap-user-connections";
 export * from "./tavily-user-credentials";

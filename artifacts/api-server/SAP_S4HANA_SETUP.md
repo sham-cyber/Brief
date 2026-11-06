@@ -1,48 +1,37 @@
-# SAP S/4HANA source setup
+# Generic SAP S/4HANA business-data connection
 
-The SAP source is an optional, server-side OAuth 2.0 client-credentials connection. The app reads only configured OData areas and never writes to SAP. No SAP request is made while loading the app or checking connection status; SAP is accessed only after an owner presses **Brief** and passes the PIN check.
+The SAP source uses an administrator-configured, read-only OData business API. It is not tied to a specific company. The app requests data only after the configured owner presses **Brief**; opening the app, loading the settings page, and checking status do not read SAP business records.
 
-## Configure the API Server secret
+## Configure the connection
 
-Add one API Server secret named `SAP_S4HANA_CONFIG`. Its value must be JSON with:
+Sign in with the account configured as `BRIEFING_OWNER_EMAIL`. In the app's **Settings**, open **SAP connection settings** and enter:
 
-- `serviceRoot`: HTTPS OData service root.
-- `tokenUrl`: HTTPS OAuth token endpoint.
-- `clientId` and `clientSecret`: credentials for the approved read-only SAP integration user.
-- `fioriUrl`: HTTPS SAP Fiori entry point used as the source link.
-- `organizations`: exact company or plant identifiers the app is allowed to query.
-- `areas`: mappings for only the areas approved by the SAP administrator.
-- Optional `scope`: OAuth scope requested from the token endpoint.
+- The HTTPS OData service root from the SAP API documentation.
+- The OAuth token URL and client-credentials scope, if required.
+- The SAP Fiori base URL used for source links.
+- The exact company codes or plant identifiers allowed for this connection.
+- The OAuth client ID and client secret issued for the integration.
+- Each approved business-area mapping: OData entity path, date/organization filter, date field, record ID field, title field, summary fields, and associated briefing topic.
 
-Example structure only; replace every placeholder with values supplied and approved by the S/4HANA administrator. Do not put real credentials in source control, chat, or this file.
+The first save requires both OAuth credentials. On later edits, leave those fields empty to retain the saved values. Credentials are encrypted on the server with `USER_CREDENTIALS_ENCRYPTION_KEY`; they are not stored in browser storage or returned to the page. The app's **Test connection** action checks OAuth and the OData `$metadata` endpoint only; it does not read business records. Removing the saved copy here does not revoke the OAuth client in SAP.
 
-```json
-{
-  "serviceRoot": "https://s4.example.invalid/sap/opu/odata/sap/",
-  "tokenUrl": "https://identity.example.invalid/oauth/token",
-  "clientId": "configured-in-Replit-Secrets",
-  "clientSecret": "configured-in-Replit-Secrets",
-  "scope": "approved-read-only-scope",
-  "fioriUrl": "https://s4.example.invalid/sap/bc/ui2/flp",
-  "organizations": ["approved-company-code", "approved-plant-code"],
-  "areas": {
-    "inventory": {
-      "resourcePath": "API_EXAMPLE_SRV/ExampleSet",
-      "filterTemplate": "ChangedAt ge datetimeoffset'{start}' and ChangedAt le datetimeoffset'{end}' and CompanyCode eq '{organization}'",
-      "dateField": "ChangedAt",
-      "idField": "RecordId",
-      "titleField": "Description",
-      "summaryFields": ["Status", "Quantity"],
-      "topic": "news"
-    }
-  }
-}
-```
+The connection uses OAuth 2.0 client credentials by default. API-key authentication is not enabled because SAP HANA database authentication and SAP S/4HANA API gateway authentication are different; use an API key only if the SAP gateway administrator confirms support for the selected API.
 
-Each configured area (`store`, `production`, `maintenance`, `inventory`, `sales`, `hr`, `power_electrical_solar`) needs its own company-approved OData path, date filter, field mapping, and one existing briefing topic (`news`, `hire`, `launch`, `financial`, or `risk`). An area is queried only when its mapped topic is selected; if no selected area matches a selected topic, the app does not request an OAuth token or contact SAP. The filter template must include `{start}`, `{end}`, and `{organization}`; the app supplies the rolling 30-day range and an organization value that must exactly match the administrator's allowlist. The service path is relative to `serviceRoot` and is restricted to that HTTPS origin. Only mapped properties are requested, with a maximum of 20 records per area.
+## HANA database vs. S/4HANA business APIs
 
-## Access and privacy
+This integration reads released SAP S/4HANA OData business APIs. It does **not** open a direct SQL connection to SAP HANA. Direct HANA database access is a separate JDBC/ODBC integration that requires its own approved endpoint, database identity, network access, TLS configuration, and least-privilege authorization.
 
-Use a dedicated SAP integration user with read-only permissions and only the approved company/plant and data areas. Do not add an HR area mapping unless the SAP administrator has approved that integration user's HR access. The app currently allows only its configured owner to start a briefing; SAP data returned by the integration is therefore visible to that authorized app account. A broader multi-user rollout needs per-user SAP identity/role enforcement before it is enabled.
+For operational records such as store, production, maintenance, inventory, sales, HR, and power/electrical/solar, use the released business APIs and field mappings documented for the connected SAP system. The available APIs, entity sets, field names, filters, and OAuth scopes depend on the SAP release and its communication arrangements; do not copy placeholder mappings into a live connection.
 
-Connection status reports whether the secret and at least one valid area mapping are present; it does not test the SAP host. The first SAP read occurs only when **Brief** is pressed. If the secret is absent, incomplete, or rejected, the app fails closed and does not substitute public web results.
+## Areas, access, and limits
+
+Available areas are `store`, `production`, `maintenance`, `inventory`, `sales`, `hr`, and `power_electrical_solar`. Only areas with valid mappings appear as selectable. Each area is requested only if its mapped briefing topic is selected. Each filter must contain `{start}`, `{end}`, and `{organization}`; the app supplies the rolling 30-day window and requires the company or plant to exactly match the administrator's allowlist. The service path stays under the configured HTTPS origin, and each area returns at most 20 records.
+
+Use a dedicated SAP integration identity with read-only permissions restricted to the intended company/plant and approved data areas. Do not configure HR unless the SAP administrator explicitly approves that access. The app currently restricts briefing starts to its configured owner; a multi-user rollout needs SAP-side user/role enforcement before it is opened to other accounts.
+
+## Official SAP references
+
+- [APIs for SAP S/4HANA](https://help.sap.com/doc/57063b559ae04c86a281dc626f474091/2008.500/en-US/APIsforSAPS4HANA.pdf)
+- [SAP S/4HANA Cloud APIs for Sales](https://help.sap.com/docs/SAP_S4HANA_CLOUD/03c04db2a7434731b7fe21dca77440da/3bac8c01d7024ae1b15cf848ce12544e.html)
+- [SAP HANA Cloud database connection via JDBC](https://help.sap.com/docs/hana-cloud/sap-hana-cloud-getting-started-guide/connect-to-sap-hana-database-in-sap-hana-cloud-via-jdbc)
+- [SAP HANA Cloud authentication mechanisms](https://help.sap.com/docs/hana-cloud-database/sap-hana-cloud-sap-hana-database-security-guide/user-authentication-mechanisms)

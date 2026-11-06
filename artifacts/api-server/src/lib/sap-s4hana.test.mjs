@@ -35,14 +35,14 @@ test("SAP S/4HANA source stays idle until an explicit read", async (t) => {
     globalThis.fetch = originalFetch;
   });
 
-  await t.test("reports missing or malformed setup without making requests", () => {
+  await t.test("reports missing or malformed setup without making requests", async () => {
     let calls = 0;
     globalThis.fetch = async () => {
       calls += 1;
       throw new Error("Unexpected network request");
     };
     delete process.env.SAP_S4HANA_CONFIG;
-    assert.deepEqual(getSapConfigurationStatus(), {
+    assert.deepEqual(await getSapConfigurationStatus(), {
       configured: false,
       availableAreas: [],
     });
@@ -51,16 +51,16 @@ test("SAP S/4HANA source stays idle until an explicit read", async (t) => {
     process.env.SAP_S4HANA_CONFIG = makeConfig({
       serviceRoot: "http://s4.example.invalid/odata/",
     });
-    assert.deepEqual(getSapConfigurationStatus(), {
+    assert.deepEqual(await getSapConfigurationStatus(), {
       configured: false,
       availableAreas: [],
     });
     assert.equal(calls, 0);
   });
 
-  await t.test("shows only areas explicitly configured by the SAP administrator", () => {
+  await t.test("shows only areas explicitly configured by the SAP administrator", async () => {
     process.env.SAP_S4HANA_CONFIG = makeConfig();
-    assert.deepEqual(getSapConfigurationStatus(), {
+    assert.deepEqual(await getSapConfigurationStatus(), {
       configured: true,
       availableAreas: ["inventory"],
     });

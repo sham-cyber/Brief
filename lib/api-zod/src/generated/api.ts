@@ -57,6 +57,156 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
+ * @summary Get safe SAP connection settings for the configured app owner
+ */
+export const getSapConnectionSettingsResponseAreasItemResourcePathMax = 300;
+
+export const getSapConnectionSettingsResponseAreasItemFilterTemplateMax = 1000;
+
+export const getSapConnectionSettingsResponseAreasItemDateFieldRegExp = new RegExp('^[A-Za-z_][A-Za-z0-9_]*$');
+export const getSapConnectionSettingsResponseAreasItemIdFieldRegExp = new RegExp('^[A-Za-z_][A-Za-z0-9_]*$');
+export const getSapConnectionSettingsResponseAreasItemTitleFieldRegExp = new RegExp('^[A-Za-z_][A-Za-z0-9_]*$');
+export const getSapConnectionSettingsResponseAreasItemSummaryFieldsItemRegExp = new RegExp('^[A-Za-z_][A-Za-z0-9_]*$');
+export const getSapConnectionSettingsResponseAreasItemSummaryFieldsMax = 12;
+
+
+
+export const GetSapConnectionSettingsResponse = zod.object({
+  "configured": zod.boolean(),
+  "storageReady": zod.boolean(),
+  "clientCredentialsConfigured": zod.boolean(),
+  "hasSavedConnection": zod.boolean(),
+  "legacyEnvironmentConfig": zod.boolean().describe('Whether a legacy server-managed SAP config is also present.'),
+  "legacyEnvironmentConfigActive": zod.boolean(),
+  "serviceRoot": zod.string().url().nullable(),
+  "tokenUrl": zod.string().url().nullable(),
+  "fioriUrl": zod.string().url().nullable(),
+  "scope": zod.string().nullable(),
+  "organizations": zod.array(zod.string()),
+  "areas": zod.array(zod.object({
+  "area": zod.enum(['store', 'production', 'maintenance', 'inventory', 'sales', 'hr', 'power_electrical_solar']),
+  "resourcePath": zod.string().min(1).max(getSapConnectionSettingsResponseAreasItemResourcePathMax),
+  "filterTemplate": zod.string().max(getSapConnectionSettingsResponseAreasItemFilterTemplateMax).describe('OData filter expression using {start}, {end}, and {organization} placeholders.'),
+  "dateField": zod.string().regex(getSapConnectionSettingsResponseAreasItemDateFieldRegExp),
+  "idField": zod.string().regex(getSapConnectionSettingsResponseAreasItemIdFieldRegExp),
+  "titleField": zod.string().regex(getSapConnectionSettingsResponseAreasItemTitleFieldRegExp),
+  "summaryFields": zod.array(zod.string().regex(getSapConnectionSettingsResponseAreasItemSummaryFieldsItemRegExp)).max(getSapConnectionSettingsResponseAreasItemSummaryFieldsMax),
+  "topic": zod.enum(['news', 'hire', 'launch', 'financial', 'risk'])
+})),
+  "updatedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Save an owner-managed SAP S/4HANA OData connection
+ */
+export const saveSapConnectionSettingsBodyServiceRootMax = 2048;
+
+export const saveSapConnectionSettingsBodyTokenUrlMax = 2048;
+
+export const saveSapConnectionSettingsBodyFioriUrlMax = 2048;
+
+export const saveSapConnectionSettingsBodyClientIdMax = 512;
+
+export const saveSapConnectionSettingsBodyClientSecretMax = 4096;
+
+export const saveSapConnectionSettingsBodyScopeMax = 1024;
+
+export const saveSapConnectionSettingsBodyOrganizationsItemMax = 120;
+
+export const saveSapConnectionSettingsBodyOrganizationsMax = 50;
+
+export const saveSapConnectionSettingsBodyAreasItemResourcePathMax = 300;
+
+export const saveSapConnectionSettingsBodyAreasItemFilterTemplateMax = 1000;
+
+export const saveSapConnectionSettingsBodyAreasItemDateFieldRegExp = new RegExp('^[A-Za-z_][A-Za-z0-9_]*$');
+export const saveSapConnectionSettingsBodyAreasItemIdFieldRegExp = new RegExp('^[A-Za-z_][A-Za-z0-9_]*$');
+export const saveSapConnectionSettingsBodyAreasItemTitleFieldRegExp = new RegExp('^[A-Za-z_][A-Za-z0-9_]*$');
+export const saveSapConnectionSettingsBodyAreasItemSummaryFieldsItemRegExp = new RegExp('^[A-Za-z_][A-Za-z0-9_]*$');
+export const saveSapConnectionSettingsBodyAreasItemSummaryFieldsMax = 12;
+
+export const saveSapConnectionSettingsBodyAreasMax = 7;
+
+
+
+export const SaveSapConnectionSettingsBody = zod.object({
+  "serviceRoot": zod.string().url().max(saveSapConnectionSettingsBodyServiceRootMax),
+  "tokenUrl": zod.string().url().max(saveSapConnectionSettingsBodyTokenUrlMax),
+  "fioriUrl": zod.string().url().max(saveSapConnectionSettingsBodyFioriUrlMax),
+  "clientId": zod.string().max(saveSapConnectionSettingsBodyClientIdMax).optional(),
+  "clientSecret": zod.string().max(saveSapConnectionSettingsBodyClientSecretMax).optional(),
+  "scope": zod.string().max(saveSapConnectionSettingsBodyScopeMax).optional(),
+  "organizations": zod.array(zod.string().min(1).max(saveSapConnectionSettingsBodyOrganizationsItemMax)).min(1).max(saveSapConnectionSettingsBodyOrganizationsMax),
+  "areas": zod.array(zod.object({
+  "area": zod.enum(['store', 'production', 'maintenance', 'inventory', 'sales', 'hr', 'power_electrical_solar']),
+  "resourcePath": zod.string().min(1).max(saveSapConnectionSettingsBodyAreasItemResourcePathMax),
+  "filterTemplate": zod.string().max(saveSapConnectionSettingsBodyAreasItemFilterTemplateMax).describe('OData filter expression using {start}, {end}, and {organization} placeholders.'),
+  "dateField": zod.string().regex(saveSapConnectionSettingsBodyAreasItemDateFieldRegExp),
+  "idField": zod.string().regex(saveSapConnectionSettingsBodyAreasItemIdFieldRegExp),
+  "titleField": zod.string().regex(saveSapConnectionSettingsBodyAreasItemTitleFieldRegExp),
+  "summaryFields": zod.array(zod.string().regex(saveSapConnectionSettingsBodyAreasItemSummaryFieldsItemRegExp)).max(saveSapConnectionSettingsBodyAreasItemSummaryFieldsMax),
+  "topic": zod.enum(['news', 'hire', 'launch', 'financial', 'risk'])
+})).min(1).max(saveSapConnectionSettingsBodyAreasMax)
+})
+
+export const saveSapConnectionSettingsResponseAreasItemResourcePathMax = 300;
+
+export const saveSapConnectionSettingsResponseAreasItemFilterTemplateMax = 1000;
+
+export const saveSapConnectionSettingsResponseAreasItemDateFieldRegExp = new RegExp('^[A-Za-z_][A-Za-z0-9_]*$');
+export const saveSapConnectionSettingsResponseAreasItemIdFieldRegExp = new RegExp('^[A-Za-z_][A-Za-z0-9_]*$');
+export const saveSapConnectionSettingsResponseAreasItemTitleFieldRegExp = new RegExp('^[A-Za-z_][A-Za-z0-9_]*$');
+export const saveSapConnectionSettingsResponseAreasItemSummaryFieldsItemRegExp = new RegExp('^[A-Za-z_][A-Za-z0-9_]*$');
+export const saveSapConnectionSettingsResponseAreasItemSummaryFieldsMax = 12;
+
+
+
+export const SaveSapConnectionSettingsResponse = zod.object({
+  "configured": zod.boolean(),
+  "storageReady": zod.boolean(),
+  "clientCredentialsConfigured": zod.boolean(),
+  "hasSavedConnection": zod.boolean(),
+  "legacyEnvironmentConfig": zod.boolean().describe('Whether a legacy server-managed SAP config is also present.'),
+  "legacyEnvironmentConfigActive": zod.boolean(),
+  "serviceRoot": zod.string().url().nullable(),
+  "tokenUrl": zod.string().url().nullable(),
+  "fioriUrl": zod.string().url().nullable(),
+  "scope": zod.string().nullable(),
+  "organizations": zod.array(zod.string()),
+  "areas": zod.array(zod.object({
+  "area": zod.enum(['store', 'production', 'maintenance', 'inventory', 'sales', 'hr', 'power_electrical_solar']),
+  "resourcePath": zod.string().min(1).max(saveSapConnectionSettingsResponseAreasItemResourcePathMax),
+  "filterTemplate": zod.string().max(saveSapConnectionSettingsResponseAreasItemFilterTemplateMax).describe('OData filter expression using {start}, {end}, and {organization} placeholders.'),
+  "dateField": zod.string().regex(saveSapConnectionSettingsResponseAreasItemDateFieldRegExp),
+  "idField": zod.string().regex(saveSapConnectionSettingsResponseAreasItemIdFieldRegExp),
+  "titleField": zod.string().regex(saveSapConnectionSettingsResponseAreasItemTitleFieldRegExp),
+  "summaryFields": zod.array(zod.string().regex(saveSapConnectionSettingsResponseAreasItemSummaryFieldsItemRegExp)).max(saveSapConnectionSettingsResponseAreasItemSummaryFieldsMax),
+  "topic": zod.enum(['news', 'hire', 'launch', 'financial', 'risk'])
+})),
+  "updatedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Delete the configured owner's saved SAP connection
+ */
+export const DeleteSapConnectionSettingsResponse = zod.object({
+  "deleted": zod.boolean()
+})
+
+
+/**
+ * @summary Test saved SAP OAuth and OData metadata without reading business records
+ */
+export const TestSapConnectionResponse = zod.object({
+  "connected": zod.boolean(),
+  "checkedAt": zod.coerce.date(),
+  "message": zod.string()
+})
+
+
+/**
  * @summary Get source readiness and the public-search crawl allowance
  */
 export const getBriefingSourceStatusResponseDailyCrawlLimitMsMin = 0;

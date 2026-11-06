@@ -56,6 +56,35 @@ pnpm --filter @workspace/db run push
 
 Run this schema command against a development database. Handle production schema changes separately.
 
+## Clone the repository and connect your SAP system
+
+The GitHub repository supplies the application code only. It does not contain SAP credentials and does not connect to SAP by itself. Each clone must be configured for its own SAP system by an authorized administrator.
+
+```sh
+git clone https://github.com/sham-cyber/Brief.git
+cd Brief
+pnpm install --frozen-lockfile
+```
+
+Open the cloned project in Replit or run it locally. Configure the app's required secrets and development database first, then apply the schema:
+
+```sh
+pnpm --filter @workspace/db run push
+```
+
+Do not put SAP client credentials, tokens, or database passwords in GitHub.
+
+After the app is running:
+
+1. Sign in with the account configured as `BRIEFING_OWNER_EMAIL`.
+2. Open **Settings → SAP connection settings**.
+3. Enter the SAP S/4HANA OData service URL, OAuth token URL, SAP Fiori link base, approved company or plant values, and the mappings for the approved business areas.
+4. Enter the OAuth client ID and secret issued by the SAP administrator. The app stores these encrypted on the server; they are not committed, saved in browser storage, or returned to the page.
+5. Save the settings and press **Test connection**. This checks OAuth and the OData metadata endpoint; it does not fetch operational records.
+6. Select **SAP** in the briefing form and choose only the configured data areas.
+
+SAP supplies the endpoint, API release, OAuth scope, communication arrangement, and valid entity/field mappings. Until those are supplied and approved, a clone can run but cannot return live SAP data. This integration uses S/4HANA business OData APIs; direct SAP HANA SQL/JDBC/ODBC access is a separate connection type and is not enabled here.
+
 ## Run locally
 
 Requirements: Node.js 24, pnpm, PostgreSQL, and valid Clerk and Tavily configuration.
@@ -98,7 +127,7 @@ Set values in Replit Secrets or your hosting provider's secret manager. This tab
 | `BRIEFING_OWNER_EMAIL` | Email allowed to start crawls |
 | `BRIEFING_START_PIN` | Four-digit server-side crawl PIN; store its value only in the secret manager |
 | `TAVILY_API_KEY` | Project Tavily key, restricted to the configured owner |
-| `USER_CREDENTIALS_ENCRYPTION_KEY` | Encryption key for securely saved user Tavily credentials |
+| `USER_CREDENTIALS_ENCRYPTION_KEY` | 64-character hex encryption key for saved Tavily credentials and the app-owner SAP connection |
 
 Clerk development and production environments may have separate accounts. Create and test the owner account in the environment where its owner email and PIN are configured. Give each fork or separate deployment its own database, Clerk configuration, owner email, PIN, and Tavily key.
 
