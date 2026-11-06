@@ -1,0 +1,42 @@
+[
+  {
+    "id": "7d4737f5-cd6e-4590-bcea-bc70139d40eb",
+    "position": 1,
+    "filepath": "src/pages/slides/BriefingAgentCover.tsx",
+    "title": "Briefing Agent",
+    "description": "Source-linked meeting preparation for a company or person.",
+    "speakerNotes": ""
+  },
+  {
+    "id": "bc18e313-ffe1-42a2-86e1-84f85a3c5e50",
+    "position": 2,
+    "filepath": "src/pages/slides/PrepareForOneMeeting.tsx",
+    "title": "Prepare for one meeting",
+    "description": "Set the meeting details and research context.",
+    "speakerNotes": ""
+  },
+  {
+    "id": "9250858f-3554-47ac-a94d-d9ebc38e4a1c",
+    "position": 3,
+    "filepath": "src/pages/slides/ChooseTopics.tsx",
+    "title": "Choose the topics that matter",
+    "description": "Select from five briefing topics.",
+    "speakerNotes": ""
+  },
+  {
+    "id": "fe876721-5229-42b3-98a8-7f4467237a9f",
+    "position": 4,
+    "filepath": "src/pages/slides/ResearchSources.tsx",
+    "title": "Research that leads back to sources",
+    "description": "Crawl selected public topics and review linked evidence.",
+    "speakerNotes": ""
+  },
+  {
+    "id": "e7fd811d-2564-4aff-9445-e81250c6ba06",
+    "position": 5,
+    "filepath": "src/pages/slides/BriefReadyToUse.tsx",
+    "title": "A brief ready to use",
+    "description": "One-page output with source links and crawl limits.",
+    "speakerNotes": ""
+  }
+]

@@ -1,0 +1,28 @@
+kind = "slides"
+previewPath = "/briefing-agent-project-deck/"
+title = "Briefing Agent Project Deck"
+description = "A five-slide presentation explaining the Briefing Agent's 30-day public-source research workflow, selectable topics, source links, one-page brief, and current guardrails."
+version = "1.0.0"
+id = "artifacts/briefing-agent-project-deck"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/briefing-agent-project-deck/" ]
+localPort = 22219
+
+[services.development]
+run = "pnpm --filter @workspace/briefing-agent-project-deck run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/briefing-agent-project-deck", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/briefing-agent-project-deck/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22219"
+BASE_PATH = "/briefing-agent-project-deck/"

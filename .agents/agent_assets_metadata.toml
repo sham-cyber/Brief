@@ -14,3 +14,16 @@ mtime_ms = 1793606604137
 storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:742d8fb7-8455-444c-89a0-21c32e2418fa/cce49f37-da79-4c43-8320-3168a3767472/aa0fd5f9-0fa5-433c-9e37-dfc92ed6cef9"
 storage_version_token = "1793606625894689"
 content_type = "application/pdf"
+[[outputs]]
+id = "PV-pJb1AgXjqzva1aszIY"
+uri = "file://.local/outputs/Briefing-Agent-Project.pptx"
+type = "slides"
+title = "Briefing Agent Project (PPTX)"
+description = "Five-slide PowerPoint presentation about the Briefing Agent project."
+logical_id = "a36154bc-dbfd-46ce-b8f0-f929dd50b2cb"
+content_hash = "sha256:4892cf78a23188dce53f703cfe4a256a9bb31c3979d7d8187538ba161b0cc6b6"
+size = 2456006
+mtime_ms = 1793963594002
+storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:742d8fb7-8455-444c-89a0-21c32e2418fa/a36154bc-dbfd-46ce-b8f0-f929dd50b2cb/7d45d2a9-30ad-48c5-89d5-e82a0c4d84c7"
+storage_version_token = "1793963595683155"
+content_type = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
