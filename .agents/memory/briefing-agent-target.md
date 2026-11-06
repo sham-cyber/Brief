@@ -154,3 +154,9 @@ Treat SAP connection setup as generic per-clone configuration, not Finolex-speci
 **Why:** The user corrected the scope to SAP HANA generally and said a cloned app should connect to its own SAP server.
 
 **How to apply:** Do not hard-code company hosts or credentials. Use released S/4HANA OData business APIs by default; direct HANA SQL access is a separate connection type and is not enabled unless requested.
+
+Keep SAP and Tavily as separate briefing sources. The Tavily key box is separate from SAP credentials and may be opened while SAP is selected, but Tavily searches run only for Public briefs.
+
+**Why:** The user chose to keep sources separate while asking for a distinct, secure Tavily key box in the app.
+
+**How to apply:** Never send Tavily requests as part of an SAP brief unless the user changes this behavior; keep key storage and billing separate from SAP OAuth.

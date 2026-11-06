@@ -8,7 +8,7 @@ import type { BriefingResult, BriefSource, SapDataArea } from '@workspace/api-cl
 import { ClerkProvider, SignIn, SignUp, Show, useClerk, useUser } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
-import { ArrowDown, ArrowUpRight, Check, Clipboard, Clock3, FileText, Link2, LoaderCircle, Printer, Radio, Search, Square, Volume2 } from 'lucide-react';
+import { ArrowDown, ArrowUpRight, Check, Clipboard, Clock3, FileText, Link2, LoaderCircle, LockKeyhole, Printer, Radio, Search, Square, Volume2 } from 'lucide-react';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { SapConnectionSettings } from '@/components/sap-connection-settings';
 import { Toaster } from '@/components/ui/toaster';
@@ -1670,17 +1670,6 @@ function Home() {
                 <span className="text-base font-semibold text-[#292e46]">Briefing details</span>
                 <span className="rounded-full bg-[#eeeaf4] px-3 py-1 font-mono text-xs font-semibold text-[#594b87]">30 DAYS</span>
               </div>
-              {sourceMode === 'public' && (
-              <details className="mb-4 rounded-xl border border-[#ded9e2] bg-white/65 px-4 py-3" data-testid="details-source-key-settings">
-                <summary className="cursor-pointer text-base font-semibold text-[#35364a]">Source search key settings</summary>
-                <div className="pt-3">
-                  <TavilyKeySettings
-                    onChanged={() => { void sourceStatusQuery.refetch(); }}
-                    projectKeyActive={keySource === 'project-owner'}
-                  />
-                </div>
-              </details>
-              )}
               <fieldset className="mt-4">
                     <legend className="mb-2 text-base font-semibold text-[#35364a]">Briefing subject</legend>
                 <div className="grid max-w-md grid-cols-2 gap-2">
@@ -1897,6 +1886,24 @@ function Home() {
                   })}
                 </div>
               </fieldset>
+              <details className="mt-3 rounded-xl border border-[#ded9e2] bg-white/70 px-4 py-3" data-testid="details-source-key-settings">
+                <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 text-base font-semibold text-[#35364a]">
+                  <span className="inline-flex items-center gap-2">
+                    <LockKeyhole aria-hidden="true" className="h-4 w-4 text-[#594b87]" />
+                    Tavily key settings · separate from SAP
+                  </span>
+                  <span className="rounded-full bg-[#eeeaf4] px-2.5 py-1 text-xs font-semibold text-[#594b87]">Public source only</span>
+                </summary>
+                <p className="mt-3 text-sm leading-relaxed text-[#625d69]">
+                  Public-source searches run only when Public is selected and use the active Tavily key shown below. Any saved personal key remains encrypted and separate from SAP credentials; SAP briefs do not send Tavily searches.
+                </p>
+                <div className="pt-3">
+                  <TavilyKeySettings
+                    onChanged={() => { void sourceStatusQuery.refetch(); }}
+                    projectKeyActive={keySource === 'project-owner'}
+                  />
+                </div>
+              </details>
               {sourceMode === 'private' && (
                 <div className="mt-3 rounded-lg border border-[#e5c5c0] bg-[#fbefed] px-4 py-3 text-base leading-relaxed text-[#7f413b]" role="status" data-testid="private-source-unavailable">
                   Private sources are not connected. No email, mailbox, or WhatsApp data will be collected.
