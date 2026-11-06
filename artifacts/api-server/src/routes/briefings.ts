@@ -31,11 +31,19 @@ import {
   getTavilyCredentialStatus,
   getUserTavilyApiKey,
 } from "../lib/user-tavily-credentials";
+import {
+  getSapConfigurationStatus,
+  searchSapS4Hana,
+  SAP_AREA_LABELS,
+  SAP_BRIEFING_HARD_STOP_MS,
+  SAP_BRIEFING_LIMIT_MS,
+} from "../lib/sap-s4hana";
 
 const router: IRouter = Router();
 const START_PIN_MAX_ATTEMPTS = 5;
 const START_PIN_ATTEMPT_WINDOW_MS = 15 * 60_000;
 const START_PIN_LOCKOUT_MS = 15 * 60_000;
+let sapBriefingActive = false;
 const startPinFailures = new Map<
   string,
   { attempts: number; windowStartedAt: number; lockedUntil: number }
@@ -497,6 +505,7 @@ router.get("/briefings", async (req, res): Promise<void> => {
   const dailyUsage = canStart && userId
     ? await getTavilyDailyUsageStatus(userId)
     : null;
+  const sapStatus = getSapConfigurationStatus();
   res.json(GetBriefingSourceStatusResponse.parse({
     provider: "tavily",
     configured: keySource !== "missing",
@@ -517,6 +526,8 @@ router.get("/briefings", async (req, res): Promise<void> => {
     dailySearchRequestsRemaining: dailyUsage?.dailySearchRequestsRemaining ?? null,
     maxSearchesPerBriefing: TAVILY_MAX_SEARCHES_PER_BRIEFING,
     searchDepth: "basic",
+    sapConfigured: sapStatus.configured,
+    sapAvailableAreas: sapStatus.availableAreas,
   }));
 });
 
@@ -606,6 +617,7 @@ function buildBriefingContent(
   topics: BriefingTopic[],
   sources: SearchResult[],
   companyName: string | null,
+  sourceMode: "public" | "sap" = "public",
 ): {
   overview: {
     text: string;
@@ -629,6 +641,7 @@ function buildBriefingContent(
   }[];
 } {
   const contextTerms = getContextTerms(context);
+  const evidenceLabel = sourceMode === "sap" ? "SAP S/4HANA records" : "public reports";
   const researchLabel =
     subjectType === "person" && companyName
       ? `${subject} or ${companyName}`
@@ -664,11 +677,13 @@ function buildBriefingContent(
     sources,
     contextTerms,
     "positive",
+    `the selected ${evidenceLabel}`,
   );
   const topNegative = buildTopSignal(
     sources,
     contextTerms,
     "negative",
+    `the selected ${evidenceLabel}`,
   );
   const normalizedContext = context?.replace(/\s+/g, " ").trim();
   const shortContext = normalizedContext && normalizedContext.length > 100
@@ -691,13 +706,13 @@ function buildBriefingContent(
   const answerSources = matchingSources.length ? matchingSources : sources.slice(0, 2);
   const overviewText = context
     ? matchingSources.length
-      ? `For “${shortContext}” related to ${researchLabel}, the closest recent public ${answerSources.length === 1 ? "report is" : "reports are"}: ${answerSources.map(({ source }) => `${source.affiliatedCompanyReport ? "Company report: " : ""}“${sourceExcerpt(source)}”`).join(" ")}`
+      ? `For “${shortContext}” related to ${researchLabel}, the closest recent ${evidenceLabel} ${answerSources.length === 1 ? "is" : "are"}: ${answerSources.map(({ source }) => `${source.affiliatedCompanyReport ? "Company-level: " : ""}“${sourceExcerpt(source)}”`).join(" ")}`
       : sources.length
-        ? `No recent public report directly matched “${shortContext}” related to ${researchLabel}. These are the closest selected-topic reports found in the 30-day window.`
-        : `No recent public report matched “${shortContext}” related to ${researchLabel} in the 30-day window.`
+        ? `No recent ${sourceMode === "sap" ? "SAP record" : "public report"} directly matched “${shortContext}” related to ${researchLabel}. These are the closest selected-topic sources found in the 30-day window.`
+        : `No recent ${sourceMode === "sap" ? "SAP record" : "public report"} matched “${shortContext}” related to ${researchLabel} in the 30-day window.`
     : latest
-      ? `Recent public reporting related to ${researchLabel} includes ${sources.length} reports from the 30-day research window. The latest report is “${latest.title},” published by ${latest.publisher}.`
-      : `No recent public reports were found for ${researchLabel} in the selected topics during the 30-day research window.`;
+      ? `The 30-day ${evidenceLabel} for ${researchLabel} include ${sources.length} sourced record${sources.length === 1 ? "" : "s"}. Latest: “${latest.title},” recorded by ${latest.publisher}.`
+      : `No recent ${sourceMode === "sap" ? "SAP records" : "public reports"} were found for ${researchLabel} in the selected topics during the 30-day research window.`;
   const topicLabels: Record<BriefingTopic, string> = {
     news: "news",
     hire: "hire",
@@ -722,9 +737,9 @@ function buildBriefingContent(
     return {
       category,
       text: latestTopicSource
-        ? `The 30-day ${label} tab has ${topicSources.length} sourced report${topicSources.length === 1 ? "" : "s"} related to ${researchLabel}. Latest: “${latestTopicSource.source.title}.”`
+        ? `The 30-day ${label} tab has ${topicSources.length} sourced record${topicSources.length === 1 ? "" : "s"} related to ${researchLabel}. Latest: “${latestTopicSource.source.title}.”`
         : category === "hire"
-          ? `No confirmed-hire reports related to ${researchLabel} were found in the 30-day public-news crawl.`
+          ? `No confirmed-hire ${sourceMode === "sap" ? "records" : "reports"} related to ${researchLabel} were found in the 30-day ${sourceMode === "sap" ? "SAP source" : "public-news crawl"}.`
           : `No ${label} reports related to ${researchLabel} were found in the 30-day window.`,
       sourceIds: latestTopicSource ? [latestTopicSource.source.id] : [],
       topPositive: buildTopSignal(
@@ -896,6 +911,163 @@ router.post("/briefings", async (req, res): Promise<void> => {
     return;
   }
 
+  if (input.data.sourceMode !== "sap" && (input.data.sapAreas?.length ?? 0) > 0) {
+    res.status(400).json({
+      error: "Choose SAP S/4HANA as the source before selecting SAP data areas.",
+    });
+    return;
+  }
+
+  if (input.data.sourceMode === "sap") {
+    const sapAreas = input.data.sapAreas ?? [];
+    if (sapAreas.length === 0) {
+      res.status(400).json({
+        error: "Select at least one SAP data area.",
+      });
+      return;
+    }
+    const organization =
+      input.data.subjectType === "company"
+        ? input.data.subject.trim()
+        : companyName;
+    if (!organization) {
+      res.status(400).json({
+        error: "SAP briefs need a company scope. Select a Company brief or add the Chairman / CEO's company.",
+      });
+      return;
+    }
+    const sapStatus = getSapConfigurationStatus();
+    if (!sapStatus.configured) {
+      res.status(503).json({
+        error: "SAP S/4HANA is not configured on the server. No SAP data was requested.",
+      });
+      return;
+    }
+    const unavailableAreas = sapAreas.filter(
+      (area) => !sapStatus.availableAreas.includes(area),
+    );
+    if (unavailableAreas.length > 0) {
+      res.status(403).json({
+        error: `These SAP areas are not enabled for the approved connection: ${unavailableAreas.map((area) => SAP_AREA_LABELS[area]).join(", ")}.`,
+      });
+      return;
+    }
+    if (sapBriefingActive) {
+      res.status(429).json({
+        error: "An SAP briefing is already running. Wait for it to finish before starting another.",
+      });
+      return;
+    }
+
+    sapBriefingActive = true;
+    const crawlController = new AbortController();
+    let stopReason: "time-limit" | "hard-stop" | null = null;
+    const durationTimer = setTimeout(() => {
+      stopReason = "time-limit";
+      crawlController.abort(new Error("SAP briefing reached its two-minute limit."));
+    }, SAP_BRIEFING_LIMIT_MS);
+    const hardStopTimer = setTimeout(() => {
+      stopReason = "hard-stop";
+      crawlController.abort(new Error("SAP briefing reached its three-minute hard stop."));
+    }, SAP_BRIEFING_HARD_STOP_MS);
+
+    try {
+      const now = new Date();
+      const meetingAt = input.data.meetingAt;
+      const windowEnd = now;
+      const windowStart = new Date(windowEnd.getTime() - 30 * 86_400_000);
+      const topics = input.data.topics as BriefingTopic[];
+      const sapResult = await searchSapS4Hana({
+        areas: sapAreas,
+        topics,
+        organization,
+        windowStart,
+        windowEnd,
+        affiliatedCompanyReport: input.data.subjectType === "person",
+        signal: crawlController.signal,
+      });
+      if (stopReason) {
+        res.status(504).json({
+          error: stopReason === "time-limit"
+            ? "This SAP briefing reached its two-minute collection limit and was stopped."
+            : "The SAP briefing reached its three-minute backup hard stop.",
+        });
+        return;
+      }
+
+      const relevant = sapResult.sources.filter(({ source, searchedAs }) =>
+        classifySource(source, searchedAs, topics) !== null,
+      );
+      const content = buildBriefingContent(
+        input.data.subject.trim(),
+        input.data.subjectType,
+        input.data.context?.trim() || undefined,
+        topics,
+        relevant,
+        companyName,
+        "sap",
+      );
+      const dataSourceIds = sapResult.sapData.slice(0, 3).flatMap((item) => item.sourceIds);
+      const returnedAreaCount = new Set(sapResult.sapData.map((item) => item.area)).size;
+      content.overview.text = sapResult.sapData.length
+        ? `SAP S/4HANA returned ${sapResult.sapData.length} cited record${sapResult.sapData.length === 1 ? "" : "s"} across ${returnedAreaCount} selected data area${returnedAreaCount === 1 ? "" : "s"} for ${organization}. See SAP Data for the records.`
+        : `No SAP records matched the selected areas and topics for ${organization} during the 30-day window.`;
+      content.overview.sourceIds = dataSourceIds;
+      content.overview.topPositive = {
+        text: "Positive/negative scoring is not applied to SAP records. Review the cited operational values below.",
+        sourceIds: [],
+      };
+      content.overview.topNegative = {
+        text: "Positive/negative scoring is not applied to SAP records. Review the cited operational values below.",
+        sourceIds: [],
+      };
+
+      const result = CreateBriefingResponse.parse({
+        briefingId: randomUUID(),
+        subject: input.data.subject.trim(),
+        subjectType: input.data.subjectType,
+        personRole: input.data.personRole,
+        publicRoleTitle,
+        companyName,
+        sourceMode: "sap",
+        sapAreas,
+        topics,
+        meetingAt: meetingAt.toISOString(),
+        generatedAt: now.toISOString(),
+        windowStart: windowStart.toISOString(),
+        windowEnd: windowEnd.toISOString(),
+        searchCreditsUsed: null,
+        sourceSearchesCompleted: sapResult.requestsCompleted,
+        searchResultsReturned: sapResult.resultsReturned,
+        ...content,
+        sources: sapResult.sources.map(({ source }) => source),
+        sapData: sapResult.sapData,
+      });
+      res.json(result);
+    } catch (error) {
+      req.log.error(
+        {
+          areaCount: sapAreas.length,
+          errorName: error instanceof Error ? error.name : "unknown",
+          stopReason,
+        },
+        "SAP S/4HANA briefing request failed",
+      );
+      res.status(stopReason ? 504 : 502).json({
+        error: stopReason === "time-limit"
+          ? "This SAP briefing reached its two-minute collection limit and was stopped."
+          : stopReason === "hard-stop"
+            ? "The SAP briefing reached its three-minute backup hard stop."
+            : "SAP data could not be collected. Check the approved S/4HANA connection and try again.",
+      });
+    } finally {
+      clearTimeout(durationTimer);
+      clearTimeout(hardStopTimer);
+      sapBriefingActive = false;
+    }
+    return;
+  }
+
   let apiKey: string | null;
   const projectApiKey = process.env.TAVILY_API_KEY?.trim();
   if (projectApiKey) {
@@ -1041,6 +1213,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
       publicRoleTitle,
       companyName,
       sourceMode: "public",
+      sapAreas: [],
       topics,
       meetingAt: meetingAt.toISOString(),
       generatedAt: now.toISOString(),
@@ -1051,6 +1224,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
       searchResultsReturned: searchResult.resultsReturned,
       ...content,
       sources,
+      sapData: [],
     });
     res.json(result);
   } catch (error) {

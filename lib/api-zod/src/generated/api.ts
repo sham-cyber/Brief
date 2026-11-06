@@ -57,7 +57,7 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
- * @summary Get the signed-in user's source configuration and app-wide crawl allowance
+ * @summary Get source readiness and the public-search crawl allowance
  */
 export const getBriefingSourceStatusResponseDailyCrawlLimitMsMin = 0;
 
@@ -102,12 +102,14 @@ export const GetBriefingSourceStatusResponse = zod.object({
   "dailySearchRequestsUsed": zod.number().int().min(getBriefingSourceStatusResponseDailySearchRequestsUsedMin).nullable(),
   "dailySearchRequestsRemaining": zod.number().int().min(getBriefingSourceStatusResponseDailySearchRequestsRemainingMin).nullable(),
   "maxSearchesPerBriefing": zod.number().int().min(1).max(getBriefingSourceStatusResponseMaxSearchesPerBriefingMax).describe('One request per selected topic, up to five topics.'),
-  "searchDepth": zod.enum(['basic'])
+  "searchDepth": zod.enum(['basic']),
+  "sapConfigured": zod.boolean().describe('Whether the server has an SAP S/4HANA OAuth connection and at least one approved area mapping configured. This does not probe SAP.'),
+  "sapAvailableAreas": zod.array(zod.enum(['store', 'production', 'maintenance', 'inventory', 'sales', 'hr', 'power_electrical_solar']))
 })
 
 
 /**
- * @summary Create a sourced pre-meeting briefing
+ * @summary Create a public or SAP-sourced pre-meeting briefing
  */
 export const createBriefingBodyStartPinMin = 4;
 export const createBriefingBodyStartPinMax = 4;
@@ -122,6 +124,8 @@ export const createBriefingBodyPublicRoleTitleMax = 80;
 export const createBriefingBodyCompanyNameMax = 200;
 
 export const createBriefingBodySourceModeDefault = `public`;
+export const createBriefingBodySapAreasMax = 7;
+
 export const createBriefingBodyContextMax = 1500;
 
 
@@ -134,7 +138,8 @@ export const CreateBriefingBody = zod.object({
   "personRole": zod.union([zod.literal('business_owner'),zod.literal('mp'),zod.literal('corporate'),zod.literal(null)]).nullable(),
   "publicRoleTitle": zod.string().max(createBriefingBodyPublicRoleTitleMax).optional(),
   "companyName": zod.string().max(createBriefingBodyCompanyNameMax).optional(),
-  "sourceMode": zod.enum(['public', 'private']).default(createBriefingBodySourceModeDefault),
+  "sourceMode": zod.enum(['public', 'private', 'sap']).default(createBriefingBodySourceModeDefault),
+  "sapAreas": zod.array(zod.enum(['store', 'production', 'maintenance', 'inventory', 'sales', 'hr', 'power_electrical_solar'])).max(createBriefingBodySapAreasMax).optional().describe('SAP S/4HANA data areas selected for this briefing. Required only when sourceMode is sap.'),
   "meetingAt": zod.coerce.date(),
   "context": zod.string().max(createBriefingBodyContextMax).optional(),
   "topics": zod.array(zod.enum(['news', 'hire', 'launch', 'financial', 'risk'])).min(1)
@@ -153,6 +158,7 @@ export const createBriefingResponseSearchResultsReturnedMin = 0;
 
 
 
+
 export const CreateBriefingResponse = zod.object({
   "briefingId": zod.string().uuid(),
   "subject": zod.string(),
@@ -160,14 +166,15 @@ export const CreateBriefingResponse = zod.object({
   "personRole": zod.union([zod.literal('business_owner'),zod.literal('mp'),zod.literal('corporate'),zod.literal(null)]).nullable(),
   "publicRoleTitle": zod.string().max(createBriefingResponsePublicRoleTitleMax).nullable(),
   "companyName": zod.string().max(createBriefingResponseCompanyNameMax).nullable(),
-  "sourceMode": zod.enum(['public', 'private']),
+  "sourceMode": zod.enum(['public', 'private', 'sap']),
+  "sapAreas": zod.array(zod.enum(['store', 'production', 'maintenance', 'inventory', 'sales', 'hr', 'power_electrical_solar'])),
   "topics": zod.array(zod.enum(['news', 'hire', 'launch', 'financial', 'risk'])),
   "meetingAt": zod.coerce.date(),
   "generatedAt": zod.coerce.date(),
   "windowStart": zod.coerce.date(),
   "windowEnd": zod.coerce.date(),
   "searchCreditsUsed": zod.number().int().min(createBriefingResponseSearchCreditsUsedMin).nullable(),
-  "sourceSearchesCompleted": zod.number().int().min(createBriefingResponseSourceSearchesCompletedMin),
+  "sourceSearchesCompleted": zod.number().int().min(createBriefingResponseSourceSearchesCompletedMin).describe('Completed Tavily topic searches or SAP area requests, depending on sourceMode.'),
   "searchResultsReturned": zod.number().int().min(createBriefingResponseSearchResultsReturnedMin),
   "overview": zod.object({
   "text": zod.string(),
@@ -216,7 +223,15 @@ export const CreateBriefingResponse = zod.object({
   "url": zod.string().url(),
   "description": zod.string()
 })).optional().describe('Images extracted from this accepted source. Images remain optional when none are available.')
-}))
+})),
+  "sapData": zod.array(zod.object({
+  "area": zod.enum(['store', 'production', 'maintenance', 'inventory', 'sales', 'hr', 'power_electrical_solar']),
+  "recordId": zod.string(),
+  "title": zod.string(),
+  "detail": zod.string(),
+  "recordedAt": zod.coerce.date(),
+  "sourceIds": zod.array(zod.string()).min(1)
+})).describe('Cited records from the selected SAP S/4HANA areas. Empty for non-SAP briefs.')
 })
 
 

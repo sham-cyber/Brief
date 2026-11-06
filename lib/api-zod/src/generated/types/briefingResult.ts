@@ -14,6 +14,8 @@ import type { BriefingResultSubjectType } from './briefingResultSubjectType';
 import type { BriefingResultTopicsItem } from './briefingResultTopicsItem';
 import type { BriefingTopicBrief } from './briefingTopicBrief';
 import type { BriefSource } from './briefSource';
+import type { SapBriefingDataItem } from './sapBriefingDataItem';
+import type { SapDataArea } from './sapDataArea';
 
 export interface BriefingResult {
   briefingId: string;
@@ -32,6 +34,7 @@ export interface BriefingResult {
      */
   companyName: string | null;
   sourceMode: BriefingResultSourceMode;
+  sapAreas: SapDataArea[];
   topics: BriefingResultTopicsItem[];
   meetingAt: Date;
   generatedAt: Date;
@@ -42,7 +45,10 @@ export interface BriefingResult {
      * @nullable
      */
   searchCreditsUsed: number | null;
-  /** @minimum 0 */
+  /**
+     * Completed Tavily topic searches or SAP area requests, depending on sourceMode.
+     * @minimum 0
+     */
   sourceSearchesCompleted: number;
   /** @minimum 0 */
   searchResultsReturned: number;
@@ -51,4 +57,6 @@ export interface BriefingResult {
   questions: BriefingQuestion[];
   topicBriefs: BriefingTopicBrief[];
   sources: BriefSource[];
+  /** Cited records from the selected SAP S/4HANA areas. Empty for non-SAP briefs. */
+  sapData: SapBriefingDataItem[];
 }

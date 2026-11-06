@@ -37,5 +37,7 @@ export * from './personProfileInput';
 export * from './personProfileInputPersonRole';
 export * from './personProfileList';
 export * from './personProfilePersonRole';
+export * from './sapBriefingDataItem';
+export * from './sapDataArea';
 export * from './tavilyCredentialInput';
 export * from './tavilyCredentialStatus';

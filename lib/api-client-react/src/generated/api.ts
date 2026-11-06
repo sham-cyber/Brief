@@ -386,7 +386,7 @@ export const getGetBriefingSourceStatusUrl = () => {
 }
 
 /**
- * @summary Get the signed-in user's source configuration and app-wide crawl allowance
+ * @summary Get source readiness and the public-search crawl allowance
  */
 export const getBriefingSourceStatus = async ( options?: Parameters<typeof customFetch>[1]): Promise<BriefingSourceStatus> => {
 
@@ -433,7 +433,7 @@ export type GetBriefingSourceStatusQueryError = ErrorType<unknown>
 
 
 /**
- * @summary Get the signed-in user's source configuration and app-wide crawl allowance
+ * @summary Get source readiness and the public-search crawl allowance
  */
 
 export function useGetBriefingSourceStatus<TData = Awaited<ReturnType<typeof getBriefingSourceStatus>>, TError = ErrorType<unknown>>(
@@ -463,7 +463,7 @@ export const getCreateBriefingUrl = () => {
 }
 
 /**
- * @summary Create a sourced pre-meeting briefing
+ * @summary Create a public or SAP-sourced pre-meeting briefing
  */
 export const createBriefing = async (briefingInput: BriefingInput, options?: Parameters<typeof customFetch>[1]): Promise<BriefingResult> => {
 
@@ -529,7 +529,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type CreateBriefingMutationVariables = {data: BodyType<BriefingInput>}
 
     /**
- * @summary Create a sourced pre-meeting briefing
+ * @summary Create a public or SAP-sourced pre-meeting briefing
  */
 export const useCreateBriefing = <TError = ErrorType<Error>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createBriefing>>, TError,CreateBriefingMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}

@@ -8,6 +8,7 @@
 import type { BriefingSourceStatusKeySource } from './briefingSourceStatusKeySource';
 import type { BriefingSourceStatusProvider } from './briefingSourceStatusProvider';
 import type { BriefingSourceStatusSearchDepth } from './briefingSourceStatusSearchDepth';
+import type { SapDataArea } from './sapDataArea';
 
 export interface BriefingSourceStatus {
   provider: BriefingSourceStatusProvider;
@@ -74,4 +75,7 @@ export interface BriefingSourceStatus {
      */
   maxSearchesPerBriefing: number;
   searchDepth: BriefingSourceStatusSearchDepth;
+  /** Whether the server has an SAP S/4HANA OAuth connection and at least one approved area mapping configured. This does not probe SAP. */
+  sapConfigured: boolean;
+  sapAvailableAreas: SapDataArea[];
 }

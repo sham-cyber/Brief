@@ -12,4 +12,5 @@ export type BriefingInputSourceMode = typeof BriefingInputSourceMode[keyof typeo
 export const BriefingInputSourceMode = {
   public: 'public',
   private: 'private',
+  sap: 'sap',
 } as const;

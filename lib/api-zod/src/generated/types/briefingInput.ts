@@ -9,6 +9,7 @@ import type { BriefingInputPersonRole } from './briefingInputPersonRole';
 import type { BriefingInputSourceMode } from './briefingInputSourceMode';
 import type { BriefingInputSubjectType } from './briefingInputSubjectType';
 import type { BriefingInputTopicsItem } from './briefingInputTopicsItem';
+import type { SapDataArea } from './sapDataArea';
 
 export interface BriefingInput {
   /**
@@ -30,6 +31,11 @@ export interface BriefingInput {
   /** @maxLength 200 */
   companyName?: string;
   sourceMode: BriefingInputSourceMode;
+  /**
+     * SAP S/4HANA data areas selected for this briefing. Required only when sourceMode is sap.
+     * @maxItems 7
+     */
+  sapAreas?: SapDataArea[];
   meetingAt: Date;
   /** @maxLength 1500 */
   context?: string;

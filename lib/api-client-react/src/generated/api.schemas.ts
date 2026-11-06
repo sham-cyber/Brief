@@ -39,6 +39,7 @@ export type BriefingInputSourceMode = typeof BriefingInputSourceMode[keyof typeo
 export const BriefingInputSourceMode = {
   public: 'public',
   private: 'private',
+  sap: 'sap',
 } as const;
 
 export type BriefingInputTopicsItem = typeof BriefingInputTopicsItem[keyof typeof BriefingInputTopicsItem];
@@ -50,6 +51,19 @@ export const BriefingInputTopicsItem = {
   launch: 'launch',
   financial: 'financial',
   risk: 'risk',
+} as const;
+
+export type SapDataArea = typeof SapDataArea[keyof typeof SapDataArea];
+
+
+export const SapDataArea = {
+  store: 'store',
+  production: 'production',
+  maintenance: 'maintenance',
+  inventory: 'inventory',
+  sales: 'sales',
+  hr: 'hr',
+  power_electrical_solar: 'power_electrical_solar',
 } as const;
 
 export interface BriefingInput {
@@ -72,6 +86,11 @@ export interface BriefingInput {
   /** @maxLength 200 */
   companyName?: string;
   sourceMode: BriefingInputSourceMode;
+  /**
+     * SAP S/4HANA data areas selected for this briefing. Required only when sourceMode is sap.
+     * @maxItems 7
+     */
+  sapAreas?: SapDataArea[];
   meetingAt: string;
   /** @maxLength 1500 */
   context?: string;
@@ -189,6 +208,9 @@ export interface BriefingSourceStatus {
      */
   maxSearchesPerBriefing: number;
   searchDepth: BriefingSourceStatusSearchDepth;
+  /** Whether the server has an SAP S/4HANA OAuth connection and at least one approved area mapping configured. This does not probe SAP. */
+  sapConfigured: boolean;
+  sapAvailableAreas: SapDataArea[];
 }
 
 export interface TavilyCredentialStatus {
@@ -287,6 +309,7 @@ export type BriefingResultSourceMode = typeof BriefingResultSourceMode[keyof typ
 export const BriefingResultSourceMode = {
   public: 'public',
   private: 'private',
+  sap: 'sap',
 } as const;
 
 export type BriefingResultTopicsItem = typeof BriefingResultTopicsItem[keyof typeof BriefingResultTopicsItem];
@@ -299,6 +322,16 @@ export const BriefingResultTopicsItem = {
   financial: 'financial',
   risk: 'risk',
 } as const;
+
+export interface SapBriefingDataItem {
+  area: SapDataArea;
+  recordId: string;
+  title: string;
+  detail: string;
+  recordedAt: string;
+  /** @minItems 1 */
+  sourceIds: string[];
+}
 
 export interface BriefingResult {
   briefingId: string;
@@ -317,6 +350,7 @@ export interface BriefingResult {
      */
   companyName: string | null;
   sourceMode: BriefingResultSourceMode;
+  sapAreas: SapDataArea[];
   topics: BriefingResultTopicsItem[];
   meetingAt: string;
   generatedAt: string;
@@ -327,7 +361,10 @@ export interface BriefingResult {
      * @nullable
      */
   searchCreditsUsed: number | null;
-  /** @minimum 0 */
+  /**
+     * Completed Tavily topic searches or SAP area requests, depending on sourceMode.
+     * @minimum 0
+     */
   sourceSearchesCompleted: number;
   /** @minimum 0 */
   searchResultsReturned: number;
@@ -336,6 +373,8 @@ export interface BriefingResult {
   questions: BriefingQuestion[];
   topicBriefs: BriefingTopicBrief[];
   sources: BriefSource[];
+  /** Cited records from the selected SAP S/4HANA areas. Empty for non-SAP briefs. */
+  sapData: SapBriefingDataItem[];
 }
 
 export type PersonProfileInputPersonRole = typeof PersonProfileInputPersonRole[keyof typeof PersonProfileInputPersonRole];

@@ -12,4 +12,5 @@ export type BriefingResultSourceMode = typeof BriefingResultSourceMode[keyof typ
 export const BriefingResultSourceMode = {
   public: 'public',
   private: 'private',
+  sap: 'sap',
 } as const;

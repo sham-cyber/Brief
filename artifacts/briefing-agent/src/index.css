@@ -450,6 +450,9 @@
   .print-page-overview { overflow: hidden; border: .25mm solid #d8d2df; padding: 3mm 4mm; }
   .print-page-overview h2, .print-page-sources h2 { margin: 0 0 1mm; font-family: Georgia, serif; font-size: 10pt; }
   .print-page-overview p { display: -webkit-box; margin: 0; overflow: hidden; font-size: 8pt; line-height: 1.25; -webkit-box-orient: vertical; -webkit-line-clamp: 5; }
+  .print-sap-data { min-height: 0; overflow: hidden; border: .25mm solid #c2ddda; padding: 3mm 4mm; }
+  .print-sap-data h2 { margin: 0 0 2mm; color: #245d5b; font-family: Georgia, serif; font-size: 10pt; }
+  .print-sap-data p { display: -webkit-box; margin: 0 0 1.5mm; overflow: hidden; font-size: 7pt; line-height: 1.2; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
   .print-topic-grid { display: grid; min-height: 0; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(3, minmax(0, 1fr)); gap: 1.5mm; }
   .print-topic { min-height: 0; overflow: hidden; border: .25mm solid #d8d2df; padding: 2.5mm 3mm; }
   .print-topic h2 { margin: 0 0 1.5mm; color: #4f426f; font-family: Georgia, serif; font-size: 9pt; }

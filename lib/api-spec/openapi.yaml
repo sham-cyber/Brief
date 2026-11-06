@@ -114,10 +114,10 @@ paths:
     get:
       operationId: getBriefingSourceStatus
       tags: [briefings]
-      summary: Get the signed-in user's source configuration and app-wide crawl allowance
+      summary: Get source readiness and the public-search crawl allowance
       responses:
         "200":
-          description: Per-user Tavily connection status and app-wide crawl allowance without exposing credentials
+          description: Public Tavily status, SAP configuration readiness, and crawl allowance without exposing credentials
           content:
             application/json:
               schema:
@@ -125,7 +125,7 @@ paths:
     post:
       operationId: createBriefing
       tags: [briefings]
-      summary: Create a sourced pre-meeting briefing
+      summary: Create a public or SAP-sourced pre-meeting briefing
       requestBody:
         required: true
         content:
@@ -176,7 +176,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "503":
-          description: Tavily or start-PIN configuration is unavailable, or a private source is not configured
+          description: Tavily, SAP, or start-PIN configuration is unavailable, or a private source is not configured
           content:
             application/json:
               schema:
@@ -300,8 +300,15 @@ components:
           maxLength: 200
         sourceMode:
           type: string
-          enum: [public, private]
+          enum: [public, private, sap]
           default: public
+        sapAreas:
+          type: array
+          maxItems: 7
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/SapDataArea"
+          description: SAP S/4HANA data areas selected for this briefing. Required only when sourceMode is sap.
         meetingAt:
           type: string
           format: date-time
@@ -316,6 +323,9 @@ components:
             type: string
             enum: [news, hire, launch, financial, risk]
       required: [startPin, subject, subjectType, personRole, sourceMode, meetingAt, topics]
+    SapDataArea:
+      type: string
+      enum: [store, production, maintenance, inventory, sales, hr, power_electrical_solar]
     BriefSource:
       type: object
       properties:
@@ -411,6 +421,13 @@ components:
         searchDepth:
           type: string
           enum: [basic]
+        sapConfigured:
+          type: boolean
+          description: Whether the server has an SAP S/4HANA OAuth connection and at least one approved area mapping configured. This does not probe SAP.
+        sapAvailableAreas:
+          type: array
+          items:
+            $ref: "#/components/schemas/SapDataArea"
       required:
         - provider
         - configured
@@ -431,6 +448,8 @@ components:
         - dailySearchRequestsRemaining
         - maxSearchesPerBriefing
         - searchDepth
+        - sapConfigured
+        - sapAvailableAreas
     TavilyCredentialStatus:
       type: object
       properties:
@@ -539,7 +558,11 @@ components:
           maxLength: 200
         sourceMode:
           type: string
-          enum: [public, private]
+          enum: [public, private, sap]
+        sapAreas:
+          type: array
+          items:
+            $ref: "#/components/schemas/SapDataArea"
         topics:
           type: array
           items:
@@ -563,6 +586,7 @@ components:
         sourceSearchesCompleted:
           type: integer
           minimum: 0
+          description: Completed Tavily topic searches or SAP area requests, depending on sourceMode.
         searchResultsReturned:
           type: integer
           minimum: 0
@@ -584,6 +608,11 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/BriefSource"
+        sapData:
+          type: array
+          description: Cited records from the selected SAP S/4HANA areas. Empty for non-SAP briefs.
+          items:
+            $ref: "#/components/schemas/SapBriefingDataItem"
       required:
         - briefingId
         - subject
@@ -592,6 +621,7 @@ components:
         - publicRoleTitle
         - companyName
         - sourceMode
+        - sapAreas
         - topics
         - meetingAt
         - generatedAt
@@ -605,6 +635,27 @@ components:
         - questions
         - topicBriefs
         - sources
+        - sapData
+    SapBriefingDataItem:
+      type: object
+      properties:
+        area:
+          $ref: "#/components/schemas/SapDataArea"
+        recordId:
+          type: string
+        title:
+          type: string
+        detail:
+          type: string
+        recordedAt:
+          type: string
+          format: date-time
+        sourceIds:
+          type: array
+          minItems: 1
+          items:
+            type: string
+      required: [area, recordId, title, detail, recordedAt, sourceIds]
     PersonProfileInput:
       type: object
       properties:
