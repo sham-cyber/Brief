@@ -25,7 +25,7 @@ For operational records such as store, production, maintenance, inventory, sales
 
 ## Areas, access, and limits
 
-Available areas are `store`, `production`, `maintenance`, `inventory`, `sales`, `hr`, and `power_electrical_solar`. Only areas with valid mappings appear as selectable. Each area is requested only if its mapped briefing topic is selected. Each filter must contain `{start}`, `{end}`, and `{organization}`; the app supplies the rolling 30-day window and requires the company or plant to exactly match the administrator's allowlist. The service path stays under the configured HTTPS origin, and each area returns at most 20 records.
+Available areas are `store`, `production`, `maintenance`, `inventory`, `sales`, `hr`, `power_electrical_solar`, `purchase`, `scrap`, `order`, and `delivery`. Only areas with valid mappings appear as selectable. Each area is requested only if its mapped briefing topic is selected. Each filter must contain `{start}`, `{end}`, and `{organization}`; the app supplies the rolling 30-day window and requires the company or plant to exactly match the administrator's allowlist. The service path stays under the configured HTTPS origin, and each area returns at most 20 records.
 
 Use a dedicated SAP integration identity with read-only permissions restricted to the intended company/plant and approved data areas. Do not configure HR unless the SAP administrator explicitly approves that access. The app currently restricts briefing starts to its configured owner; a multi-user rollout needs SAP-side user/role enforcement before it is opened to other accounts.
 

@@ -84,7 +84,7 @@ export const GetSapConnectionSettingsResponse = zod.object({
   "scope": zod.string().nullable(),
   "organizations": zod.array(zod.string()),
   "areas": zod.array(zod.object({
-  "area": zod.enum(['store', 'production', 'maintenance', 'inventory', 'sales', 'hr', 'power_electrical_solar']),
+  "area": zod.enum(['store', 'production', 'maintenance', 'inventory', 'sales', 'hr', 'power_electrical_solar', 'purchase', 'scrap', 'order', 'delivery']),
   "resourcePath": zod.string().min(1).max(getSapConnectionSettingsResponseAreasItemResourcePathMax),
   "filterTemplate": zod.string().max(getSapConnectionSettingsResponseAreasItemFilterTemplateMax).describe('OData filter expression using {start}, {end}, and {organization} placeholders.'),
   "dateField": zod.string().regex(getSapConnectionSettingsResponseAreasItemDateFieldRegExp),
@@ -126,7 +126,7 @@ export const saveSapConnectionSettingsBodyAreasItemTitleFieldRegExp = new RegExp
 export const saveSapConnectionSettingsBodyAreasItemSummaryFieldsItemRegExp = new RegExp('^[A-Za-z_][A-Za-z0-9_]*$');
 export const saveSapConnectionSettingsBodyAreasItemSummaryFieldsMax = 12;
 
-export const saveSapConnectionSettingsBodyAreasMax = 7;
+export const saveSapConnectionSettingsBodyAreasMax = 11;
 
 
 
@@ -139,7 +139,7 @@ export const SaveSapConnectionSettingsBody = zod.object({
   "scope": zod.string().max(saveSapConnectionSettingsBodyScopeMax).optional(),
   "organizations": zod.array(zod.string().min(1).max(saveSapConnectionSettingsBodyOrganizationsItemMax)).min(1).max(saveSapConnectionSettingsBodyOrganizationsMax),
   "areas": zod.array(zod.object({
-  "area": zod.enum(['store', 'production', 'maintenance', 'inventory', 'sales', 'hr', 'power_electrical_solar']),
+  "area": zod.enum(['store', 'production', 'maintenance', 'inventory', 'sales', 'hr', 'power_electrical_solar', 'purchase', 'scrap', 'order', 'delivery']),
   "resourcePath": zod.string().min(1).max(saveSapConnectionSettingsBodyAreasItemResourcePathMax),
   "filterTemplate": zod.string().max(saveSapConnectionSettingsBodyAreasItemFilterTemplateMax).describe('OData filter expression using {start}, {end}, and {organization} placeholders.'),
   "dateField": zod.string().regex(saveSapConnectionSettingsBodyAreasItemDateFieldRegExp),
@@ -175,7 +175,7 @@ export const SaveSapConnectionSettingsResponse = zod.object({
   "scope": zod.string().nullable(),
   "organizations": zod.array(zod.string()),
   "areas": zod.array(zod.object({
-  "area": zod.enum(['store', 'production', 'maintenance', 'inventory', 'sales', 'hr', 'power_electrical_solar']),
+  "area": zod.enum(['store', 'production', 'maintenance', 'inventory', 'sales', 'hr', 'power_electrical_solar', 'purchase', 'scrap', 'order', 'delivery']),
   "resourcePath": zod.string().min(1).max(saveSapConnectionSettingsResponseAreasItemResourcePathMax),
   "filterTemplate": zod.string().max(saveSapConnectionSettingsResponseAreasItemFilterTemplateMax).describe('OData filter expression using {start}, {end}, and {organization} placeholders.'),
   "dateField": zod.string().regex(saveSapConnectionSettingsResponseAreasItemDateFieldRegExp),
@@ -254,7 +254,7 @@ export const GetBriefingSourceStatusResponse = zod.object({
   "maxSearchesPerBriefing": zod.number().int().min(1).max(getBriefingSourceStatusResponseMaxSearchesPerBriefingMax).describe('One request per selected topic, up to five topics.'),
   "searchDepth": zod.enum(['basic']),
   "sapConfigured": zod.boolean().describe('Whether the server has an SAP S/4HANA OAuth connection and at least one approved area mapping configured. This does not probe SAP.'),
-  "sapAvailableAreas": zod.array(zod.enum(['store', 'production', 'maintenance', 'inventory', 'sales', 'hr', 'power_electrical_solar']))
+  "sapAvailableAreas": zod.array(zod.enum(['store', 'production', 'maintenance', 'inventory', 'sales', 'hr', 'power_electrical_solar', 'purchase', 'scrap', 'order', 'delivery']))
 })
 
 
@@ -274,7 +274,7 @@ export const createBriefingBodyPublicRoleTitleMax = 80;
 export const createBriefingBodyCompanyNameMax = 200;
 
 export const createBriefingBodySourceModeDefault = `public`;
-export const createBriefingBodySapAreasMax = 7;
+export const createBriefingBodySapAreasMax = 11;
 
 export const createBriefingBodyContextMax = 1500;
 
@@ -289,7 +289,7 @@ export const CreateBriefingBody = zod.object({
   "publicRoleTitle": zod.string().max(createBriefingBodyPublicRoleTitleMax).optional(),
   "companyName": zod.string().max(createBriefingBodyCompanyNameMax).optional(),
   "sourceMode": zod.enum(['public', 'private', 'sap']).default(createBriefingBodySourceModeDefault),
-  "sapAreas": zod.array(zod.enum(['store', 'production', 'maintenance', 'inventory', 'sales', 'hr', 'power_electrical_solar'])).max(createBriefingBodySapAreasMax).optional().describe('SAP S/4HANA data areas selected for this briefing. Required only when sourceMode is sap.'),
+  "sapAreas": zod.array(zod.enum(['store', 'production', 'maintenance', 'inventory', 'sales', 'hr', 'power_electrical_solar', 'purchase', 'scrap', 'order', 'delivery'])).max(createBriefingBodySapAreasMax).optional().describe('SAP S/4HANA data areas selected for this briefing. Required only when sourceMode is sap.'),
   "meetingAt": zod.coerce.date(),
   "context": zod.string().max(createBriefingBodyContextMax).optional(),
   "topics": zod.array(zod.enum(['news', 'hire', 'launch', 'financial', 'risk'])).min(1)
@@ -317,7 +317,7 @@ export const CreateBriefingResponse = zod.object({
   "publicRoleTitle": zod.string().max(createBriefingResponsePublicRoleTitleMax).nullable(),
   "companyName": zod.string().max(createBriefingResponseCompanyNameMax).nullable(),
   "sourceMode": zod.enum(['public', 'private', 'sap']),
-  "sapAreas": zod.array(zod.enum(['store', 'production', 'maintenance', 'inventory', 'sales', 'hr', 'power_electrical_solar'])),
+  "sapAreas": zod.array(zod.enum(['store', 'production', 'maintenance', 'inventory', 'sales', 'hr', 'power_electrical_solar', 'purchase', 'scrap', 'order', 'delivery'])),
   "topics": zod.array(zod.enum(['news', 'hire', 'launch', 'financial', 'risk'])),
   "meetingAt": zod.coerce.date(),
   "generatedAt": zod.coerce.date(),
@@ -375,7 +375,7 @@ export const CreateBriefingResponse = zod.object({
 })).optional().describe('Images extracted from this accepted source. Images remain optional when none are available.')
 })),
   "sapData": zod.array(zod.object({
-  "area": zod.enum(['store', 'production', 'maintenance', 'inventory', 'sales', 'hr', 'power_electrical_solar']),
+  "area": zod.enum(['store', 'production', 'maintenance', 'inventory', 'sales', 'hr', 'power_electrical_solar', 'purchase', 'scrap', 'order', 'delivery']),
   "recordId": zod.string(),
   "title": zod.string(),
   "detail": zod.string(),

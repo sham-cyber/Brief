@@ -73,6 +73,10 @@ const SAP_AREAS: { value: SapDataArea; label: string }[] = [
   { value: 'sales', label: 'Sales' },
   { value: 'hr', label: 'HR' },
   { value: 'power_electrical_solar', label: 'Power / Electrical / Solar' },
+  { value: 'purchase', label: 'Purchase' },
+  { value: 'scrap', label: 'Scrap' },
+  { value: 'order', label: 'Order' },
+  { value: 'delivery', label: 'Delivery' },
 ];
 const PERSON_ROLES = [
   { value: 'business_owner', label: 'Chairman / CEO' },
@@ -1666,12 +1670,6 @@ function Home() {
                 <span className="text-base font-semibold text-[#292e46]">Briefing details</span>
                 <span className="rounded-full bg-[#eeeaf4] px-3 py-1 font-mono text-xs font-semibold text-[#594b87]">30 DAYS</span>
               </div>
-              {canStart && (
-                <SapConnectionSettings
-                  basePath={basePath}
-                  onChanged={() => { void sourceStatusQuery.refetch(); }}
-                />
-              )}
               {sourceMode === 'public' && (
               <details className="mb-4 rounded-xl border border-[#ded9e2] bg-white/65 px-4 py-3" data-testid="details-source-key-settings">
                 <summary className="cursor-pointer text-base font-semibold text-[#35364a]">Source search key settings</summary>
@@ -1857,33 +1855,44 @@ function Home() {
                     const unavailableForSubject = value === 'private' && subjectType === 'company';
                     const selected = sourceMode === value;
                     return (
-                      <label
-                        key={value}
-                        className={`flex min-h-12 items-center gap-2 rounded-lg border px-3 py-2 text-base font-semibold transition ${
-                          unavailableForSubject
-                            ? 'cursor-not-allowed border-[#e3dfe5] bg-[#f4f2f4] text-[#a19ba5]'
-                            : selected
-                              ? value === 'sap'
-                                ? 'cursor-pointer border-[#54a7a3] bg-[#e8f5f3] text-[#245d5b]'
-                                : value === 'public'
-                                  ? 'cursor-pointer border-[#9183ad] bg-[#f0edf6] text-[#493d65]'
-                                  : 'cursor-pointer border-[#bd8b4a] bg-[#fff5e6] text-[#754a1f]'
-                              : 'cursor-pointer border-[#d9d4df] bg-[#fffefa] text-[#777280] hover:border-[#bbb1cc]'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="sourceMode"
-                          value={value}
-                          checked={selected}
-                          disabled={unavailableForSubject}
-                          onChange={() => setSourceMode(value)}
-                          className="accent-[#655487]"
-                          data-testid={`radio-source-mode-${value}`}
-                        />
-                        {label}
-                        {value === 'private' && <span className="text-sm font-normal">(Person only)</span>}
-                      </label>
+                      <div key={value} className="relative">
+                        <label
+                          className={`flex min-h-12 items-center gap-2 rounded-lg border px-3 py-2 text-base font-semibold transition ${
+                            value === 'sap' && canStart ? 'pr-14' : ''
+                          } ${
+                            unavailableForSubject
+                              ? 'cursor-not-allowed border-[#e3dfe5] bg-[#f4f2f4] text-[#a19ba5]'
+                              : selected
+                                ? value === 'sap'
+                                  ? 'cursor-pointer border-[#54a7a3] bg-[#e8f5f3] text-[#245d5b]'
+                                  : value === 'public'
+                                    ? 'cursor-pointer border-[#9183ad] bg-[#f0edf6] text-[#493d65]'
+                                    : 'cursor-pointer border-[#bd8b4a] bg-[#fff5e6] text-[#754a1f]'
+                                : 'cursor-pointer border-[#d9d4df] bg-[#fffefa] text-[#777280] hover:border-[#bbb1cc]'
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="sourceMode"
+                            value={value}
+                            checked={selected}
+                            disabled={unavailableForSubject}
+                            onChange={() => setSourceMode(value)}
+                            className="accent-[#655487]"
+                            data-testid={`radio-source-mode-${value}`}
+                          />
+                          {label}
+                          {value === 'private' && <span className="text-sm font-normal">(Person only)</span>}
+                        </label>
+                        {value === 'sap' && canStart && (
+                          <div className="absolute right-1 top-1/2 z-10 -translate-y-1/2">
+                            <SapConnectionSettings
+                              basePath={basePath}
+                              onChanged={() => { void sourceStatusQuery.refetch(); }}
+                            />
+                          </div>
+                        )}
+                      </div>
                     );
                   })}
                 </div>

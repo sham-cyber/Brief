@@ -64,6 +64,10 @@ export const SapDataArea = {
   sales: 'sales',
   hr: 'hr',
   power_electrical_solar: 'power_electrical_solar',
+  purchase: 'purchase',
+  scrap: 'scrap',
+  order: 'order',
+  delivery: 'delivery',
 } as const;
 
 export interface BriefingInput {
@@ -88,7 +92,7 @@ export interface BriefingInput {
   sourceMode: BriefingInputSourceMode;
   /**
      * SAP S/4HANA data areas selected for this briefing. Required only when sourceMode is sap.
-     * @maxItems 7
+     * @maxItems 11
      */
   sapAreas?: SapDataArea[];
   meetingAt: string;
@@ -157,7 +161,7 @@ export interface SapConnectionInput {
   organizations: string[];
   /**
      * @minItems 1
-     * @maxItems 7
+     * @maxItems 11
      */
   areas: SapConnectionAreaMapping[];
 }

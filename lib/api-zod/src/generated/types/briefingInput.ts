@@ -33,7 +33,7 @@ export interface BriefingInput {
   sourceMode: BriefingInputSourceMode;
   /**
      * SAP S/4HANA data areas selected for this briefing. Required only when sourceMode is sap.
-     * @maxItems 7
+     * @maxItems 11
      */
   sapAreas?: SapDataArea[];
   meetingAt: Date;

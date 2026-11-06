@@ -22,6 +22,10 @@ export const SAP_DATA_AREAS: SapDataArea[] = [
   "sales",
   "hr",
   "power_electrical_solar",
+  "purchase",
+  "scrap",
+  "order",
+  "delivery",
 ];
 
 export const SAP_AREA_LABELS: Record<SapDataArea, string> = {
@@ -32,6 +36,10 @@ export const SAP_AREA_LABELS: Record<SapDataArea, string> = {
   sales: "Sales",
   hr: "HR",
   power_electrical_solar: "Power / Electrical / Solar",
+  purchase: "Purchase",
+  scrap: "Scrap",
+  order: "Order",
+  delivery: "Delivery",
 };
 
 type SapAreaMapping = {

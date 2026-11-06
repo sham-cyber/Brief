@@ -29,7 +29,7 @@ export interface SapConnectionInput {
   organizations: string[];
   /**
      * @minItems 1
-     * @maxItems 7
+     * @maxItems 11
      */
   areas: SapConnectionAreaMapping[];
 }

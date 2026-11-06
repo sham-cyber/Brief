@@ -17,4 +17,8 @@ export const SapDataArea = {
   sales: 'sales',
   hr: 'hr',
   power_electrical_solar: 'power_electrical_solar',
+  purchase: 'purchase',
+  scrap: 'scrap',
+  order: 'order',
+  delivery: 'delivery',
 } as const;

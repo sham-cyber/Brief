@@ -1,7 +1,9 @@
 // Copyright 2026 Sham Mohite
 // SPDX-License-Identifier: Apache-2.0
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { Settings2, X } from "lucide-react";
 
 type SapArea =
   | "store"
@@ -10,7 +12,11 @@ type SapArea =
   | "inventory"
   | "sales"
   | "hr"
-  | "power_electrical_solar";
+  | "power_electrical_solar"
+  | "purchase"
+  | "scrap"
+  | "order"
+  | "delivery";
 
 type Topic = "news" | "hire" | "launch" | "financial" | "risk";
 
@@ -58,6 +64,10 @@ const AREAS: { value: SapArea; label: string }[] = [
   { value: "sales", label: "Sales" },
   { value: "hr", label: "HR" },
   { value: "power_electrical_solar", label: "Power / Electrical / Solar" },
+  { value: "purchase", label: "Purchase" },
+  { value: "scrap", label: "Scrap" },
+  { value: "order", label: "Order" },
+  { value: "delivery", label: "Delivery" },
 ];
 
 const TOPICS: { value: Topic; label: string }[] = [
@@ -109,6 +119,7 @@ export function SapConnectionSettings({
   const [message, setMessage] = useState("");
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [loadError, setLoadError] = useState("");
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const endpoint = useMemo(
     () => `${basePath}/api/sap-connection`,
     [basePath],
@@ -298,18 +309,52 @@ export function SapConnectionSettings({
   };
 
   return (
-    <section className="mb-5 rounded-xl border border-[#c2ddda] bg-[#f2f9f8] p-5 sm:p-6" aria-label="SAP connection settings" data-testid="sap-connection-admin-settings">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="max-w-3xl">
-          <h2 className="text-lg font-semibold text-[#245d5b]">SAP HANA / S/4HANA connection settings</h2>
-          <p className="mt-2 text-base leading-relaxed text-[#486d6b]">
-            Configure this clone for its own SAP business-data system. Operational records use an approved S/4HANA OData API, not direct SQL access to the HANA database.
-          </p>
-        </div>
-        <span className={`rounded-full px-3 py-1.5 text-sm font-semibold ${settings?.configured ? "bg-[#e5f2e9] text-[#32634a]" : "bg-[#fff2de] text-[#79531f]"}`} data-testid="sap-admin-status">
-          {settings?.configured ? "Settings saved" : "Setup required"}
-        </span>
-      </div>
+    <>
+      <button
+        type="button"
+        onClick={() => dialogRef.current?.showModal()}
+        aria-label="Open SAP connection settings"
+        title="SAP connection settings"
+        className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[#82b3ae] bg-white text-[#245d5b] shadow-sm transition hover:bg-[#e8f5f3] focus:outline-none focus:ring-2 focus:ring-[#277b77]/30"
+        data-testid="button-open-sap-settings"
+      >
+        <Settings2 aria-hidden="true" className="h-5 w-5" />
+      </button>
+      {typeof document !== "undefined" && createPortal(
+        <dialog
+          ref={dialogRef}
+          aria-labelledby="sap-settings-dialog-title"
+          data-testid="sap-settings-dialog"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) event.currentTarget.close();
+          }}
+          className="m-auto max-h-[92dvh] w-[calc(100%-1rem)] max-w-5xl overflow-hidden rounded-2xl border border-[#c2ddda] bg-[#f2f9f8] p-0 text-left shadow-2xl backdrop:bg-[#12201f]/60"
+        >
+          <div className="max-h-[92dvh] overflow-y-auto p-4 sm:p-6">
+            <section className="rounded-xl border border-[#c2ddda] bg-[#f2f9f8]" aria-label="SAP connection settings" data-testid="sap-connection-admin-settings">
+              <div className="sticky top-0 z-10 flex flex-wrap items-start justify-between gap-3 border-b border-[#c2ddda] bg-[#f2f9f8] p-4 sm:p-5">
+                <div className="max-w-3xl">
+                  <h2 id="sap-settings-dialog-title" className="text-lg font-semibold text-[#245d5b]">SAP HANA / S/4HANA connection settings</h2>
+                  <p className="mt-2 text-base leading-relaxed text-[#486d6b]">
+                    Configure this clone for its own SAP business-data system. Operational records use an approved S/4HANA OData API, not direct SQL access to the HANA database.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`rounded-full px-3 py-1.5 text-sm font-semibold ${settings?.configured ? "bg-[#e5f2e9] text-[#32634a]" : "bg-[#fff2de] text-[#79531f]"}`} data-testid="sap-admin-status">
+                    {settings?.configured ? "Settings saved" : "Setup required"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => dialogRef.current?.close()}
+                    aria-label="Close SAP settings"
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[#c7d9d6] bg-white text-[#315f5d] hover:bg-[#e8f5f3] focus:outline-none focus:ring-2 focus:ring-[#277b77]/30"
+                    data-testid="button-close-sap-settings"
+                  >
+                    <X aria-hidden="true" className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+              <div className="p-4 sm:p-5">
 
       <div className="mt-4 rounded-lg border border-[#d5e4e2] bg-white px-4 py-3 text-sm leading-relaxed text-[#405e5c]">
         <p><strong>Authentication:</strong> OAuth 2.0 client credentials. The client ID and secret are encrypted on the server, scoped to the configured app-owner account, and never saved in browser storage or returned to this page.</p>
@@ -451,6 +496,12 @@ export function SapConnectionSettings({
         <p className="mt-3 text-sm text-[#486d6b]">Saved on {new Date(settings.updatedAt).toLocaleString()}.</p>
       )}
       {message && <p className="mt-3 text-base text-[#405e5c]" role="status" aria-live="polite" data-testid="status-sap-connection-message">{message}</p>}
-    </section>
+              </div>
+            </section>
+          </div>
+        </dialog>,
+        document.body,
+      )}
+    </>
   );
 }
