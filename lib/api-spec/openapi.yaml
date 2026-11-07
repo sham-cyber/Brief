@@ -541,6 +541,8 @@ components:
           description: Whether a legacy server-managed SAP config is also present.
         legacyEnvironmentConfigActive:
           type: boolean
+        legacyEnvironmentConfigSuppressed:
+          type: boolean
         serviceRoot:
           type: ["string", "null"]
           format: uri
@@ -563,7 +565,7 @@ components:
         updatedAt:
           type: ["string", "null"]
           format: date-time
-      required: [configured, storageReady, clientCredentialsConfigured, hasSavedConnection, legacyEnvironmentConfig, legacyEnvironmentConfigActive, serviceRoot, tokenUrl, fioriUrl, scope, organizations, areas, updatedAt]
+      required: [configured, storageReady, clientCredentialsConfigured, hasSavedConnection, legacyEnvironmentConfig, legacyEnvironmentConfigActive, legacyEnvironmentConfigSuppressed, serviceRoot, tokenUrl, fioriUrl, scope, organizations, areas, updatedAt]
     SapConnectionTestResult:
       type: object
       properties:

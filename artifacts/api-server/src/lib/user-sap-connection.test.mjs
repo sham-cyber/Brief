@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   decryptSapConfig,
   encryptSapConfig,
+  isSapFallbackDisabled,
 } from "./user-sap-connection.ts";
 
 test("SAP connection encryption is confidential and account-bound", (t) => {
@@ -25,4 +26,11 @@ test("SAP connection encryption is confidential and account-bound", (t) => {
 
   const altered = { ...encrypted, authTag: Buffer.alloc(16).toString("base64") };
   assert.throws(() => decryptSapConfig("owner-account", altered));
+});
+
+test("SAP fallback-disable marker is recognized without accepting unrelated settings", () => {
+  assert.equal(isSapFallbackDisabled({ __briefingAgentSapFallbackDisabled: true }), true);
+  assert.equal(isSapFallbackDisabled({ __briefingAgentSapFallbackDisabled: false }), false);
+  assert.equal(isSapFallbackDisabled({ serviceRoot: "https://sap.example.invalid" }), false);
+  assert.equal(isSapFallbackDisabled(null), false);
 });

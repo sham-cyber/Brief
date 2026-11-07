@@ -160,3 +160,9 @@ SAP briefs combine Tavily public research with read-only SAP records in distinct
 **Why:** The user clarified that SAP selection must use Tavily for public research as well as the SAP connection, with automatic fallback to Public when SAP setup is incomplete.
 
 **How to apply:** For SAP briefs, check the active Tavily key and at least one valid SAP area mapping before collecting data; keep source sections and credentials distinct.
+
+Removing the app-managed SAP connection must suppress any legacy server-managed SAP fallback instead of silently reactivating it.
+
+**Why:** The user expects the in-app remove action to disconnect SAP for that deployment, even when an older server-managed configuration remains.
+
+**How to apply:** If a legacy SAP config exists, persist an account-bound encrypted disable marker without retaining provider credentials; expose the suppressed state in settings and allow a new saved configuration to replace it.

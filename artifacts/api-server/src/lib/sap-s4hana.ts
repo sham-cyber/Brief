@@ -8,9 +8,11 @@ import type {
 } from "@workspace/api-zod";
 import {
   deleteUserSapConfig,
+  disableLegacySapFallback,
   getUserSapConfig,
   getUserSapConfigUpdatedAt,
   isSapCredentialStorageReady,
+  isSapFallbackDisabled,
   saveUserSapConfig,
 } from "./user-sap-connection.ts";
 
@@ -234,6 +236,7 @@ function readLegacySapConfig(): SapConfig | null {
 async function readSapConfig(userId?: string): Promise<SapConfig | null> {
   if (userId) {
     const saved = await getUserSapConfig(userId);
+    if (isSapFallbackDisabled(saved)) return null;
     if (saved) return parseSapConfig(saved);
   }
   return readLegacySapConfig();
@@ -255,8 +258,9 @@ export async function getSapConfigurationStatus(userId?: string): Promise<{
 
 export async function getSapConnectionSettings(userId: string) {
   const saved = await getUserSapConfig(userId);
+  const fallbackDisabled = isSapFallbackDisabled(saved);
   const legacyConfig = readLegacySapConfig();
-  const config = saved ? parseSapConfig(saved) : legacyConfig;
+  const config = fallbackDisabled ? null : saved ? parseSapConfig(saved) : legacyConfig;
   const updatedAt = saved
     ? await getUserSapConfigUpdatedAt(userId)
     : null;
@@ -270,9 +274,10 @@ export async function getSapConnectionSettings(userId: string) {
     configured: Boolean(config && areas.length > 0),
     storageReady: isSapCredentialStorageReady(),
     clientCredentialsConfigured: Boolean(saved && config?.clientId && config.clientSecret),
-    hasSavedConnection: Boolean(saved),
+    hasSavedConnection: Boolean(saved && !fallbackDisabled),
     legacyEnvironmentConfig: Boolean(legacyConfig),
     legacyEnvironmentConfigActive: Boolean(!saved && legacyConfig),
+    legacyEnvironmentConfigSuppressed: Boolean(fallbackDisabled && legacyConfig),
     serviceRoot: config?.serviceRoot.toString() ?? null,
     tokenUrl: config?.tokenUrl.toString() ?? null,
     fioriUrl: config?.fioriUrl.toString() ?? null,
@@ -347,6 +352,10 @@ export async function saveSapConnectionSettings(
 }
 
 export async function deleteSapConnectionSettings(userId: string): Promise<boolean> {
+  if (readLegacySapConfig()) {
+    await disableLegacySapFallback(userId);
+    return true;
+  }
   return deleteUserSapConfig(userId);
 }
 

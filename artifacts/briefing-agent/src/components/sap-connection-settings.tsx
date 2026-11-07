@@ -38,6 +38,7 @@ type SapSettings = {
   hasSavedConnection: boolean;
   legacyEnvironmentConfig: boolean;
   legacyEnvironmentConfigActive: boolean;
+  legacyEnvironmentConfigSuppressed: boolean;
   serviceRoot: string | null;
   tokenUrl: string | null;
   fioriUrl: string | null;
@@ -380,7 +381,9 @@ export function SapConnectionSettings({
         <p className="mt-3 rounded-lg border border-[#e8d9b8] bg-[#fff9ec] px-4 py-3 text-sm leading-relaxed text-[#79531f]" role="note">
           {settings.legacyEnvironmentConfigActive
             ? "A legacy server-managed SAP connection is active. Saving here creates an owner-scoped encrypted connection that takes priority."
-            : "A legacy server-managed SAP connection is also configured. The saved app connection takes priority; deleting it will return to that fallback."}
+            : settings.legacyEnvironmentConfigSuppressed
+              ? "A legacy server-managed SAP connection still exists in Replit Secrets, but this app has disabled its fallback because the connection was removed."
+              : "A legacy server-managed SAP connection is also configured. The saved app connection takes priority; removing it disconnects SAP for this app."}
           {" "}The legacy configuration itself is managed in Replit Secrets.
         </p>
       )}

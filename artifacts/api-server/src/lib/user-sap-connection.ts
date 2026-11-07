@@ -10,6 +10,7 @@ import {
 
 const KEY_ENV = "USER_CREDENTIALS_ENCRYPTION_KEY";
 const AAD_PREFIX = "briefing-agent:sap-s4hana:v1:";
+const DISABLED_CONFIG_MARKER = "__briefingAgentSapFallbackDisabled";
 
 type EncryptedConfig = {
   encryptedConfig: string;
@@ -35,6 +36,15 @@ function userKey(userId: string, master: Buffer): Buffer {
 
 export function isSapCredentialStorageReady(): boolean {
   return masterKey() !== null;
+}
+
+export function isSapFallbackDisabled(value: unknown): boolean {
+  return Boolean(
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    (value as Record<string, unknown>)[DISABLED_CONFIG_MARKER] === true,
+  );
 }
 
 export function encryptSapConfig(userId: string, value: unknown): EncryptedConfig {
@@ -141,4 +151,8 @@ export async function deleteUserSapConfig(userId: string): Promise<boolean> {
     [userId],
   );
   return (result.rowCount ?? 0) > 0;
+}
+
+export async function disableLegacySapFallback(userId: string): Promise<void> {
+  await saveUserSapConfig(userId, { [DISABLED_CONFIG_MARKER]: true });
 }

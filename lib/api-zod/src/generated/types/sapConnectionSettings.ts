@@ -15,6 +15,7 @@ export interface SapConnectionSettings {
   /** Whether a legacy server-managed SAP config is also present. */
   legacyEnvironmentConfig: boolean;
   legacyEnvironmentConfigActive: boolean;
+  legacyEnvironmentConfigSuppressed: boolean;
   /** @nullable */
   serviceRoot: string | null;
   /** @nullable */
