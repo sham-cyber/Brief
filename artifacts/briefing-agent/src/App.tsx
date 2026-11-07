@@ -1971,7 +1971,7 @@ function Home() {
                       <div key={value} className="relative">
                         <label
                           className={`flex min-h-12 items-center gap-2 rounded-lg border px-3 py-2 text-base font-semibold transition ${
-                            value === 'sap' && canStart ? 'pr-14' : ''
+                            value === 'sap' && canStart ? 'pr-24' : ''
                           } ${
                             unavailableForSubject
                               ? 'cursor-not-allowed border-[#e3dfe5] bg-[#f4f2f4] text-[#a19ba5]'

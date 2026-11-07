@@ -27,3 +27,17 @@ mtime_ms = 1793963594002
 storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:742d8fb7-8455-444c-89a0-21c32e2418fa/a36154bc-dbfd-46ce-b8f0-f929dd50b2cb/7d45d2a9-30ad-48c5-89d5-e82a0c4d84c7"
 storage_version_token = "1793963595683155"
 content_type = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+
+[[outputs]]
+id = "wrcB3XlaHz3odT46B06p8"
+uri = "file://SAP-Setup-and-GitHub-Clone-Guide.pdf"
+type = "pdf"
+title = "SAP Setup & GitHub Clone Guide"
+description = "Four-page A4 guide to cloning the Briefing Agent, securing setup values, and connecting a clone to an authorized SAP S/4HANA OData system."
+logical_id = "e39b1363-571a-4505-8cee-37043c13de05"
+content_hash = "sha256:2e59a46784a2c823ece60aa7b96eec5d3f7439a61f38e2fac165723f51f08f65"
+size = 122534
+mtime_ms = 1794015632023
+storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:742d8fb7-8455-444c-89a0-21c32e2418fa/e39b1363-571a-4505-8cee-37043c13de05/0bfb96ba-da3b-47a8-96ac-30a6eae9b750"
+storage_version_token = "1794015753164191"
+content_type = "application/pdf"

@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Settings2, X } from "lucide-react";
+import { Info, Settings2, X } from "lucide-react";
 
 type SapArea =
   | "store"
@@ -121,6 +121,7 @@ export function SapConnectionSettings({
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [loadError, setLoadError] = useState("");
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const infoDialogRef = useRef<HTMLDialogElement>(null);
   const endpoint = useMemo(
     () => `${basePath}/api/sap-connection`,
     [basePath],
@@ -311,51 +312,85 @@ export function SapConnectionSettings({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => dialogRef.current?.showModal()}
-        aria-label="Open SAP connection settings"
-        title="SAP connection settings"
-        className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[#82b3ae] bg-white text-[#245d5b] shadow-sm transition hover:bg-[#e8f5f3] focus:outline-none focus:ring-2 focus:ring-[#277b77]/30"
-        data-testid="button-open-sap-settings"
-      >
-        <Settings2 aria-hidden="true" className="h-5 w-5" />
-      </button>
       {typeof document !== "undefined" && createPortal(
-        <dialog
-          ref={dialogRef}
-          aria-labelledby="sap-settings-dialog-title"
-          data-testid="sap-settings-dialog"
-          onClick={(event) => {
-            if (event.target === event.currentTarget) event.currentTarget.close();
-          }}
-          className="m-auto max-h-[92dvh] w-[calc(100%-1rem)] max-w-5xl overflow-hidden rounded-2xl border border-[#c2ddda] bg-[#f2f9f8] p-0 text-left shadow-2xl backdrop:bg-[#12201f]/60"
-        >
-          <div className="max-h-[92dvh] overflow-y-auto p-4 sm:p-6">
-            <section className="rounded-xl border border-[#c2ddda] bg-[#f2f9f8]" aria-label="SAP connection settings" data-testid="sap-connection-admin-settings">
-              <div className="sticky top-0 z-10 flex flex-wrap items-start justify-between gap-3 border-b border-[#c2ddda] bg-[#f2f9f8] p-4 sm:p-5">
-                <div className="max-w-3xl">
-                  <h2 id="sap-settings-dialog-title" className="text-lg font-semibold text-[#245d5b]">SAP HANA / S/4HANA connection settings</h2>
-                  <p className="mt-2 text-base leading-relaxed text-[#486d6b]">
-                    Configure this clone for its own SAP business-data system. Operational records use an approved S/4HANA OData API, not direct SQL access to the HANA database.
-                  </p>
+        <>
+          <dialog
+            ref={infoDialogRef}
+            aria-labelledby="sap-info-dialog-title"
+            data-testid="sap-info-dialog"
+            onClick={(event) => {
+              if (event.target === event.currentTarget) event.currentTarget.close();
+            }}
+            className="m-auto max-h-[90dvh] w-[calc(100%-1rem)] max-w-2xl overflow-y-auto rounded-2xl border border-[#c2ddda] bg-[#f2f9f8] p-0 text-left shadow-2xl backdrop:bg-[#12201f]/60"
+          >
+            <div className="p-5 sm:p-7">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-sm font-bold uppercase tracking-[.12em] text-[#277b77]">SAP source guide</p>
+                  <h2 id="sap-info-dialog-title" className="mt-1 text-2xl font-bold text-[#173f3d]">How SAP briefing works</h2>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className={`rounded-full px-3 py-1.5 text-sm font-semibold ${settings?.configured ? "bg-[#e5f2e9] text-[#32634a]" : "bg-[#fff2de] text-[#79531f]"}`} data-testid="sap-admin-status">
-                    {settings?.configured ? "Settings saved" : "Setup required"}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => dialogRef.current?.close()}
-                    aria-label="Close SAP settings"
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[#c7d9d6] bg-white text-[#315f5d] hover:bg-[#e8f5f3] focus:outline-none focus:ring-2 focus:ring-[#277b77]/30"
-                    data-testid="button-close-sap-settings"
-                  >
-                    <X aria-hidden="true" className="h-5 w-5" />
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => infoDialogRef.current?.close()}
+                  aria-label="Close SAP information"
+                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[#9bc4c0] bg-white text-[#245d5b] hover:bg-[#e8f5f3] focus:outline-none focus:ring-2 focus:ring-[#277b77]/40"
+                  data-testid="button-close-sap-info"
+                >
+                  <X aria-hidden="true" className="h-5 w-5" />
+                </button>
               </div>
-              <div className="p-4 sm:p-5">
+              <p className="mt-4 text-base leading-relaxed text-[#334e4c]">
+                A GitHub clone is the briefing app, not software installed inside SAP. The running app connects to your SAP system through administrator-approved, read-only S/4HANA OData APIs.
+              </p>
+              <ol className="mt-5 space-y-3 text-base leading-relaxed text-[#334e4c]">
+                <li><strong>1. Clone and run the app.</strong> Each GitHub clone or deployment is configured separately for its own SAP tenant.</li>
+                <li><strong>2. Get SAP administrator details.</strong> Request the approved OData service URL, OAuth token URL, client ID and secret, Fiori link base, permitted company/plant scope, and allowed business areas.</li>
+                <li><strong>3. Open SAP settings.</strong> Use the gear beside the SAP source. Add the endpoints, scope, and mappings for Store, Production, Maintenance, Inventory, Sales, HR, Power/Electrical/Solar, Purchase, Scrap, Order, and Delivery as authorized.</li>
+                <li><strong>4. Save and test.</strong> OAuth credentials are encrypted by the app server. Test checks the connection and metadata; the app requests operational records only when you press <strong>Brief</strong>.</li>
+                <li><strong>5. Select and brief.</strong> Choose a company, meeting time, topics, and mapped SAP areas. SAP records and Tavily public research are shown in separate sections; each uses its own credentials and billing.</li>
+              </ol>
+              <div className="mt-5 rounded-xl border border-[#e2c88e] bg-[#fff8e9] p-4 text-sm leading-relaxed text-[#654d22]">
+                <strong>Important:</strong> If SAP setup or the separate Tavily key is incomplete, SAP mode returns to Public and shows an alert. This setup does not enable direct HANA database SQL access or install the app in SAP. Do not paste credentials into GitHub, chat, or this help window.
+              </div>
+              <p className="mt-4 text-sm leading-relaxed text-[#486d6b]">
+                The SAP administrator must confirm the exact API, fields, permissions, company/plant values, and OAuth client for the target system. The app does not guess SAP endpoints or grant itself access.
+              </p>
+            </div>
+          </dialog>
+          <dialog
+            ref={dialogRef}
+            aria-labelledby="sap-settings-dialog-title"
+            data-testid="sap-settings-dialog"
+            onClick={(event) => {
+              if (event.target === event.currentTarget) event.currentTarget.close();
+            }}
+            className="m-auto max-h-[92dvh] w-[calc(100%-1rem)] max-w-5xl overflow-hidden rounded-2xl border border-[#c2ddda] bg-[#f2f9f8] p-0 text-left shadow-2xl backdrop:bg-[#12201f]/60"
+          >
+            <div className="max-h-[92dvh] overflow-y-auto p-4 sm:p-6">
+              <section className="rounded-xl border border-[#c2ddda] bg-[#f2f9f8]" aria-label="SAP connection settings" data-testid="sap-connection-admin-settings">
+                <div className="sticky top-0 z-10 flex flex-wrap items-start justify-between gap-3 border-b border-[#c2ddda] bg-[#f2f9f8] p-4 sm:p-5">
+                  <div className="max-w-3xl">
+                    <h2 id="sap-settings-dialog-title" className="text-lg font-semibold text-[#245d5b]">SAP HANA / S/4HANA connection settings</h2>
+                    <p className="mt-2 text-base leading-relaxed text-[#486d6b]">
+                      Configure this clone for its own SAP business-data system. Operational records use an approved S/4HANA OData API, not direct SQL access to the HANA database.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`rounded-full px-3 py-1.5 text-sm font-semibold ${settings?.configured ? "bg-[#e5f2e9] text-[#32634a]" : "bg-[#fff2de] text-[#79531f]"}`} data-testid="sap-admin-status">
+                      {settings?.configured ? "Settings saved" : "Setup required"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => dialogRef.current?.close()}
+                      aria-label="Close SAP settings"
+                      className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[#c7d9d6] bg-white text-[#315f5d] hover:bg-[#e8f5f3] focus:outline-none focus:ring-2 focus:ring-[#277b77]/30"
+                      data-testid="button-close-sap-settings"
+                    >
+                      <X aria-hidden="true" className="h-5 w-5" />
+                    </button>
+                  </div>
+                </div>
+                <div className="p-4 sm:p-5">
 
       <div className="mt-4 rounded-lg border border-[#d5e4e2] bg-white px-4 py-3 text-sm leading-relaxed text-[#405e5c]">
         <p><strong>Authentication:</strong> OAuth 2.0 client credentials. The client ID and secret are encrypted on the server, scoped to the configured app-owner account, and never saved in browser storage or returned to this page.</p>
@@ -501,10 +536,33 @@ export function SapConnectionSettings({
       {message && <p className="mt-3 text-base text-[#405e5c]" role="status" aria-live="polite" data-testid="status-sap-connection-message">{message}</p>}
               </div>
             </section>
-          </div>
-        </dialog>,
+            </div>
+          </dialog>
+        </>,
         document.body,
       )}
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => infoDialogRef.current?.showModal()}
+          aria-label="SAP briefing information and setup procedure"
+          title="SAP information and setup procedure"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#82b3ae] bg-white text-[#245d5b] shadow-sm transition hover:bg-[#e8f5f3] focus:outline-none focus:ring-2 focus:ring-[#277b77]/30"
+          data-testid="button-open-sap-info"
+        >
+          <Info aria-hidden="true" className="h-5 w-5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => dialogRef.current?.showModal()}
+          aria-label="Open SAP connection settings"
+          title="SAP connection settings"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[#82b3ae] bg-white text-[#245d5b] shadow-sm transition hover:bg-[#e8f5f3] focus:outline-none focus:ring-2 focus:ring-[#277b77]/30"
+          data-testid="button-open-sap-settings"
+        >
+          <Settings2 aria-hidden="true" className="h-5 w-5" />
+        </button>
+      </div>
     </>
   );
 }
