@@ -36,7 +36,8 @@ export interface BriefingResult {
   sourceMode: BriefingResultSourceMode;
   sapAreas: SapDataArea[];
   topics: BriefingResultTopicsItem[];
-  meetingAt: Date;
+  /** @nullable */
+  meetingAt: Date | null;
   generatedAt: Date;
   windowStart: Date;
   windowEnd: Date;

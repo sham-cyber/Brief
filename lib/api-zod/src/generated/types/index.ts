@@ -47,3 +47,7 @@ export * from './sapConnectionTestResult';
 export * from './sapDataArea';
 export * from './tavilyCredentialInput';
 export * from './tavilyCredentialStatus';
+export * from './telegramCredentialInput';
+export * from './telegramCredentialStatus';
+export * from './telegramCredentialTestResult';
+export * from './telegramSendResponse';

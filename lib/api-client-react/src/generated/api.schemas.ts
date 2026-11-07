@@ -95,7 +95,7 @@ export interface BriefingInput {
      * @maxItems 11
      */
   sapAreas?: SapDataArea[];
-  meetingAt: string;
+  meetingAt?: string;
   /** @maxLength 1500 */
   context?: string;
   /** @minItems 1 */
@@ -329,6 +329,55 @@ export interface TavilyCredentialInput {
   apiKey: string;
 }
 
+export interface TelegramCredentialStatus {
+  connected: boolean;
+  storageReady: boolean;
+  /** @nullable */
+  chatId: string | null;
+  /** @nullable */
+  updatedAt: string | null;
+  /** @minimum 0 */
+  limit: number;
+  /** @minimum 0 */
+  usedThisHour: number;
+  /** @minimum 0 */
+  remaining: number;
+  /** @nullable */
+  windowResetsAt: string | null;
+}
+
+export interface TelegramCredentialInput {
+  /**
+     * @minLength 30
+     * @maxLength 256
+     * @pattern ^[0-9]{6,}:[A-Za-z0-9_-]{20,}$
+     */
+  botToken: string;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     * @pattern ^[A-Za-z0-9_-]+$
+     */
+  chatId: string;
+}
+
+export interface TelegramCredentialTestResult {
+  connected: boolean;
+  /** @nullable */
+  botName: string | null;
+  chatId: string;
+  message: string;
+}
+
+export interface TelegramSendResponse {
+  sent: boolean;
+  sentAt: string;
+  /** @minimum 0 */
+  remaining: number;
+  /** @nullable */
+  windowResetsAt: string | null;
+}
+
 export type BriefingHighlightCategory = typeof BriefingHighlightCategory[keyof typeof BriefingHighlightCategory];
 
 
@@ -453,7 +502,8 @@ export interface BriefingResult {
   sourceMode: BriefingResultSourceMode;
   sapAreas: SapDataArea[];
   topics: BriefingResultTopicsItem[];
-  meetingAt: string;
+  /** @nullable */
+  meetingAt: string | null;
   generatedAt: string;
   windowStart: string;
   windowEnd: string;

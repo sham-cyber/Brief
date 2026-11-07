@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Router, type IRouter } from "express";
-import { randomUUID, timingSafeEqual } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import {
   CreateBriefingBody,
   CreateBriefingResponse,
@@ -32,6 +32,7 @@ import {
   getUserTavilyApiKey,
 } from "../lib/user-tavily-credentials";
 import { resolveOwnerUserId } from "../lib/briefing-owner";
+import { verifyBriefingStartPin } from "../lib/briefing-start-pin";
 import {
   getSapConfigurationStatus,
   searchSapS4Hana,
@@ -41,45 +42,7 @@ import {
 } from "../lib/sap-s4hana";
 
 const router: IRouter = Router();
-const START_PIN_MAX_ATTEMPTS = 5;
-const START_PIN_ATTEMPT_WINDOW_MS = 15 * 60_000;
-const START_PIN_LOCKOUT_MS = 15 * 60_000;
 let sapBriefingActive = false;
-const startPinFailures = new Map<
-  string,
-  { attempts: number; windowStartedAt: number; lockedUntil: number }
->();
-
-function startPinLockSeconds(userId: string): number {
-  const now = Date.now();
-  const state = startPinFailures.get(userId);
-  if (!state) return 0;
-  if (state.lockedUntil > now) return Math.ceil((state.lockedUntil - now) / 1000);
-  if (
-    now - state.windowStartedAt >= START_PIN_ATTEMPT_WINDOW_MS ||
-    state.lockedUntil > 0
-  ) {
-    startPinFailures.delete(userId);
-  }
-  return 0;
-}
-
-function recordStartPinFailure(userId: string): number {
-  const now = Date.now();
-  const previous = startPinFailures.get(userId);
-  const state =
-    previous && now - previous.windowStartedAt < START_PIN_ATTEMPT_WINDOW_MS
-      ? previous
-      : { attempts: 0, windowStartedAt: now, lockedUntil: 0 };
-  state.attempts += 1;
-  if (state.attempts >= START_PIN_MAX_ATTEMPTS) {
-    state.lockedUntil = now + START_PIN_LOCKOUT_MS;
-  }
-  startPinFailures.set(userId, state);
-  return state.lockedUntil > now
-    ? Math.ceil((state.lockedUntil - now) / 1000)
-    : 0;
-}
 
 type NewsItem = {
   id: string;
@@ -773,7 +736,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
   const input = CreateBriefingBody.safeParse(req.body);
   if (!input.success) {
     res.status(400).json({
-      error: "Enter a four-digit PIN, company or person, required person details, at least one topic, and meeting time.",
+      error: "Enter a four-digit PIN, company or person, required person details, and at least one topic.",
     });
     return;
   }
@@ -814,39 +777,14 @@ router.post("/briefings", async (req, res): Promise<void> => {
     return;
   }
 
-  const configuredStartPin = process.env.BRIEFING_START_PIN?.trim();
-  if (!configuredStartPin || !/^\d{4}$/.test(configuredStartPin)) {
-    res.status(503).json({
-      error: "The briefing start PIN is not configured in the API Server secrets.",
-    });
-    return;
-  }
-  const lockSeconds = startPinLockSeconds(userId);
-  if (lockSeconds > 0) {
-    res.setHeader("Retry-After", String(lockSeconds));
-    res.status(429).json({
-      error: "Too many incorrect PIN attempts. Try again after the lockout period.",
-    });
-    return;
-  }
-  const suppliedPin = Buffer.from(input.data.startPin, "utf8");
-  const expectedPin = Buffer.from(configuredStartPin, "utf8");
-  if (
-    suppliedPin.length !== expectedPin.length ||
-    !timingSafeEqual(suppliedPin, expectedPin)
-  ) {
-    const retryAfter = recordStartPinFailure(userId);
-    if (retryAfter > 0) {
-      res.setHeader("Retry-After", String(retryAfter));
-      res.status(429).json({
-        error: "Too many incorrect PIN attempts. Try again after the lockout period.",
-      });
-      return;
+  const pinCheck = verifyBriefingStartPin(userId, input.data.startPin);
+  if (!pinCheck.valid) {
+    if (pinCheck.retryAfterSeconds) {
+      res.setHeader("Retry-After", String(pinCheck.retryAfterSeconds));
     }
-    res.status(403).json({ error: "The start PIN is incorrect." });
+    res.status(pinCheck.status).json({ error: pinCheck.message });
     return;
   }
-  startPinFailures.delete(userId);
 
   if (input.data.subjectType === "person" && !input.data.personRole) {
     res.status(400).json({ error: "Choose a briefing context for the person: Chairman / CEO, MP, or Corporate." });
@@ -1040,7 +978,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
 
     try {
       const now = new Date();
-      const meetingAt = input.data.meetingAt;
+      const meetingAt = input.data.meetingAt ?? null;
       const windowEnd = now;
       const windowStart = new Date(windowEnd.getTime() - 30 * 86_400_000);
       const [tavilyResult, sapResult] = await Promise.all([
@@ -1122,7 +1060,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
         sourceMode: "sap",
         sapAreas,
         topics,
-        meetingAt: meetingAt.toISOString(),
+        meetingAt: meetingAt?.toISOString() ?? null,
         generatedAt: now.toISOString(),
         windowStart: windowStart.toISOString(),
         windowEnd: windowEnd.toISOString(),
@@ -1289,7 +1227,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
 
   try {
     const now = new Date();
-    const meetingAt = input.data.meetingAt;
+    const meetingAt = input.data.meetingAt ?? null;
     const windowEnd = now;
     const windowStart = new Date(windowEnd.getTime() - 30 * 86_400_000);
     const topics = input.data.topics as BriefingTopic[];
@@ -1346,7 +1284,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
       sourceMode: "public",
       sapAreas: [],
       topics,
-      meetingAt: meetingAt.toISOString(),
+      meetingAt: meetingAt?.toISOString() ?? null,
       generatedAt: now.toISOString(),
       windowStart: windowStart.toISOString(),
       windowEnd: windowEnd.toISOString(),

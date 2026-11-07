@@ -9,7 +9,7 @@ import type { BriefingResult, BriefSource, SapDataArea } from '@workspace/api-cl
 import { ClerkProvider, SignIn, SignUp, Show, useClerk, useUser } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
-import { ArrowDown, ArrowUpRight, Check, Clipboard, Clock3, FileText, Link2, LoaderCircle, LockKeyhole, Printer, Radio, Search, Square, Volume2 } from 'lucide-react';
+import { ArrowDown, ArrowUpRight, Check, Clipboard, Clock3, FileText, Link2, LoaderCircle, LockKeyhole, Printer, Radio, Search, Send, Square, Volume2 } from 'lucide-react';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { SapConnectionSettings } from '@/components/sap-connection-settings';
 import { Toaster } from '@/components/ui/toaster';
@@ -143,6 +143,17 @@ type TavilyCredentialStatus = {
   connected: boolean;
   storageReady: boolean;
   updatedAt: string | null;
+};
+
+type TelegramCredentialStatus = {
+  connected: boolean;
+  storageReady: boolean;
+  chatId: string | null;
+  updatedAt: string | null;
+  limit: number;
+  usedThisHour: number;
+  remaining: number;
+  windowResetsAt: string | null;
 };
 
 function TavilyKeySettings({ onChanged, projectKeyActive }: { onChanged: () => void; projectKeyActive: boolean }) {
@@ -315,6 +326,223 @@ function TavilyKeySettings({ onChanged, projectKeyActive }: { onChanged: () => v
         </div>
       )}
       {message && <p className="mt-3 text-sm text-[#4e4957]" role="status" aria-live="polite" data-testid="status-tavily-key-message">{message}</p>}
+    </section>
+  );
+}
+
+function TelegramSettings() {
+  const { isLoaded, isSignedIn, user } = useUser();
+  const [status, setStatus] = useState<TelegramCredentialStatus | null>(null);
+  const [botToken, setBotToken] = useState('');
+  const [chatId, setChatId] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+  const [accessDenied, setAccessDenied] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
+
+  const refreshStatus = useCallback(async () => {
+    const payload = await sendAccountRequest('telegram-credentials', 'GET') as TelegramCredentialStatus;
+    setStatus(payload);
+    setAccessDenied(false);
+  }, []);
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) {
+      setStatus(null);
+      setBotToken('');
+      setChatId('');
+      setMessage('');
+      setAccessDenied(false);
+      return;
+    }
+    let active = true;
+    setStatus(null);
+    setBotToken('');
+    setChatId('');
+    setMessage('');
+    setAccessDenied(false);
+    void sendAccountRequest('telegram-credentials', 'GET')
+      .then((payload) => {
+        if (active) setStatus(payload as TelegramCredentialStatus);
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        const text = error instanceof Error ? error.message : 'Telegram settings could not be loaded.';
+        setMessage(text);
+        setAccessDenied(text.includes('configured briefing owner'));
+      });
+    return () => {
+      active = false;
+    };
+  }, [isLoaded, isSignedIn, user?.id]);
+
+  const saveConnection = async () => {
+    setBusy(true);
+    setMessage('');
+    try {
+      const payload = await sendAccountRequest('telegram-credentials', 'PUT', {
+        botToken: botToken.trim(),
+        chatId: chatId.trim(),
+      }) as TelegramCredentialStatus;
+      setStatus(payload);
+      setBotToken('');
+      setChatId('');
+      setMessage('Saved encrypted on the server. The bot token is not sent back to this page.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Telegram setup could not be saved.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const testConnection = async () => {
+    setBusy(true);
+    setMessage('');
+    try {
+      const result = await sendAccountRequest('telegram-credentials/test', 'POST', {}) as {
+        connected: boolean;
+        botName: string | null;
+        chatId: string;
+        message: string;
+      };
+      setMessage(result.message);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Telegram connection test failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removeConnection = async () => {
+    setBusy(true);
+    setMessage('');
+    try {
+      const payload = await sendAccountRequest('telegram-credentials', 'DELETE') as TelegramCredentialStatus;
+      setStatus(payload);
+      setConfirmRemove(false);
+      setMessage('The saved token and chat ID were deleted from this app. Revoke the token with BotFather to disable the bot.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Telegram connection could not be removed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!isLoaded || !isSignedIn) return null;
+
+  return (
+    <section className="mt-4 rounded-xl border border-[#d9d5e1] bg-[#f7f5fa] p-4 sm:p-5" aria-label="Telegram PDF delivery setup" data-testid="telegram-settings">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h3 className="text-base font-semibold text-[#292e46]">Telegram PDF delivery</h3>
+          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[#625d69]">
+            Enter a BotFather token and the destination chat ID. Start the bot chat with <strong>/start</strong> first. Telegram sends only when you press the PDF button; this setup does not run a crawl or use Tavily.
+          </p>
+        </div>
+        {status && (
+          <span className={`rounded-full px-3 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-wide ${status.connected ? 'bg-[#e8f3eb] text-[#32634a]' : 'bg-[#f3eee3] text-[#7b6338]'}`}>
+            {status.connected ? 'Bot connected' : 'Not connected'}
+          </span>
+        )}
+      </div>
+
+      {accessDenied ? (
+        <p className="mt-3 rounded-lg border border-[#e5c5c0] bg-[#fbefed] px-4 py-3 text-sm leading-relaxed text-[#7f413b]" role="status">
+          Telegram setup is restricted to the configured briefing owner.
+        </p>
+      ) : !status ? (
+        <p className="mt-3 text-sm text-[#625d69]" role="status">Checking owner access and secure storage…</p>
+      ) : (
+        <>
+          {!status.storageReady && (
+            <p className="mt-3 rounded-lg border border-[#e5c5c0] bg-[#fbefed] px-4 py-3 text-sm leading-relaxed text-[#7f413b]" role="alert">
+              Secure credential storage is not configured on the server. Telegram credentials cannot be saved until the server encryption secret is available.
+            </p>
+          )}
+          <p className="mt-3 rounded-lg border border-[#e6d6b7] bg-[#fff9ed] px-4 py-3 text-sm leading-relaxed text-[#72582c]" role="note">
+            The token is encrypted at rest and never returned to the browser. This is server-side encryption, not end-to-end encryption. Deleting it here removes this app’s copy; use <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer" className="font-semibold underline underline-offset-2">BotFather</a> to revoke or regenerate the actual bot token.
+          </p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+            <label className="min-w-0">
+              <span className="mb-1.5 block text-sm font-medium text-[#35364a]">Bot token</span>
+              <input
+                type="password"
+                autoComplete="new-password"
+                spellCheck={false}
+                value={botToken}
+                onChange={(event) => setBotToken(event.target.value)}
+                placeholder={status.connected ? 'Enter a replacement token' : 'Paste the BotFather token'}
+                className="h-12 w-full min-w-0 rounded-lg border border-[#d9d4df] bg-white px-4 text-base text-foreground placeholder:text-[#898392] focus:border-[#594b87] focus:outline-none focus:ring-2 focus:ring-[#594b87]/20"
+                data-testid="input-telegram-bot-token"
+              />
+            </label>
+            <label className="min-w-0">
+              <span className="mb-1.5 block text-sm font-medium text-[#35364a]">Private chat ID</span>
+              <input
+                type="text"
+                inputMode="text"
+                autoComplete="off"
+                spellCheck={false}
+                value={chatId}
+                onChange={(event) => setChatId(event.target.value)}
+                placeholder={status.chatId ?? 'Enter the destination chat ID'}
+                className="h-12 w-full min-w-0 rounded-lg border border-[#d9d4df] bg-white px-4 text-base text-foreground placeholder:text-[#898392] focus:border-[#594b87] focus:outline-none focus:ring-2 focus:ring-[#594b87]/20"
+                data-testid="input-telegram-chat-id"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => void saveConnection()}
+              disabled={busy || !status.storageReady || botToken.trim().length < 30 || !chatId.trim()}
+              className="h-12 rounded-lg bg-[#292e46] px-5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+              data-testid="button-save-telegram-credentials"
+            >
+              {busy ? 'Saving…' : 'Save Telegram'}
+            </button>
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {status.connected && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => void testConnection()}
+                  disabled={busy}
+                  className="h-10 rounded-lg border border-[#d9d4df] bg-white px-4 text-sm font-semibold text-[#35364a] disabled:opacity-50"
+                  data-testid="button-test-telegram"
+                >
+                  Test bot and chat
+                </button>
+                {!confirmRemove ? (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmRemove(true)}
+                    disabled={busy}
+                    className="h-10 rounded-lg border border-[#c98e87] bg-white px-4 text-sm font-semibold text-[#8e3f39] disabled:opacity-50"
+                    data-testid="button-remove-telegram"
+                  >
+                    Remove saved connection
+                  </button>
+                ) : (
+                  <span className="inline-flex flex-wrap items-center gap-2 rounded-lg border border-[#e4b7b2] bg-[#fff8f7] p-2">
+                    <span className="px-1 text-sm text-[#713c38]">Delete the saved copy?</span>
+                    <button type="button" onClick={() => setConfirmRemove(false)} disabled={busy} className="h-9 rounded-md border border-[#d9d4df] bg-white px-3 text-sm font-semibold text-[#35364a]">
+                      Keep it
+                    </button>
+                    <button type="button" onClick={() => void removeConnection()} disabled={busy} className="h-9 rounded-md bg-[#8e3f39] px-3 text-sm font-semibold text-white disabled:opacity-50" data-testid="button-confirm-remove-telegram">
+                      Delete
+                    </button>
+                  </span>
+                )}
+                <span className="text-sm text-[#625d69]" data-testid="text-telegram-hourly-quota">
+                  {status.remaining} of {status.limit} PDF sends left this rolling hour
+                </span>
+              </>
+            )}
+          </div>
+        </>
+      )}
+      {message && <p className="mt-3 text-sm text-[#4e4957]" role="status" aria-live="polite" data-testid="status-telegram-settings">{message}</p>}
     </section>
   );
 }
@@ -843,6 +1071,9 @@ function SapDataSection({
 function BriefingDocument({ result }: { result: BriefingResult }) {
   const [copied, setCopied] = useState(false);
   const [activeTopic, setActiveTopic] = useState<'all' | Topic>('all');
+  const [telegramStatus, setTelegramStatus] = useState<TelegramCredentialStatus | null>(null);
+  const [telegramSending, setTelegramSending] = useState(false);
+  const [telegramMessage, setTelegramMessage] = useState('');
   const visibleTopics = result.topics.filter((topic) => activeTopic === 'all' || activeTopic === topic);
   const activeTopicBrief = activeTopic === 'all'
     ? undefined
@@ -864,6 +1095,21 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
     setActiveTopic('all');
   }, [result.generatedAt]);
 
+  useEffect(() => {
+    let active = true;
+    setTelegramStatus(null);
+    void sendAccountRequest('telegram-credentials', 'GET')
+      .then((payload) => {
+        if (active) setTelegramStatus(payload as TelegramCredentialStatus);
+      })
+      .catch((error: unknown) => {
+        if (active) setTelegramMessage(error instanceof Error ? error.message : 'Telegram status could not be loaded.');
+      });
+    return () => {
+      active = false;
+    };
+  }, [result.generatedAt]);
+
   const copyBrief = async () => {
     const visibleSourceIds = new Set([
       ...visibleOverview.sourceIds,
@@ -878,7 +1124,9 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
       : result.sources.filter((source) => visibleSourceIds.has(source.id));
     const lines = [
       `${result.subject} — ${activeTopic === 'all' ? 'meeting briefing' : `${TOPICS.find((topic) => topic.value === activeTopic)?.label ?? 'Topic'} briefing`}`,
-      `Meeting: ${formatDate(result.meetingAt)}`,
+      result.meetingAt
+        ? `Meeting: ${formatDate(result.meetingAt)}`
+        : `Prepared: ${formatDate(result.generatedAt)}`,
       `Crawl started: ${formatDate(result.generatedAt)}`,
       `Research window: ${formatWindow(result.windowStart, result.windowEnd)}`,
       ...(result.sourceMode === 'sap' ? [
@@ -927,6 +1175,68 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
     }
   };
 
+  const sendPdfToTelegram = async () => {
+    if (!telegramStatus?.connected || !telegramStatus.chatId) {
+      setTelegramMessage('Connect Telegram in the source key settings before sending a PDF.');
+      return;
+    }
+    const confirmed = window.confirm(
+      `Send this one-page briefing PDF to Telegram chat ${telegramStatus.chatId}? It may include internal SAP records and source links.`,
+    );
+    if (!confirmed) return;
+    const pin = window.prompt('Enter the four-digit briefing start PIN to send this PDF.');
+    if (pin === null) return;
+    if (!/^\d{4}$/.test(pin.trim())) {
+      setTelegramMessage('Enter the four-digit briefing start PIN.');
+      return;
+    }
+
+    setTelegramSending(true);
+    setTelegramMessage('');
+    try {
+      const { createTelegramBriefPdf } = await import('@/lib/telegram-brief-pdf');
+      const { bytes, filename } = await createTelegramBriefPdf(result, activeTopic);
+      const pdfBody = Uint8Array.from(bytes);
+      const response = await fetch(apiUrl('telegram-send'), {
+        method: 'POST',
+        credentials: 'include',
+        cache: 'no-store',
+        referrerPolicy: 'no-referrer',
+        headers: {
+          'Content-Type': 'application/pdf',
+          'X-Briefing-Start-Pin': pin.trim(),
+          'X-Briefing-Filename': filename,
+        },
+        body: new Blob([pdfBody.buffer as ArrayBuffer], { type: 'application/pdf' }),
+      });
+      const payload = await response.json().catch(() => ({})) as {
+        error?: string;
+        remaining?: number;
+        usedThisHour?: number;
+        windowResetsAt?: string | null;
+      };
+      if (!response.ok) throw new Error(payload.error ?? 'Telegram could not send the PDF.');
+      const remaining = payload.remaining ?? Math.max(0, telegramStatus.remaining - 1);
+      setTelegramStatus((current) => current ? {
+        ...current,
+        remaining,
+        usedThisHour: payload.usedThisHour ?? current.usedThisHour + 1,
+        windowResetsAt: payload.windowResetsAt ?? current.windowResetsAt,
+      } : current);
+      setTelegramMessage(`PDF sent. ${remaining} of ${telegramStatus.limit} sends remain this rolling hour.`);
+    } catch (error) {
+      setTelegramMessage(error instanceof Error ? error.message : 'Telegram could not send the PDF.');
+      try {
+        const latestStatus = await sendAccountRequest('telegram-credentials', 'GET') as TelegramCredentialStatus;
+        setTelegramStatus(latestStatus);
+      } catch {
+        // Keep the delivery error visible if the status refresh is also unavailable.
+      }
+    } finally {
+      setTelegramSending(false);
+    }
+  };
+
   return (
     <article className="fade-up min-w-0" aria-label={`Briefing for ${result.subject}`} data-testid="briefing-result">
       <div className="screen-brief">
@@ -937,7 +1247,7 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
           <span className="text-muted-foreground">·</span>
           Crawl started {formatDate(result.generatedAt)}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button type="button" onClick={copyBrief} className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-card px-3 text-xs font-semibold text-foreground transition hover:bg-accent" data-testid="button-copy-brief">
             {copied ? <Check className="h-3.5 w-3.5" /> : <Clipboard className="h-3.5 w-3.5" />}
             {copied ? 'Copied' : 'Copy brief'}
@@ -945,8 +1255,24 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
           <button type="button" onClick={() => window.print()} className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#292e46] px-3 text-xs font-semibold text-white transition hover:bg-[#3c4160]" data-testid="button-print-brief-top">
             <Printer className="h-3.5 w-3.5" aria-hidden="true" /> Print one-page brief
           </button>
+          <button
+            type="button"
+            onClick={() => void sendPdfToTelegram()}
+            disabled={telegramSending || !telegramStatus?.connected || telegramStatus.remaining <= 0}
+            className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#547a61] bg-[#eaf4ed] px-3 text-xs font-semibold text-[#285b39] transition hover:bg-[#dcefe2] disabled:cursor-not-allowed disabled:opacity-50"
+            title={!telegramStatus?.connected ? 'Connect Telegram in source key settings first' : `Up to ${telegramStatus.limit} PDFs per rolling hour`}
+            data-testid="button-send-telegram-pdf"
+          >
+            {telegramSending ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : <Send className="h-3.5 w-3.5" aria-hidden="true" />}
+            {telegramSending ? 'Sending…' : 'Telegram PDF'}
+          </button>
         </div>
       </div>
+      <p className="no-print -mt-4 mb-5 text-right text-xs text-[#625d69]" role="status" aria-live="polite" data-testid="status-telegram-send">
+        {telegramMessage || (telegramStatus?.connected
+          ? `${telegramStatus.remaining} of ${telegramStatus.limit} Telegram PDF sends remain this rolling hour. Sending uses the current brief and does not start another Tavily search.`
+          : 'Connect Telegram in source key settings to send this brief as a PDF.')}
+      </p>
 
       <header className="print-card relative overflow-hidden rounded-2xl border border-[#d8d2df] bg-[#262b42] px-6 py-7 text-[#f6f1e8] shadow-[0_15px_45px_rgba(36,35,54,.12)] sm:px-9 sm:py-9">
         <div className="absolute -right-16 -top-24 h-64 w-64 rounded-full border border-white/10" aria-hidden="true" />
@@ -958,7 +1284,7 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
           </p>
           <h2 className="mt-4 max-w-3xl font-serif text-4xl leading-[.98] tracking-[-.02em] sm:text-5xl">{result.subject}</h2>
           <div className="mt-6 flex flex-wrap gap-x-6 gap-y-3 text-xs text-[#d2d0da]">
-            <span className="inline-flex items-center gap-2"><Clock3 className="h-3.5 w-3.5 text-[#c5b9e8]" />{formatDate(result.meetingAt)}</span>
+            <span className="inline-flex items-center gap-2"><Clock3 className="h-3.5 w-3.5 text-[#c5b9e8]" />{result.meetingAt ? `Meeting: ${formatDate(result.meetingAt)}` : `Prepared: ${formatDate(result.generatedAt)}`}</span>
             <span className="inline-flex items-center gap-2"><Radio className="h-3.5 w-3.5 text-[#c5b9e8]" />Research window: {formatWindow(result.windowStart, result.windowEnd)}</span>
             {result.sourceMode === 'sap' ? (
               <span className="inline-flex items-center gap-2" data-testid="text-sap-usage">
@@ -1212,7 +1538,7 @@ function PrintOnePageBrief({ result, activeTopic }: { result: BriefingResult; ac
         </p>
         <h1>{result.subject}</h1>
         <div className="print-date-details" data-testid="text-print-date-details">
-          <span>Meeting: {formatDate(result.meetingAt)}</span>
+          <span>{result.meetingAt ? `Meeting: ${formatDate(result.meetingAt)}` : `Prepared: ${formatDate(result.generatedAt)}`}</span>
           <span>Crawl started: {formatDate(result.generatedAt)}</span>
           <span>30-day research window: {formatWindow(result.windowStart, result.windowEnd)}</span>
           <span data-testid="text-print-word-count">Brief text: {printedWordCount} / {PRINT_WORD_LIMIT} words; sources listed separately</span>
@@ -1375,7 +1701,7 @@ function Home() {
   const activeRequestKey = useRef('');
   const timeoutRef = useRef<number | undefined>(undefined);
   const requestKey = JSON.stringify([subject.trim(), subjectType, personRole, publicRoleTitle.trim(), companyName.trim(), sourceMode, sourceMode === 'sap' ? sapAreas : [], meetingAt, topics, context.trim()]);
-  const meetingTimeIsValid = Boolean(meetingAt && !Number.isNaN(new Date(meetingAt).getTime()));
+  const meetingTimeIsValid = !meetingAt || !Number.isNaN(new Date(meetingAt).getTime());
   const hasValidSubject = subject.trim().length >= 2;
   const hasValidRoleSelection = subjectType !== 'person' || Boolean(personRole);
   const hasValidPersonDetails = subjectType !== 'person' || (
@@ -1575,11 +1901,10 @@ function Home() {
     }
   };
   const researchWindow = useMemo(() => {
-    if (!meetingTimeIsValid) return '';
     const end = new Date();
     const start = new Date(end.getTime() - 30 * 86_400_000);
     return `${formatDate(start.toISOString(), { dateStyle: 'medium' })} — ${formatDate(end.toISOString(), { dateStyle: 'medium' })}`;
-  }, [meetingAt, meetingTimeIsValid]);
+  }, []);
 
   const runBriefing = useCallback((key: string, pin: string) => {
     const selectedSourceReady =
@@ -1616,7 +1941,7 @@ function Home() {
           ...(subjectType === 'person' && personRole === 'business_owner' ? { companyName: companyName.trim() } : {}),
           sourceMode,
           sapAreas: sourceMode === 'sap' ? sapAreas : [],
-          meetingAt: new Date(meetingAt).toISOString(),
+          meetingAt: meetingAt ? new Date(meetingAt).toISOString() : undefined,
           topics,
           ...(context.trim() ? { context: context.trim() } : {}),
         },
@@ -1713,7 +2038,7 @@ function Home() {
                           ? 'Not ready — enter the public office or title.'
                           : 'Not ready — complete the person context.'
                     : !meetingTimeIsValid
-                      ? 'Not ready — set a meeting time.'
+                      ? 'Not ready — enter a valid meeting time or leave it blank.'
                       : !hasTopics
                         ? 'Not ready — select at least one topic.'
                         : sourceMode === 'sap' && !hasSapOrganization
@@ -2020,7 +2345,7 @@ function Home() {
                 <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 text-base font-semibold text-[#35364a]">
                   <span className="inline-flex items-center gap-2">
                     <LockKeyhole aria-hidden="true" className="h-4 w-4 text-[#594b87]" />
-                    Tavily key settings · separate from SAP credentials
+                    Tavily and Telegram settings · separate from SAP credentials
                   </span>
                   <span className="rounded-full bg-[#eeeaf4] px-2.5 py-1 text-xs font-semibold text-[#594b87]">Public + SAP briefs</span>
                 </summary>
@@ -2033,6 +2358,12 @@ function Home() {
                     projectKeyActive={keySource === 'project-owner'}
                   />
                 </div>
+                <details className="mt-3 rounded-lg border border-[#d9d5e1] bg-white px-4 py-3" data-testid="details-telegram-settings">
+                  <summary className="cursor-pointer text-base font-semibold text-[#35364a]">
+                    Telegram PDF delivery · encrypted bot setup
+                  </summary>
+                  <TelegramSettings />
+                </details>
               </details>
               {sourceMode === 'private' && (
                 <div className="mt-3 rounded-lg border border-[#e5c5c0] bg-[#fbefed] px-4 py-3 text-base leading-relaxed text-[#7f413b]" role="status" data-testid="private-source-unavailable">
@@ -2150,16 +2481,16 @@ function Home() {
               </fieldset>
               </div>
 
-              <label htmlFor="meetingAt" className="mb-1.5 mt-5 block text-base font-semibold text-[#35364a]">Meeting time</label>
+              <label htmlFor="meetingAt" className="mb-1.5 mt-5 block text-base font-semibold text-[#35364a]">Meeting time (optional)</label>
               <input
                 id="meetingAt"
                 type="datetime-local"
                 value={meetingAt}
                 onChange={(event) => setMeetingAt(event.target.value)}
-                required
                 className="h-12 w-full rounded-lg border border-[#d9d4df] bg-[#fffefa] px-3 text-base text-foreground focus:border-[#8c7dae] focus:outline-none"
                 data-testid="input-meeting-time"
               />
+              <p className="mt-1.5 text-sm text-[#625d69]">Leave blank to prepare a brief now. The 30-day research window still ends at the current time.</p>
               {researchWindow && (
                 <p className="mt-2 text-sm text-[#625d69]" data-testid="text-research-window">
                   30-day research window ending today: <strong>{researchWindow}</strong>

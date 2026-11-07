@@ -16,6 +16,8 @@ tags:
     description: Optional account-scoped person details
   - name: sap-connection
     description: Owner-managed SAP S/4HANA OData connection
+  - name: telegram
+    description: Owner-only encrypted Telegram PDF delivery
 paths:
   /tavily-credentials:
     get:
@@ -95,6 +97,189 @@ paths:
                 $ref: "#/components/schemas/Error"
         "403":
           description: Request did not come from this app
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /telegram-credentials:
+    get:
+      operationId: getTelegramCredential
+      tags: [telegram]
+      summary: Get Telegram connection and delivery-limit status
+      responses:
+        "200":
+          description: Connection status without returning the bot token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TelegramCredentialStatus"
+        "401":
+          description: Sign-in is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Only the configured owner can use Telegram delivery
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    put:
+      operationId: saveTelegramCredential
+      tags: [telegram]
+      summary: Save the owner's Telegram bot token and chat ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TelegramCredentialInput"
+      responses:
+        "200":
+          description: Saved connection status without returning the token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TelegramCredentialStatus"
+        "400":
+          description: Bot token or chat ID is invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Sign-in is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Request did not come from this app or owner
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: Encrypted credential storage is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: deleteTelegramCredential
+      tags: [telegram]
+      summary: Remove the owner's Telegram connection
+      responses:
+        "200":
+          description: Disconnected status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TelegramCredentialStatus"
+        "401":
+          description: Sign-in is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Request did not come from this app or owner
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /telegram-credentials/test:
+    post:
+      operationId: testTelegramCredential
+      tags: [telegram]
+      summary: Test the saved Telegram bot and destination without sending a message
+      responses:
+        "200":
+          description: Bot and chat validation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TelegramCredentialTestResult"
+        "401":
+          description: Sign-in is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Only the configured owner can test Telegram delivery
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /telegram-send:
+    post:
+      operationId: sendTelegramBriefingPdf
+      tags: [telegram]
+      summary: Send a one-page briefing PDF to the owner's saved Telegram chat
+      parameters:
+        - name: X-Briefing-Start-Pin
+          in: header
+          required: true
+          schema:
+            type: string
+            minLength: 4
+            maxLength: 4
+            pattern: "^[0-9]{4}$"
+        - name: X-Briefing-Filename
+          in: header
+          required: false
+          schema:
+            type: string
+            maxLength: 96
+            pattern: "^[A-Za-z0-9_-]+\\.pdf$"
+      requestBody:
+        required: true
+        content:
+          application/pdf:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "200":
+          description: PDF sent to the saved Telegram chat
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TelegramSendResponse"
+        "400":
+          description: Request or PDF is invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Sign-in is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Only the configured owner can send Telegram PDFs or the PIN is invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Three PDFs have already been sent in the rolling hour, or the PIN is locked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "502":
+          description: Telegram did not accept the PDF
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: Telegram credentials or delivery storage are unavailable
           content:
             application/json:
               schema:
@@ -448,7 +633,7 @@ components:
           items:
             type: string
             enum: [news, hire, launch, financial, risk]
-      required: [startPin, subject, subjectType, personRole, sourceMode, meetingAt, topics]
+      required: [startPin, subject, subjectType, personRole, sourceMode, topics]
     SapDataArea:
       type: string
       enum: [store, production, maintenance, inventory, sales, hr, power_electrical_solar, purchase, scrap, order, delivery]
@@ -726,6 +911,72 @@ components:
           minLength: 20
           maxLength: 4096
       required: [apiKey]
+    TelegramCredentialStatus:
+      type: object
+      properties:
+        connected:
+          type: boolean
+        storageReady:
+          type: boolean
+        chatId:
+          type: ["string", "null"]
+        updatedAt:
+          type: ["string", "null"]
+          format: date-time
+        limit:
+          type: integer
+          minimum: 0
+        usedThisHour:
+          type: integer
+          minimum: 0
+        remaining:
+          type: integer
+          minimum: 0
+        windowResetsAt:
+          type: ["string", "null"]
+          format: date-time
+      required: [connected, storageReady, chatId, updatedAt, limit, usedThisHour, remaining, windowResetsAt]
+    TelegramCredentialInput:
+      type: object
+      properties:
+        botToken:
+          type: string
+          minLength: 30
+          maxLength: 256
+          pattern: "^[0-9]{6,}:[A-Za-z0-9_-]{20,}$"
+        chatId:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: "^[A-Za-z0-9_-]+$"
+      required: [botToken, chatId]
+    TelegramCredentialTestResult:
+      type: object
+      properties:
+        connected:
+          type: boolean
+        botName:
+          type: ["string", "null"]
+        chatId:
+          type: string
+        message:
+          type: string
+      required: [connected, botName, chatId, message]
+    TelegramSendResponse:
+      type: object
+      properties:
+        sent:
+          type: boolean
+        sentAt:
+          type: string
+          format: date-time
+        remaining:
+          type: integer
+          minimum: 0
+        windowResetsAt:
+          type: ["string", "null"]
+          format: date-time
+      required: [sent, sentAt, remaining, windowResetsAt]
     BriefingHighlight:
       type: object
       properties:
@@ -826,7 +1077,7 @@ components:
             type: string
             enum: [news, hire, launch, financial, risk]
         meetingAt:
-          type: string
+          type: ["string", "null"]
           format: date-time
         generatedAt:
           type: string

@@ -36,7 +36,7 @@ export interface BriefingInput {
      * @maxItems 11
      */
   sapAreas?: SapDataArea[];
-  meetingAt: Date;
+  meetingAt?: Date;
   /** @maxLength 1500 */
   context?: string;
   /** @minItems 1 */

@@ -48,6 +48,133 @@ export const DeleteTavilyCredentialResponse = zod.object({
 
 
 /**
+ * @summary Get Telegram connection and delivery-limit status
+ */
+export const getTelegramCredentialResponseLimitMin = 0;
+
+export const getTelegramCredentialResponseUsedThisHourMin = 0;
+
+export const getTelegramCredentialResponseRemainingMin = 0;
+
+
+
+export const GetTelegramCredentialResponse = zod.object({
+  "connected": zod.boolean(),
+  "storageReady": zod.boolean(),
+  "chatId": zod.string().nullable(),
+  "updatedAt": zod.coerce.date().nullable(),
+  "limit": zod.number().int().min(getTelegramCredentialResponseLimitMin),
+  "usedThisHour": zod.number().int().min(getTelegramCredentialResponseUsedThisHourMin),
+  "remaining": zod.number().int().min(getTelegramCredentialResponseRemainingMin),
+  "windowResetsAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Save the owner's Telegram bot token and chat ID
+ */
+export const saveTelegramCredentialBodyBotTokenMin = 30;
+export const saveTelegramCredentialBodyBotTokenMax = 256;
+
+
+export const saveTelegramCredentialBodyBotTokenRegExp = new RegExp('^[0-9]{6,}:[A-Za-z0-9_-]{20,}$');
+export const saveTelegramCredentialBodyChatIdMax = 128;
+
+
+export const saveTelegramCredentialBodyChatIdRegExp = new RegExp('^[A-Za-z0-9_-]+$');
+
+
+export const SaveTelegramCredentialBody = zod.object({
+  "botToken": zod.string().min(saveTelegramCredentialBodyBotTokenMin).max(saveTelegramCredentialBodyBotTokenMax).regex(saveTelegramCredentialBodyBotTokenRegExp),
+  "chatId": zod.string().min(1).max(saveTelegramCredentialBodyChatIdMax).regex(saveTelegramCredentialBodyChatIdRegExp)
+})
+
+export const saveTelegramCredentialResponseLimitMin = 0;
+
+export const saveTelegramCredentialResponseUsedThisHourMin = 0;
+
+export const saveTelegramCredentialResponseRemainingMin = 0;
+
+
+
+export const SaveTelegramCredentialResponse = zod.object({
+  "connected": zod.boolean(),
+  "storageReady": zod.boolean(),
+  "chatId": zod.string().nullable(),
+  "updatedAt": zod.coerce.date().nullable(),
+  "limit": zod.number().int().min(saveTelegramCredentialResponseLimitMin),
+  "usedThisHour": zod.number().int().min(saveTelegramCredentialResponseUsedThisHourMin),
+  "remaining": zod.number().int().min(saveTelegramCredentialResponseRemainingMin),
+  "windowResetsAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Remove the owner's Telegram connection
+ */
+export const deleteTelegramCredentialResponseLimitMin = 0;
+
+export const deleteTelegramCredentialResponseUsedThisHourMin = 0;
+
+export const deleteTelegramCredentialResponseRemainingMin = 0;
+
+
+
+export const DeleteTelegramCredentialResponse = zod.object({
+  "connected": zod.boolean(),
+  "storageReady": zod.boolean(),
+  "chatId": zod.string().nullable(),
+  "updatedAt": zod.coerce.date().nullable(),
+  "limit": zod.number().int().min(deleteTelegramCredentialResponseLimitMin),
+  "usedThisHour": zod.number().int().min(deleteTelegramCredentialResponseUsedThisHourMin),
+  "remaining": zod.number().int().min(deleteTelegramCredentialResponseRemainingMin),
+  "windowResetsAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Test the saved Telegram bot and destination without sending a message
+ */
+export const TestTelegramCredentialResponse = zod.object({
+  "connected": zod.boolean(),
+  "botName": zod.string().nullable(),
+  "chatId": zod.string(),
+  "message": zod.string()
+})
+
+
+/**
+ * @summary Send a one-page briefing PDF to the owner's saved Telegram chat
+ */
+export const sendTelegramBriefingPdfHeaderXBriefingStartPinMin = 4;
+export const sendTelegramBriefingPdfHeaderXBriefingStartPinMax = 4;
+
+
+export const sendTelegramBriefingPdfHeaderXBriefingStartPinRegExp = new RegExp('^[0-9]{4}$');
+export const sendTelegramBriefingPdfHeaderXBriefingFilenameMax = 96;
+
+
+export const sendTelegramBriefingPdfHeaderXBriefingFilenameRegExp = new RegExp('^[A-Za-z0-9_-]+\\.pdf$');
+
+
+export const SendTelegramBriefingPdfHeader = zod.object({
+  "X-Briefing-Start-Pin": zod.string().min(sendTelegramBriefingPdfHeaderXBriefingStartPinMin).max(sendTelegramBriefingPdfHeaderXBriefingStartPinMax).regex(sendTelegramBriefingPdfHeaderXBriefingStartPinRegExp),
+  "X-Briefing-Filename": zod.string().max(sendTelegramBriefingPdfHeaderXBriefingFilenameMax).regex(sendTelegramBriefingPdfHeaderXBriefingFilenameRegExp).optional()
+})
+
+export const sendTelegramBriefingPdfResponseRemainingMin = 0;
+
+
+
+export const SendTelegramBriefingPdfResponse = zod.object({
+  "sent": zod.boolean(),
+  "sentAt": zod.coerce.date(),
+  "remaining": zod.number().int().min(sendTelegramBriefingPdfResponseRemainingMin),
+  "windowResetsAt": zod.coerce.date().nullable()
+})
+
+
+/**
  * Returns server health status
  * @summary Health check
  */
@@ -292,7 +419,7 @@ export const CreateBriefingBody = zod.object({
   "companyName": zod.string().max(createBriefingBodyCompanyNameMax).optional(),
   "sourceMode": zod.enum(['public', 'private', 'sap']).default(createBriefingBodySourceModeDefault),
   "sapAreas": zod.array(zod.enum(['store', 'production', 'maintenance', 'inventory', 'sales', 'hr', 'power_electrical_solar', 'purchase', 'scrap', 'order', 'delivery'])).max(createBriefingBodySapAreasMax).optional().describe('SAP S/4HANA data areas selected for this briefing. Required only when sourceMode is sap.'),
-  "meetingAt": zod.coerce.date(),
+  "meetingAt": zod.coerce.date().optional(),
   "context": zod.string().max(createBriefingBodyContextMax).optional(),
   "topics": zod.array(zod.enum(['news', 'hire', 'launch', 'financial', 'risk'])).min(1)
 })
@@ -321,7 +448,7 @@ export const CreateBriefingResponse = zod.object({
   "sourceMode": zod.enum(['public', 'private', 'sap']),
   "sapAreas": zod.array(zod.enum(['store', 'production', 'maintenance', 'inventory', 'sales', 'hr', 'power_electrical_solar', 'purchase', 'scrap', 'order', 'delivery'])),
   "topics": zod.array(zod.enum(['news', 'hire', 'launch', 'financial', 'risk'])),
-  "meetingAt": zod.coerce.date(),
+  "meetingAt": zod.coerce.date().nullable(),
   "generatedAt": zod.coerce.date(),
   "windowStart": zod.coerce.date(),
   "windowEnd": zod.coerce.date(),

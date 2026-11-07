@@ -34,7 +34,11 @@ import type {
   SapConnectionSettings,
   SapConnectionTestResult,
   TavilyCredentialInput,
-  TavilyCredentialStatus
+  TavilyCredentialStatus,
+  TelegramCredentialInput,
+  TelegramCredentialStatus,
+  TelegramCredentialTestResult,
+  TelegramSendResponse
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -301,6 +305,407 @@ export const useDeleteTavilyCredential = <TError = ErrorType<Error>,
         TContext
       > => {
       return useMutation(getDeleteTavilyCredentialMutationOptions(options));
+    }
+
+export const getGetTelegramCredentialUrl = () => {
+
+
+
+
+  return `/api/telegram-credentials`
+}
+
+/**
+ * @summary Get Telegram connection and delivery-limit status
+ */
+export const getTelegramCredential = async ( options?: Parameters<typeof customFetch>[1]): Promise<TelegramCredentialStatus> => {
+
+  return customFetch<TelegramCredentialStatus>(getGetTelegramCredentialUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTelegramCredentialQueryKey = () => {
+    return [
+    `/api/telegram-credentials`
+    ] as const;
+    }
+
+
+export const getGetTelegramCredentialQueryOptions = <TData = Awaited<ReturnType<typeof getTelegramCredential>>, TError = ErrorType<Error>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTelegramCredential>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTelegramCredentialQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTelegramCredential>>> = ({ signal }) => getTelegramCredential({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTelegramCredential>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTelegramCredentialQueryResult = NonNullable<Awaited<ReturnType<typeof getTelegramCredential>>>
+export type GetTelegramCredentialQueryError = ErrorType<Error>
+
+
+/**
+ * @summary Get Telegram connection and delivery-limit status
+ */
+
+export function useGetTelegramCredential<TData = Awaited<ReturnType<typeof getTelegramCredential>>, TError = ErrorType<Error>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTelegramCredential>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTelegramCredentialQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSaveTelegramCredentialUrl = () => {
+
+
+
+
+  return `/api/telegram-credentials`
+}
+
+/**
+ * @summary Save the owner's Telegram bot token and chat ID
+ */
+export const saveTelegramCredential = async (telegramCredentialInput: TelegramCredentialInput, options?: Parameters<typeof customFetch>[1]): Promise<TelegramCredentialStatus> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<TelegramCredentialStatus>(getSaveTelegramCredentialUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(telegramCredentialInput)
+  }
+);}
+
+
+
+
+
+export const getSaveTelegramCredentialMutationKey = () => ['saveTelegramCredential'] as const;
+
+export const getSaveTelegramCredentialMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveTelegramCredential>>, TError,SaveTelegramCredentialMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof saveTelegramCredential>>, TError,SaveTelegramCredentialMutationVariables, TContext> => {
+
+const mutationKey = getSaveTelegramCredentialMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof saveTelegramCredential>>, SaveTelegramCredentialMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  saveTelegramCredential(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SaveTelegramCredentialMutationResult = NonNullable<Awaited<ReturnType<typeof saveTelegramCredential>>>
+    export type SaveTelegramCredentialMutationBody = BodyType<TelegramCredentialInput>
+    export type SaveTelegramCredentialMutationError = ErrorType<Error>
+    export type SaveTelegramCredentialMutationVariables = {data: BodyType<TelegramCredentialInput>}
+
+    /**
+ * @summary Save the owner's Telegram bot token and chat ID
+ */
+export const useSaveTelegramCredential = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveTelegramCredential>>, TError,SaveTelegramCredentialMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof saveTelegramCredential>>,
+        TError,
+        SaveTelegramCredentialMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSaveTelegramCredentialMutationOptions(options));
+    }
+
+export const getDeleteTelegramCredentialUrl = () => {
+
+
+
+
+  return `/api/telegram-credentials`
+}
+
+/**
+ * @summary Remove the owner's Telegram connection
+ */
+export const deleteTelegramCredential = async ( options?: Parameters<typeof customFetch>[1]): Promise<TelegramCredentialStatus> => {
+
+  return customFetch<TelegramCredentialStatus>(getDeleteTelegramCredentialUrl(),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteTelegramCredentialMutationKey = () => ['deleteTelegramCredential'] as const;
+
+export const getDeleteTelegramCredentialMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTelegramCredential>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteTelegramCredential>>, TError,void, TContext> => {
+
+const mutationKey = getDeleteTelegramCredentialMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteTelegramCredential>>, void> = () => {
+
+
+          return  deleteTelegramCredential(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteTelegramCredentialMutationResult = NonNullable<Awaited<ReturnType<typeof deleteTelegramCredential>>>
+
+    export type DeleteTelegramCredentialMutationError = ErrorType<Error>
+
+
+    /**
+ * @summary Remove the owner's Telegram connection
+ */
+export const useDeleteTelegramCredential = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTelegramCredential>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteTelegramCredential>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getDeleteTelegramCredentialMutationOptions(options));
+    }
+
+export const getTestTelegramCredentialUrl = () => {
+
+
+
+
+  return `/api/telegram-credentials/test`
+}
+
+/**
+ * @summary Test the saved Telegram bot and destination without sending a message
+ */
+export const testTelegramCredential = async ( options?: Parameters<typeof customFetch>[1]): Promise<TelegramCredentialTestResult> => {
+
+  return customFetch<TelegramCredentialTestResult>(getTestTelegramCredentialUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getTestTelegramCredentialMutationKey = () => ['testTelegramCredential'] as const;
+
+export const getTestTelegramCredentialMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testTelegramCredential>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof testTelegramCredential>>, TError,void, TContext> => {
+
+const mutationKey = getTestTelegramCredentialMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof testTelegramCredential>>, void> = () => {
+
+
+          return  testTelegramCredential(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type TestTelegramCredentialMutationResult = NonNullable<Awaited<ReturnType<typeof testTelegramCredential>>>
+
+    export type TestTelegramCredentialMutationError = ErrorType<Error>
+
+
+    /**
+ * @summary Test the saved Telegram bot and destination without sending a message
+ */
+export const useTestTelegramCredential = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testTelegramCredential>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof testTelegramCredential>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getTestTelegramCredentialMutationOptions(options));
+    }
+
+export const getSendTelegramBriefingPdfUrl = () => {
+
+
+
+
+  return `/api/telegram-send`
+}
+
+/**
+ * @summary Send a one-page briefing PDF to the owner's saved Telegram chat
+ */
+export const sendTelegramBriefingPdf = async (sendTelegramBriefingPdfBody: Blob, options?: Parameters<typeof customFetch>[1]): Promise<TelegramSendResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<TelegramSendResponse>(getSendTelegramBriefingPdfUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/pdf', ...getHeaders(options?.headers) },
+    body: sendTelegramBriefingPdfBody
+  }
+);}
+
+
+
+
+
+export const getSendTelegramBriefingPdfMutationKey = () => ['sendTelegramBriefingPdf'] as const;
+
+export const getSendTelegramBriefingPdfMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendTelegramBriefingPdf>>, TError,SendTelegramBriefingPdfMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendTelegramBriefingPdf>>, TError,SendTelegramBriefingPdfMutationVariables, TContext> => {
+
+const mutationKey = getSendTelegramBriefingPdfMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendTelegramBriefingPdf>>, SendTelegramBriefingPdfMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  sendTelegramBriefingPdf(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendTelegramBriefingPdfMutationResult = NonNullable<Awaited<ReturnType<typeof sendTelegramBriefingPdf>>>
+    export type SendTelegramBriefingPdfMutationBody = BodyType<Blob>
+    export type SendTelegramBriefingPdfMutationError = ErrorType<Error>
+    export type SendTelegramBriefingPdfMutationVariables = {data: BodyType<Blob>}
+
+    /**
+ * @summary Send a one-page briefing PDF to the owner's saved Telegram chat
+ */
+export const useSendTelegramBriefingPdf = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendTelegramBriefingPdf>>, TError,SendTelegramBriefingPdfMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof sendTelegramBriefingPdf>>,
+        TError,
+        SendTelegramBriefingPdfMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSendTelegramBriefingPdfMutationOptions(options));
     }
 
 export const getHealthCheckUrl = () => {
