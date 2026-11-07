@@ -1,4 +1,5 @@
 // Copyright 2026 Sham Mohite
+// Author: Sham Mohite
 // SPDX-License-Identifier: Apache-2.0
 
 import { useEffect, useMemo, useRef, useState } from "react";
