@@ -155,8 +155,8 @@ Treat SAP connection setup as generic per-clone configuration, not Finolex-speci
 
 **How to apply:** Do not hard-code company hosts or credentials. Use released S/4HANA OData business APIs by default; direct HANA SQL access is a separate connection type and is not enabled unless requested.
 
-Keep SAP and Tavily as separate briefing sources. The Tavily key box is separate from SAP credentials and may be opened while SAP is selected, but Tavily searches run only for Public briefs.
+SAP briefs combine Tavily public research with read-only SAP records in distinct cited sections. Keep the user's Tavily key and SAP credentials separately stored and billed.
 
-**Why:** The user chose to keep sources separate while asking for a distinct, secure Tavily key box in the app.
+**Why:** The user clarified that SAP selection must use Tavily for public research as well as the SAP connection, with automatic fallback to Public when SAP setup is incomplete.
 
-**How to apply:** Never send Tavily requests as part of an SAP brief unless the user changes this behavior; keep key storage and billing separate from SAP OAuth.
+**How to apply:** For SAP briefs, check the active Tavily key and at least one valid SAP area mapping before collecting data; keep source sections and credentials distinct.

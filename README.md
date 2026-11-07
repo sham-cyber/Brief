@@ -4,7 +4,7 @@
 
 **Copyright:** © 2026 Sham Mohite
 
-A source-first pre-meeting briefing app. Choose a company or person, select the topics that matter, and manually gather public reporting from the 30 days ending when the briefing starts. Each factual item links to its source.
+A source-first pre-meeting briefing app. Choose a company or person, select the topics that matter, and gather public reporting from the 30 days ending when the briefing starts. Each factual item links to its source.
 
 > **Hackathon prototype:** Add the demo URL and presentation links here when they are ready for submission.
 
@@ -15,8 +15,9 @@ A source-first pre-meeting briefing app. Choose a company or person, select the 
 - Uses Tavily for one basic search per selected topic, up to eight results per topic; validates dates, links, subject match, and topic relevance before including results.
 - Shows source links and, when Tavily returns them for an accepted source, a photo or supported video preview.
 - Provides a concise brief and a one-page print with up to 400 words of briefing text, plus its cited source list, and browser read-aloud.
+- SAP briefs combine Tavily public research with approved, read-only SAP S/4HANA records; public links and internal records remain in separate sections.
 
-Current flow centers on cited public-source results, on-demand briefings, and transient output. Separate future work may cover AI and user-authorized private-source connections.
+AI is off. Email, WhatsApp, and other private sources are not connected.
 
 ## Sign-in, owner lock, and crawl procedure
 
@@ -31,9 +32,9 @@ The PIN and owner email are server-side secrets. Configure their values in Repli
 ### Crawl guardrails
 
 - Meeting-time edits prepare the brief; the search begins when the user presses **Brief**.
-- One Tavily request is sent for each selected topic, up to five per crawl and eight results per topic.
-- The configured developer account is limited to 10 crawl starts and 10 search requests per Asia/Kolkata calendar day.
-- The app also enforces a shared 120-second crawl runtime per Asia/Kolkata calendar day, one active crawl at a time, a three-minute hard stop, and a maximum of 10 Tavily requests per five minutes.
+- One Tavily request is sent for each selected topic, up to five per event and eight results per topic. This applies to Public briefs and to the public-research part of SAP briefs.
+- The configured developer account is limited to 10 briefing events per Asia/Kolkata calendar day and up to 50 topic searches per day (10 events × five topics).
+- Each event has a two-minute collection limit and a three-minute backup stop. Only one Tavily-backed event can run at a time; the app also limits Tavily to 10 requests per rolling five minutes.
 - Provider usage is charged to the Tavily account whose key is used. Store the project key in the hosting secret manager.
 
 ### Personal Tavily key security
@@ -77,13 +78,13 @@ Do not put SAP client credentials, tokens, or database passwords in GitHub.
 After the app is running:
 
 1. Sign in with the account configured as `BRIEFING_OWNER_EMAIL`.
-2. Open **Settings → SAP connection settings**.
+2. In the briefing form, click the gear beside the **SAP** source option to open SAP connection settings over the page.
 3. Enter the SAP S/4HANA OData service URL, OAuth token URL, SAP Fiori link base, approved company or plant values, and the mappings for the approved business areas.
 4. Enter the OAuth client ID and secret issued by the SAP administrator. The app stores these encrypted on the server; they are not committed, saved in browser storage, or returned to the page.
 5. Save the settings and press **Test connection**. This checks OAuth and the OData metadata endpoint; it does not fetch operational records.
-6. Select **SAP** in the briefing form and choose only the configured data areas.
+6. Confirm the separate Tavily key is active, then select **SAP** in the briefing form and choose only the configured data areas. The brief searches Tavily and SAP together, with separate cited public and SAP sections.
 
-SAP supplies the endpoint, API release, OAuth scope, communication arrangement, and valid entity/field mappings. Until those are supplied and approved, a clone can run but cannot return live SAP data. This integration uses S/4HANA business OData APIs; direct SAP HANA SQL/JDBC/ODBC access is a separate connection type and is not enabled here.
+SAP supplies the endpoint, API release, OAuth scope, communication arrangement, and valid entity/field mappings. SAP mode requires both an active Tavily key and a complete SAP connection with at least one mapped data area; if either setup is incomplete, the app returns to Public and shows an alert. Until SAP details are supplied and approved, a clone can run but cannot return live SAP data. This integration uses S/4HANA business OData APIs; direct SAP HANA SQL/JDBC/ODBC access is a separate connection type and is not enabled here.
 
 ## Run locally
 

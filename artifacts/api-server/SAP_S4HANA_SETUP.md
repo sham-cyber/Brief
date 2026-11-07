@@ -1,10 +1,10 @@
 # Generic SAP S/4HANA business-data connection
 
-The SAP source uses an administrator-configured, read-only OData business API. It is not tied to a specific company. The app requests data only after the configured owner presses **Brief**; opening the app, loading the settings page, and checking status do not read SAP business records.
+The SAP source uses an administrator-configured, read-only OData business API. It is not tied to a specific company. SAP briefs also search public reporting through the active Tavily key; public sources and internal SAP records are shown separately. The app requests either source only after the configured owner presses **Brief**; opening the app, loading the settings page, and checking status do not read SAP business records.
 
 ## Configure the connection
 
-Sign in with the account configured as `BRIEFING_OWNER_EMAIL`. In the app's **Settings**, open **SAP connection settings** and enter:
+Sign in with the account configured as `BRIEFING_OWNER_EMAIL`. In the briefing form, select the gear beside the **SAP** source option to open connection settings and enter:
 
 - The HTTPS OData service root from the SAP API documentation.
 - The OAuth token URL and client-credentials scope, if required.
@@ -21,11 +21,13 @@ The connection uses OAuth 2.0 client credentials by default. API-key authenticat
 
 This integration reads released SAP S/4HANA OData business APIs. It does **not** open a direct SQL connection to SAP HANA. Direct HANA database access is a separate JDBC/ODBC integration that requires its own approved endpoint, database identity, network access, TLS configuration, and least-privilege authorization.
 
-For operational records such as store, production, maintenance, inventory, sales, HR, and power/electrical/solar, use the released business APIs and field mappings documented for the connected SAP system. The available APIs, entity sets, field names, filters, and OAuth scopes depend on the SAP release and its communication arrangements; do not copy placeholder mappings into a live connection.
+For operational records such as store, production, maintenance, inventory, sales, HR, power/electrical/solar, purchase, scrap, orders, and delivery, use the released business APIs and field mappings documented for the connected SAP system. The available APIs, entity sets, field names, filters, and OAuth scopes depend on the SAP release and its communication arrangements; do not copy placeholder mappings into a live connection.
 
 ## Areas, access, and limits
 
 Available areas are `store`, `production`, `maintenance`, `inventory`, `sales`, `hr`, `power_electrical_solar`, `purchase`, `scrap`, `order`, and `delivery`. Only areas with valid mappings appear as selectable. Each area is requested only if its mapped briefing topic is selected. Each filter must contain `{start}`, `{end}`, and `{organization}`; the app supplies the rolling 30-day window and requires the company or plant to exactly match the administrator's allowlist. The service path stays under the configured HTTPS origin, and each area returns at most 20 records.
+
+SAP mode requires an active Tavily key plus a complete SAP connection with at least one valid area mapping. If either configuration is missing, the UI returns to Public and displays an alert. On a ready SAP brief, one Tavily request is made per selected topic while configured SAP areas are read in parallel. The combined collection has a two-minute limit, a three-minute backup stop, and uses the account's existing Tavily event, daily-search, and rate limits.
 
 Use a dedicated SAP integration identity with read-only permissions restricted to the intended company/plant and approved data areas. Do not configure HR unless the SAP administrator explicitly approves that access. The app currently restricts briefing starts to its configured owner; a multi-user rollout needs SAP-side user/role enforcement before it is opened to other accounts.
 

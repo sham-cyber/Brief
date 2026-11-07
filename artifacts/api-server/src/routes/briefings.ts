@@ -912,9 +912,9 @@ router.post("/briefings", async (req, res): Promise<void> => {
       return;
     }
     const sapStatus = await getSapConfigurationStatus(userId);
-    if (!sapStatus.configured) {
+    if (!sapStatus.configured || sapStatus.availableAreas.length === 0) {
       res.status(503).json({
-        error: "The app owner has not configured an SAP connection. No SAP data was requested.",
+        error: "SAP setup is incomplete. Configure the connection and at least one mapped SAP area before selecting SAP. No sources were requested.",
       });
       return;
     }
@@ -927,9 +927,93 @@ router.post("/briefings", async (req, res): Promise<void> => {
       });
       return;
     }
+    let tavilyApiKey: string | null;
+    const projectApiKey = process.env.TAVILY_API_KEY?.trim();
+    if (projectApiKey) {
+      // This branch is reached only after the server has verified the configured owner account.
+      tavilyApiKey = projectApiKey;
+    } else {
+      try {
+        tavilyApiKey = await getUserTavilyApiKey(userId);
+      } catch (error) {
+        req.log.error({ error }, "User Tavily credential is unavailable or cannot be decrypted for SAP research");
+        res.status(503).json({
+          error: "Secure Tavily key storage is unavailable. No SAP or public-source request was sent.",
+        });
+        return;
+      }
+    }
+    if (!tavilyApiKey) {
+      res.status(503).json({
+        error: "SAP briefs require an active Tavily key for public research. Add a Tavily key in its separate settings box; no SAP or public-source request was sent.",
+      });
+      return;
+    }
     if (sapBriefingActive) {
       res.status(429).json({
-        error: "An SAP briefing is already running. Wait for it to finish before starting another.",
+        error: "A combined Tavily and SAP briefing is already running. Wait for it to finish before starting another.",
+      });
+      return;
+    }
+
+    const topics = input.data.topics as BriefingTopic[];
+    let quota: Awaited<ReturnType<typeof reserveTavilyQuota>>;
+    try {
+      quota = await reserveTavilyQuota(userId, topics.length);
+    } catch (error) {
+      req.log.error({ error }, "Failed to reserve the Tavily allowance for an SAP briefing");
+      res.status(503).json({
+        error: "Tavily usage limits could not be checked. No source request was sent.",
+      });
+      return;
+    }
+    if (!quota.allowed || quota.reservationId === null) {
+      if (quota.reason === "active-crawl") {
+        res.status(429).json({
+          error: "A Tavily briefing event is already using the shared app allowance. Wait for it to finish before starting another.",
+        });
+        return;
+      }
+      if (quota.reason === "daily-start-limit") {
+        res.status(429).json({
+          error: `The configured developer account has reached ${TAVILY_DAILY_CRAWL_START_LIMIT} briefing events for today's IST calendar day. It resets at midnight IST.`,
+        });
+        return;
+      }
+      if (quota.reason === "daily-search-limit") {
+        res.status(429).json({
+          error: `This account does not have enough daily Tavily searches remaining for the ${topics.length} selected topics. Reduce the selected topics or try after the IST reset.`,
+        });
+        return;
+      }
+      res.status(429).json({
+        error: "The two-minute Tavily allowance for this briefing was reached.",
+      });
+      return;
+    }
+
+    let requestRateLimit: Awaited<ReturnType<typeof reserveTavilyRequestSlots>>;
+    try {
+      requestRateLimit = await reserveTavilyRequestSlots(topics.length);
+    } catch (error) {
+      req.log.error({ error }, "Failed to reserve Tavily request-rate slots for an SAP briefing");
+      await cancelTavilyQuotaReservation(userId, quota.reservationId)
+        .catch((cancelError) => {
+          req.log.error({ error: cancelError }, "Failed to release the SAP briefing Tavily quota");
+        });
+      res.status(503).json({
+        error: "The Tavily request limit could not be checked. No source request was sent.",
+      });
+      return;
+    }
+    if (!requestRateLimit.allowed) {
+      await cancelTavilyQuotaReservation(userId, quota.reservationId)
+        .catch((cancelError) => {
+          req.log.error({ error: cancelError }, "Failed to release the SAP briefing Tavily quota");
+        });
+      res.setHeader("Retry-After", String(requestRateLimit.retryAfterSeconds));
+      res.status(429).json({
+        error: `Tavily is limited to ${TAVILY_REQUEST_LIMIT} requests per rolling five minutes across the app. Each selected topic counts once. Try again in ${requestRateLimit.retryAfterSeconds} seconds.`,
       });
       return;
     }
@@ -937,6 +1021,14 @@ router.post("/briefings", async (req, res): Promise<void> => {
     sapBriefingActive = true;
     const crawlController = new AbortController();
     let stopReason: "time-limit" | "hard-stop" | null = null;
+    const crawlStartedAt = Date.now();
+    let quotaSettled = false;
+    const settleQuota = async () => {
+      if (quotaSettled || quota.reservationId === null) return;
+      const durationMs = Math.min(TAVILY_DAILY_LIMIT_MS, Date.now() - crawlStartedAt);
+      await finishTavilyQuotaReservation(userId, quota.reservationId, durationMs);
+      quotaSettled = true;
+    };
     const durationTimer = setTimeout(() => {
       stopReason = "time-limit";
       crawlController.abort(new Error("SAP briefing reached its two-minute limit."));
@@ -951,27 +1043,46 @@ router.post("/briefings", async (req, res): Promise<void> => {
       const meetingAt = input.data.meetingAt;
       const windowEnd = now;
       const windowStart = new Date(windowEnd.getTime() - 30 * 86_400_000);
-      const topics = input.data.topics as BriefingTopic[];
-      const sapResult = await searchSapS4Hana({
-        userId,
-        areas: sapAreas,
-        topics,
-        organization,
-        windowStart,
-        windowEnd,
-        affiliatedCompanyReport: input.data.subjectType === "person",
-        signal: crawlController.signal,
-      });
+      const [tavilyResult, sapResult] = await Promise.all([
+        searchNews(
+          input.data.subject.trim(),
+          input.data.subjectType,
+          input.data.personRole,
+          topics,
+          tavilyApiKey,
+          windowStart,
+          windowEnd,
+          input.data.context?.trim() || undefined,
+          publicRoleTitle,
+          companyName,
+          crawlController.signal,
+        ),
+        searchSapS4Hana({
+          userId,
+          areas: sapAreas,
+          topics,
+          organization,
+          windowStart,
+          windowEnd,
+          affiliatedCompanyReport: input.data.subjectType === "person",
+          signal: crawlController.signal,
+        }),
+      ]);
       if (stopReason) {
+        await settleQuota();
         res.status(504).json({
           error: stopReason === "time-limit"
-            ? "This SAP briefing reached its two-minute collection limit and was stopped."
-            : "The SAP briefing reached its three-minute backup hard stop.",
+            ? "This combined Tavily and SAP briefing reached its two-minute collection limit and was stopped."
+            : "The combined briefing reached its three-minute backup hard stop.",
         });
         return;
       }
+      await settleQuota();
 
-      const relevant = sapResult.sources.filter(({ source, searchedAs }) =>
+      const publicSources = tavilyResult.sources.filter(({ source, searchedAs }) =>
+        classifySource(source, searchedAs, topics) !== null,
+      );
+      const relevantSapSources = sapResult.sources.filter(({ source, searchedAs }) =>
         classifySource(source, searchedAs, topics) !== null,
       );
       const content = buildBriefingContent(
@@ -979,24 +1090,27 @@ router.post("/briefings", async (req, res): Promise<void> => {
         input.data.subjectType,
         input.data.context?.trim() || undefined,
         topics,
-        relevant,
+        publicSources,
         companyName,
-        "sap",
       );
       const dataSourceIds = sapResult.sapData.slice(0, 3).flatMap((item) => item.sourceIds);
       const returnedAreaCount = new Set(sapResult.sapData.map((item) => item.area)).size;
-      content.overview.text = sapResult.sapData.length
-        ? `SAP S/4HANA returned ${sapResult.sapData.length} cited record${sapResult.sapData.length === 1 ? "" : "s"} across ${returnedAreaCount} selected data area${returnedAreaCount === 1 ? "" : "s"} for ${organization}. See SAP Data for the records.`
-        : `No SAP records matched the selected areas and topics for ${organization} during the 30-day window.`;
-      content.overview.sourceIds = dataSourceIds;
-      content.overview.topPositive = {
-        text: "Positive/negative scoring is not applied to SAP records. Review the cited operational values below.",
-        sourceIds: [],
-      };
-      content.overview.topNegative = {
-        text: "Positive/negative scoring is not applied to SAP records. Review the cited operational values below.",
-        sourceIds: [],
-      };
+      const publicSummary = publicSources.length
+        ? `Tavily found ${publicSources.length} cited public result${publicSources.length === 1 ? "" : "s"} for the selected topics.`
+        : "Tavily found no cited public results for the selected topics.";
+      const sapSummary = sapResult.sapData.length
+        ? `SAP S/4HANA returned ${sapResult.sapData.length} cited record${sapResult.sapData.length === 1 ? "" : "s"} across ${returnedAreaCount} selected data area${returnedAreaCount === 1 ? "" : "s"} for ${organization}.`
+        : `No SAP records matched the selected areas and topics for ${organization}.`;
+      content.overview.text = `${publicSummary} ${sapSummary}`;
+      content.overview.sourceIds = [...new Set([
+        ...publicSources.slice(0, 2).map(({ source }) => source.id),
+        ...dataSourceIds,
+      ])].slice(0, 6);
+      const combinedSources = [...publicSources, ...relevantSapSources]
+        .map(({ source }) => source)
+        .filter((source, index, all) =>
+          all.findIndex((candidate) => candidate.id === source.id) === index,
+        );
 
       const result = CreateBriefingResponse.parse({
         briefingId: randomUUID(),
@@ -1012,29 +1126,64 @@ router.post("/briefings", async (req, res): Promise<void> => {
         generatedAt: now.toISOString(),
         windowStart: windowStart.toISOString(),
         windowEnd: windowEnd.toISOString(),
-        searchCreditsUsed: null,
+        searchCreditsUsed: tavilyResult.creditsUsed,
         sourceSearchesCompleted: sapResult.requestsCompleted,
-        searchResultsReturned: sapResult.resultsReturned,
+        searchResultsReturned: tavilyResult.resultsReturned + sapResult.resultsReturned,
         ...content,
-        sources: sapResult.sources.map(({ source }) => source),
+        sources: combinedSources,
         sapData: sapResult.sapData,
       });
       res.json(result);
     } catch (error) {
+      crawlController.abort(error);
+      try {
+        await settleQuota();
+      } catch (settleError) {
+        req.log.error({ error: settleError }, "Failed to save combined Tavily and SAP usage");
+        res.status(503).json({
+          error: "Tavily usage could not be saved safely. Check the connection before retrying.",
+        });
+        return;
+      }
+      if (stopReason) {
+        res.status(504).json({
+          error: stopReason === "time-limit"
+            ? "This combined Tavily and SAP briefing reached its two-minute collection limit and was stopped."
+            : "The combined briefing reached its three-minute backup hard stop.",
+        });
+        return;
+      }
+      if (error instanceof BriefingSearchFailure) {
+        req.log.error(
+          {
+            completedSearches: error.searchesCompleted,
+            failedSearches: error.statuses.length,
+            statusCodes: error.statuses,
+            creditsReported: error.creditsUsed,
+          },
+          "Tavily public research failed during an SAP briefing",
+        );
+        const credentialsRejected = error.statuses.some((status) =>
+          [401, 403, 432, 433, 434].includes(status),
+        );
+        const creditNote = error.creditsUsed === null
+          ? "Credit use for completed searches could not be confirmed."
+          : `Tavily reported ${error.creditsUsed} credit${error.creditsUsed === 1 ? "" : "s"} for completed searches; check its dashboard for final usage.`;
+        res.status(502).json({
+          error: `${credentialsRejected ? "Tavily rejected the active API key or account limit." : "Some Tavily public searches failed."} ${creditNote} SAP records were not included; check the Tavily connection before retrying.`,
+        });
+        return;
+      }
       req.log.error(
         {
           areaCount: sapAreas.length,
           errorName: error instanceof Error ? error.name : "unknown",
           stopReason,
         },
-        "SAP S/4HANA briefing request failed",
+        "Combined Tavily and SAP briefing request failed",
       );
-      res.status(stopReason ? 504 : 502).json({
-        error: stopReason === "time-limit"
-          ? "This SAP briefing reached its two-minute collection limit and was stopped."
-          : stopReason === "hard-stop"
-            ? "The SAP briefing reached its three-minute backup hard stop."
-            : "SAP data could not be collected. Check the approved S/4HANA connection and try again.",
+      res.status(502).json({
+        error: "SAP or public Tavily data could not be collected. Check both connections and try again.",
       });
     } finally {
       clearTimeout(durationTimer);
@@ -1078,6 +1227,12 @@ router.post("/briefings", async (req, res): Promise<void> => {
     if (quota.reason === "daily-start-limit") {
       res.status(429).json({
         error: `The configured developer account has reached ${TAVILY_DAILY_CRAWL_START_LIMIT} briefing events for today's IST calendar day. It resets at midnight IST.`,
+      });
+      return;
+    }
+    if (quota.reason === "daily-search-limit") {
+      res.status(429).json({
+        error: `This account does not have enough daily Tavily searches remaining for the ${input.data.topics.length} selected topics. Reduce the selected topics or try after the IST reset.`,
       });
       return;
     }

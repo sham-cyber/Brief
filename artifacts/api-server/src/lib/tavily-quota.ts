@@ -44,6 +44,7 @@ export type TavilyQuotaReservation = TavilyQuotaStatus & {
   reason:
     | "active-crawl"
     | "daily-start-limit"
+    | "daily-search-limit"
     | null;
 };
 
@@ -193,7 +194,9 @@ export async function reserveTavilyQuota(
       ? "active-crawl"
       : dailyUsage.dailyCrawlStartsRemaining <= 0
         ? "daily-start-limit"
-        : null;
+        : dailyUsage.dailySearchRequestsRemaining < searchRequestCount
+          ? "daily-search-limit"
+          : null;
     if (reason) {
       await client.query("COMMIT");
       return {

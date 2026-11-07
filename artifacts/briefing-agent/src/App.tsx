@@ -880,7 +880,11 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
       `Meeting: ${formatDate(result.meetingAt)}`,
       `Crawl started: ${formatDate(result.generatedAt)}`,
       `Research window: ${formatWindow(result.windowStart, result.windowEnd)}`,
-      ...(result.sourceMode === 'sap' ? [`Source: SAP S/4HANA · ${result.sapAreas.map((area) => SAP_AREAS.find((item) => item.value === area)?.label ?? area).join(', ')}`] : []),
+      ...(result.sourceMode === 'sap' ? [
+        `Sources: Tavily public research + SAP S/4HANA · ${result.sapAreas.map((area) => SAP_AREAS.find((item) => item.value === area)?.label ?? area).join(', ')}`,
+        `Tavily: ${result.searchCreditsUsed === null ? 'usage not reported' : `${result.searchCreditsUsed} credits`} · ${result.topics.length} topic searches`,
+        `SAP: ${result.sourceSearchesCompleted} read-only area requests`,
+      ] : []),
       ...(result.personRole ? [`Briefing context: ${personContextLabel(result.personRole, result.publicRoleTitle, result.companyName)}`] : []),
       '',
       'OVERVIEW',
@@ -948,7 +952,7 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
         <div className="absolute -right-2 -top-12 h-44 w-44 rounded-full border border-white/10" aria-hidden="true" />
         <div className="relative">
           <p className="font-mono text-[10px] uppercase tracking-[.2em] text-[#c5b9e8]">
-            {result.sourceMode === 'sap' ? 'SAP S/4HANA · internal-data briefing' : `${result.subjectType} briefing`}
+            {result.sourceMode === 'sap' ? 'Tavily public research + SAP S/4HANA records' : `${result.subjectType} briefing`}
             {result.subjectType === 'person' && result.personRole ? ` · ${personContextLabel(result.personRole, result.publicRoleTitle, result.companyName)}` : ''}
           </p>
           <h2 className="mt-4 max-w-3xl font-serif text-4xl leading-[.98] tracking-[-.02em] sm:text-5xl">{result.subject}</h2>
@@ -957,7 +961,7 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
             <span className="inline-flex items-center gap-2"><Radio className="h-3.5 w-3.5 text-[#c5b9e8]" />Research window: {formatWindow(result.windowStart, result.windowEnd)}</span>
             {result.sourceMode === 'sap' ? (
               <span className="inline-flex items-center gap-2" data-testid="text-sap-usage">
-                SAP areas: {result.sapAreas.length} · {result.sourceSearchesCompleted} read-only area request{result.sourceSearchesCompleted === 1 ? '' : 's'}
+                Tavily: {result.searchCreditsUsed === null ? 'usage not reported' : `${result.searchCreditsUsed} credit${result.searchCreditsUsed === 1 ? '' : 's'}`} · {result.topics.length} topic searches · SAP: {result.sourceSearchesCompleted} read-only area request{result.sourceSearchesCompleted === 1 ? '' : 's'}
               </span>
             ) : (
               <span className="inline-flex items-center gap-2" data-testid="text-tavily-usage">
@@ -997,8 +1001,11 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
 
       {result.sourceMode === 'sap' && <SapDataSection items={result.sapData} sources={result.sources} />}
 
-      {result.sourceMode !== 'sap' && (
-      <>
+      {result.sourceMode === 'sap' && (
+        <p className="mt-6" data-testid="text-sap-public-research-heading">
+          <SectionEyebrow>Public research from Tavily</SectionEyebrow>
+        </p>
+      )}
       <nav className="no-print mt-6 flex flex-wrap gap-2" aria-label="Filter briefing by topic" data-testid="topic-filters">
         <button
           type="button"
@@ -1041,8 +1048,6 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
           />
         );
       })}
-      </>
-      )}
 
       </div>
 
@@ -1058,7 +1063,7 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
         {result.sources.length === 0 && result.searchResultsReturned !== null && (
           <p className="mb-4 rounded-lg border border-[#ded9e5] bg-[#f8f6fb] px-4 py-3 text-base leading-relaxed text-[#625d69]" role="status" data-testid="text-source-filter-diagnostic">
             {result.searchResultsReturned === 0
-              ? `No results were returned across ${result.sourceSearchesCompleted} selected-topic searches.`
+              ? `No results were returned across ${result.sourceMode === 'sap' ? `${result.topics.length} Tavily topic searches and ${result.sourceSearchesCompleted} SAP area requests` : `${result.sourceSearchesCompleted} selected-topic searches`}.`
               : `${result.searchResultsReturned} results were checked, but none passed the source date, link, subject, and topic checks.`}
           </p>
         )}
@@ -1111,7 +1116,7 @@ function PrintOnePageBrief({ result, activeTopic }: { result: BriefingResult; ac
   );
   const printSapData = result.sapAreas.flatMap((area) =>
     result.sapData.filter((item) => item.area === area).slice(0, 1),
-  );
+  ).slice(0, 3);
   const firstQuestion = printTopics.includes('risk') ? result.questions.slice(0, 1) : [];
   const sourceIds = new Set([
     ...printBrief.sourceIds,
@@ -1133,8 +1138,8 @@ function PrintOnePageBrief({ result, activeTopic }: { result: BriefingResult; ac
   const topNegativeText = printText(printBrief.topNegative.text, 130, 18);
   const printSapRows = printSapData.map((item) => ({
     ...item,
-    printTitle: printText(item.title, 72, 12),
-    printDetail: printText(item.detail, 120, 20),
+    printTitle: printText(item.title, result.sourceMode === 'sap' ? 56 : 72, result.sourceMode === 'sap' ? 8 : 12),
+    printDetail: printText(item.detail, result.sourceMode === 'sap' ? 80 : 120, result.sourceMode === 'sap' ? 12 : 20),
   }));
   const printTopicBlocks = printTopics.map((topic) => {
     const topicInfo = TOPICS.find((item) => item.value === topic)!;
@@ -1142,8 +1147,8 @@ function PrintOnePageBrief({ result, activeTopic }: { result: BriefingResult; ac
       .filter((item) => item.category === topic)
       .map((highlight) => ({
         ...highlight,
-        printTitle: printText(highlight.title, 100, 14),
-        printSummary: printText(highlight.summary, 170, 34),
+        printTitle: printText(highlight.title, result.sourceMode === 'sap' ? 72 : 100, result.sourceMode === 'sap' ? 10 : 14),
+        printSummary: printText(highlight.summary, result.sourceMode === 'sap' ? 120 : 170, result.sourceMode === 'sap' ? 22 : 34),
       }));
     const emptyMessage = topic === 'hire'
       ? 'No confirmed-hire reports were found in this 30-day public-news crawl; this does not confirm that no vacancies exist.'
@@ -1160,11 +1165,33 @@ function PrintOnePageBrief({ result, activeTopic }: { result: BriefingResult; ac
       questionText: question ? printText(question.text, 150, 20) : '',
     };
   });
+  const hasSapPublicPrintContent = printTopicBlocks.some((block) =>
+    block.highlights.length > 0 || Boolean(block.question),
+  );
+  const sapPublicPrintText = hasSapPublicPrintContent
+    ? printTopicBlocks.flatMap((block) =>
+      [
+        ...block.highlights.flatMap((highlight) => [
+          block.topicInfo.label,
+          highlight.printTitle,
+          highlight.printSummary,
+        ]),
+        block.questionText,
+      ],
+    )
+    : ["No public Tavily results were found in the selected topics."];
+  const additionalSapNote = result.sapData.length > printSapRows.length
+    ? `${result.sapData.length - printSapRows.length} additional SAP records are available in the app.`
+    : "";
   const printedWordCount = [
     overviewText,
     ...(result.sourceMode === 'sap' ? [] : [topPositiveText, topNegativeText]),
     ...(result.sourceMode === 'sap'
-      ? printSapRows.flatMap((item) => [item.printTitle, item.printDetail])
+      ? [
+        ...sapPublicPrintText,
+        ...printSapRows.flatMap((item) => [item.printTitle, item.printDetail]),
+        additionalSapNote,
+      ]
       : printTopicBlocks.flatMap((block) => [
       ...block.highlights.flatMap((highlight) => [highlight.printTitle, highlight.printSummary]),
       block.emptyMessage ?? '',
@@ -1176,7 +1203,7 @@ function PrintOnePageBrief({ result, activeTopic }: { result: BriefingResult; ac
     <section className="print-only print-one-page" aria-label="One-page printable briefing" data-testid="print-one-page-brief">
       <header className="print-page-header">
         <p>
-          {result.sourceMode === 'sap' ? 'SAP S/4HANA briefing' : `${result.subjectType} briefing`}
+          {result.sourceMode === 'sap' ? 'Public research + SAP S/4HANA briefing' : `${result.subjectType} briefing`}
           {result.subjectType === 'person' && result.personRole ? ` · ${personContextLabel(result.personRole, result.publicRoleTitle, result.companyName)}` : ''}
           {result.sourceMode === 'sap'
             ? ` · ${result.sapAreas.map((area) => SAP_AREAS.find((item) => item.value === area)?.label ?? area).join(', ')} · 30-day window`
@@ -1201,16 +1228,49 @@ function PrintOnePageBrief({ result, activeTopic }: { result: BriefingResult; ac
         )}
       </section>
       {result.sourceMode === 'sap' ? (
-        <section className="print-sap-data" aria-label="SAP data records" data-testid="print-sap-data">
-          <h2>SAP Data</h2>
-          {printSapRows.length ? printSapRows.map((item) => (
-            <p key={`${item.area}-${item.recordId}`}>
-              <strong>{SAP_AREAS.find((area) => area.value === item.area)?.label ?? item.area} · {item.printTitle}.</strong>{' '}
-              {item.printDetail}{' '}
-              <PrintReferences sourceIds={item.sourceIds} sources={result.sources} />
-            </p>
-          )) : <p>No matching SAP records were returned for the selected areas and 30-day window.</p>}
-        </section>
+        <>
+          <section className="print-topic-grid" aria-label="Public Tavily research" data-testid="print-public-research">
+            {hasSapPublicPrintContent ? (
+              printTopicBlocks.filter((block) => block.highlights.length > 0 || block.question || block.topic === 'hire').map(({ topic, topicInfo, highlights, question, questionText }) => (
+                <section key={topic} className="print-topic">
+                  <h2>{topicInfo.label} · Public</h2>
+                  {highlights.map((highlight) => (
+                    <p key={highlight.title}>
+                      <strong>{highlight.printTitle}.</strong> {highlight.printSummary}{' '}
+                      <PrintReferences sourceIds={highlight.sourceIds} sources={result.sources} />
+                    </p>
+                  ))}
+                  {topic === 'hire' && openRoleSearchSubject && (
+                    <p className="print-question">
+                      <strong>Open-role searches:</strong>{' '}
+                      <a href={linkedinJobsSearchUrl(openRoleSearchSubject, 'sales')}>Sales</a>
+                      {' · '}
+                      <a href={linkedinJobsSearchUrl(openRoleSearchSubject, 'maintenance')}>Maintenance</a>
+                      {' on LinkedIn; listings are not crawled automatically.'}
+                    </p>
+                  )}
+                  {question && <p><strong>Open question:</strong> {questionText} <PrintReferences sourceIds={question.sourceIds} sources={result.sources} /></p>}
+                </section>
+              ))
+            ) : (
+              <section className="print-topic">
+                <h2>Public research</h2>
+                <p>No public Tavily results were found in the selected topics.</p>
+              </section>
+            )}
+          </section>
+          <section className="print-sap-data" aria-label="SAP data records" data-testid="print-sap-data">
+            <h2>SAP Data · selected records</h2>
+            {printSapRows.length ? printSapRows.map((item) => (
+              <p key={`${item.area}-${item.recordId}`}>
+                <strong>{SAP_AREAS.find((area) => area.value === item.area)?.label ?? item.area} · {item.printTitle}.</strong>{' '}
+                {item.printDetail}{' '}
+                <PrintReferences sourceIds={item.sourceIds} sources={result.sources} />
+              </p>
+            )) : <p>No matching SAP records were returned for the selected areas and 30-day window.</p>}
+            {additionalSapNote && <p>{additionalSapNote}</p>}
+          </section>
+        </>
       ) : (
       <div className="print-topic-grid">
         {printTopicBlocks.map(({ topic, topicInfo, highlights, emptyMessage, question, questionText }) => {
@@ -1300,6 +1360,7 @@ function Home() {
   const [profileRequestPending, setProfileRequestPending] = useState(false);
   const [profileMessage, setProfileMessage] = useState('');
   const [sourceMode, setSourceMode] = useState<SourceMode>('public');
+  const [sourceModeAlert, setSourceModeAlert] = useState('');
   const [sapAreas, setSapAreas] = useState<SapDataArea[]>([]);
   const [topics, setTopics] = useState<Topic[]>(TOPICS.map((topic) => topic.value));
   const [meetingAt, setMeetingAt] = useState('');
@@ -1335,16 +1396,28 @@ function Home() {
   const dailyCrawlStartsLimit = sourceStatusQuery.data?.dailyCrawlStartsLimit ?? null;
   const dailyCrawlStartsUsed = sourceStatusQuery.data?.dailyCrawlStartsUsed ?? null;
   const dailyCrawlStartsRemaining = sourceStatusQuery.data?.dailyCrawlStartsRemaining ?? null;
+  const dailySearchRequestsLimit = sourceStatusQuery.data?.dailySearchRequestsLimit ?? null;
+  const dailySearchRequestsRemaining = sourceStatusQuery.data?.dailySearchRequestsRemaining ?? null;
   const dailyCrawlActive = sourceStatusQuery.data?.dailyCrawlActive === true;
   const dailyCrawlStartLimitReached = canStart && dailyCrawlStartsRemaining === 0;
+  const dailySearchQuotaInsufficient = canStart &&
+    dailySearchRequestsRemaining !== null &&
+    dailySearchRequestsRemaining < topics.length;
   const crawlAlreadyActive = dailyCrawlActive && !mutation.isPending;
   const sapAreasUnavailable = sapAreas.filter((area) => !sapAvailableAreas.includes(area));
-  const sapSourceReady = sapConfigured && sapAreas.length > 0 && sapAreasUnavailable.length === 0;
+  const sapSetupComplete = canStart && sapConfigured && sapAvailableAreas.length > 0;
+  const sapSourceReady = sapSetupComplete &&
+    tavilyConfigured &&
+    !dailyCrawlStartLimitReached &&
+    !dailySearchQuotaInsufficient &&
+    !crawlAlreadyActive &&
+    sapAreas.length > 0 &&
+    sapAreasUnavailable.length === 0;
   const hasSapOrganization = subjectType === 'company'
     ? subject.trim().length >= 2
     : personRole === 'business_owner' && companyName.trim().length >= 2;
   const sourceReady = sourceMode === 'public'
-    ? tavilyConfigured && !dailyCrawlStartLimitReached && !crawlAlreadyActive
+    ? tavilyConfigured && !dailyCrawlStartLimitReached && !dailySearchQuotaInsufficient && !crawlAlreadyActive
     : sourceMode === 'sap'
       ? sapSourceReady && hasSapOrganization
       : false;
@@ -1359,6 +1432,53 @@ function Home() {
     selectedSavedProfile.personName.trim().toLocaleLowerCase() === subject.trim().toLocaleLowerCase() &&
     selectedSavedProfile.personRole === personRole,
   );
+
+  const handleSourceModeChange = (nextSource: SourceMode) => {
+    setSourceModeAlert('');
+    if (nextSource !== 'sap') {
+      setSourceMode(nextSource);
+      return;
+    }
+    let issue = '';
+    if (sourceStatusQuery.isLoading || !sourceStatusQuery.data) {
+      issue = 'The app could not confirm source setup yet.';
+    } else if (sourceStatusQuery.isError) {
+      issue = 'The server could not verify SAP and Tavily setup.';
+    } else if (!canStart) {
+      issue = 'The approved account is required to start SAP briefings.';
+    } else if (!sapConfigured || sapAvailableAreas.length === 0) {
+      issue = 'Complete the SAP connection and map at least one SAP area first.';
+    } else if (sapAreasUnavailable.length > 0) {
+      issue = 'One or more selected SAP areas are not mapped by this connection.';
+    } else if (!tavilyConfigured) {
+      issue = 'Add an active Tavily key for the public research included in SAP briefs.';
+    }
+
+    if (issue) {
+      setSourceMode('public');
+      setSourceModeAlert(`SAP is not ready; returned to Public. ${issue}`);
+      return;
+    }
+    setSourceMode('sap');
+  };
+
+  useEffect(() => {
+    if (sourceMode !== 'sap' || sourceStatusQuery.isLoading) return;
+    const issue = sourceStatusQuery.isError
+      ? 'The server could not verify SAP and Tavily setup.'
+      : !canStart
+        ? 'The approved account is required to start SAP briefings.'
+        : !sapConfigured || sapAvailableAreas.length === 0
+          ? 'Complete the SAP connection and map at least one SAP area first.'
+          : sapAreasUnavailable.length > 0
+            ? 'One or more selected SAP areas are not mapped by this connection.'
+          : !tavilyConfigured
+            ? 'Add an active Tavily key for public research.'
+            : '';
+    if (!issue) return;
+    setSourceMode('public');
+    setSourceModeAlert(`SAP setup is incomplete; returned to Public. ${issue}`);
+  }, [canStart, sapAreasUnavailable.length, sapAvailableAreas.length, sapConfigured, sourceMode, sourceStatusQuery.isError, sourceStatusQuery.isLoading, tavilyConfigured]);
 
   useEffect(() => {
     if (!accountLoaded) return;
@@ -1465,12 +1585,11 @@ function Home() {
       (sourceMode === 'public' &&
         tavilyConfigured &&
         !dailyCrawlStartLimitReached &&
+        !dailySearchQuotaInsufficient &&
         !crawlAlreadyActive) ||
       (sourceMode === 'sap' &&
-        sapConfigured &&
-        sapAreas.length > 0 &&
-        hasSapOrganization &&
-        sapAreas.every((area) => sapAvailableAreas.includes(area)));
+        sapSourceReady &&
+        hasSapOrganization);
     if (!/^\d{4}$/.test(pin) || !isSignedIn || !selectedSourceReady || !startPinConfigured || !ownerAccountConfigured || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || mutation.isPending) return;
     activeRequestKey.current = key;
     setFailedKey('');
@@ -1518,9 +1637,12 @@ function Home() {
           if (activeRequestKey.current === key) {
             setFailedKey(key);
             setStartPin('');
-            setPinDialogError(
-              error instanceof Error ? error.message : 'The PIN could not be verified.',
-            );
+            const errorMessage = error instanceof Error ? error.message : 'The PIN could not be verified.';
+            if (sourceMode === 'sap' && /(SAP setup is incomplete|SAP briefs require an active Tavily key)/i.test(errorMessage)) {
+              setSourceMode('public');
+              setSourceModeAlert(`SAP is not ready; returned to Public. ${errorMessage}`);
+            }
+            setPinDialogError(errorMessage);
           }
         },
         onSettled: () => {
@@ -1528,7 +1650,7 @@ function Home() {
         },
       },
     );
-  }, [companyName, context, crawlAlreadyActive, dailyCrawlStartLimitReached, hasSapOrganization, hasTopics, hasValidRole, hasValidSubject, isSignedIn, meetingAt, meetingTimeIsValid, mutation.isPending, mutation.mutate, ownerAccountConfigured, personRole, publicRoleTitle, sapAreas, sapAvailableAreas, sapConfigured, sourceMode, sourceStatusQuery.refetch, startPinConfigured, subject, subjectType, tavilyConfigured, topics]);
+  }, [companyName, context, crawlAlreadyActive, dailyCrawlStartLimitReached, dailySearchQuotaInsufficient, hasSapOrganization, hasTopics, hasValidRole, hasValidSubject, isSignedIn, meetingAt, meetingTimeIsValid, mutation.isPending, mutation.mutate, ownerAccountConfigured, personRole, publicRoleTitle, sapAreas, sapAreasUnavailable.length, sapAvailableAreas, sapConfigured, sapSourceReady, sourceMode, sourceStatusQuery.refetch, startPinConfigured, subject, subjectType, tavilyConfigured, topics]);
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1597,29 +1719,31 @@ function Home() {
                           ? 'Not ready — SAP briefings need a Company subject or a Chairman / CEO with a company.'
                           : sourceMode === 'sap' && !sapAreas.length
                             ? 'Not ready — select at least one SAP data area.'
-                            : sourceMode === 'sap' && !sapConfigured
-                              ? 'Not ready — SAP S/4HANA setup is required on the server. No SAP data is read before you press Brief.'
+                            : sourceMode === 'sap' && !sapSetupComplete
+                              ? 'Not ready — complete the SAP connection and map at least one SAP area.'
                               : sourceMode === 'sap' && sapAreasUnavailable.length
                                 ? `Not ready — this SAP connection does not enable: ${sapAreasUnavailable.map((area) => SAP_AREAS.find((item) => item.value === area)?.label ?? area).join(', ')}.`
-                                : sourceMode === 'public' && !tavilyConfigured
-                                  ? 'Not ready — configure the owner Tavily key or save a personal key in account settings.'
-                                  : sourceMode === 'public' && crawlAlreadyActive
-                                    ? 'Not ready — another Tavily briefing event is running. Wait for it to finish.'
-                                    : sourceMode === 'public' && dailyCrawlStartLimitReached
+                                : (sourceMode === 'public' || sourceMode === 'sap') && !tavilyConfigured
+                                  ? 'Not ready — an active Tavily key is required for public research.'
+                                  : (sourceMode === 'public' || sourceMode === 'sap') && crawlAlreadyActive
+                                    ? 'Not ready — another briefing event is using the shared Tavily allowance. Wait for it to finish.'
+                                    : (sourceMode === 'public' || sourceMode === 'sap') && dailyCrawlStartLimitReached
                                       ? 'Not ready — all 10 Tavily briefing events for today have been used. The counter resets at midnight IST.'
-                                      : readinessState === 'error'
-                                        ? timedOutKey === requestKey
-                                          ? 'Not ready — the three-minute backup stop ended this crawl.'
-                                          : 'Not ready — source collection failed. Try again.'
-                                        : readinessState === 'crawling'
-                                          ? sourceMode === 'sap'
-                                            ? 'Collecting approved SAP data — this briefing has up to two minutes.'
-                                            : 'Collecting public sources — this briefing has up to two minutes.'
-                                          : readinessState === 'ready'
-                                            ? 'Brief ready — sources collected for the selected subject, meeting and topics.'
-                                            : !hasRequiredSelections
-                                              ? 'Not ready — complete the selected source settings.'
-                                              : 'Not ready — press Brief when the settings are complete.';
+                                      : (sourceMode === 'public' || sourceMode === 'sap') && dailySearchQuotaInsufficient
+                                        ? `Not ready — only ${dailySearchRequestsRemaining ?? 0} daily Tavily topic searches remain; reduce selected topics or try after the IST reset.`
+                                        : readinessState === 'error'
+                                          ? timedOutKey === requestKey
+                                            ? 'Not ready — the three-minute backup stop ended this crawl.'
+                                            : 'Not ready — source collection failed. Try again.'
+                                          : readinessState === 'crawling'
+                                            ? sourceMode === 'sap'
+                                              ? 'Collecting Tavily public sources and approved SAP data — this briefing has up to two minutes.'
+                                              : 'Collecting public sources — this briefing has up to two minutes.'
+                                            : readinessState === 'ready'
+                                              ? 'Brief ready — sources collected for the selected subject, meeting and topics.'
+                                              : !hasRequiredSelections
+                                                ? 'Not ready — complete the selected source settings.'
+                                                : 'Not ready — press Brief when the settings are complete.';
   return (
     <main className={`paper-grid min-h-[100dvh] overflow-hidden ${isSignedIn ? 'settings-neon' : ''}`}>
       <div className="mx-auto max-w-[1240px] px-5 pb-16 pt-5 sm:px-8 lg:px-12">
@@ -1866,7 +1990,7 @@ function Home() {
                             value={value}
                             checked={selected}
                             disabled={unavailableForSubject}
-                            onChange={() => setSourceMode(value)}
+                            onChange={() => handleSourceModeChange(value)}
                             className="accent-[#655487]"
                             data-testid={`radio-source-mode-${value}`}
                           />
@@ -1886,16 +2010,21 @@ function Home() {
                   })}
                 </div>
               </fieldset>
+              {sourceModeAlert && (
+                <div className="mt-3 rounded-lg border border-[#e7c49c] bg-[#fff7e9] px-4 py-3 text-base leading-relaxed text-[#714d21]" role="alert" data-testid="alert-sap-source-fallback">
+                  {sourceModeAlert}
+                </div>
+              )}
               <details className="mt-3 rounded-xl border border-[#ded9e2] bg-white/70 px-4 py-3" data-testid="details-source-key-settings">
                 <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 text-base font-semibold text-[#35364a]">
                   <span className="inline-flex items-center gap-2">
                     <LockKeyhole aria-hidden="true" className="h-4 w-4 text-[#594b87]" />
-                    Tavily key settings · separate from SAP
+                    Tavily key settings · separate from SAP credentials
                   </span>
-                  <span className="rounded-full bg-[#eeeaf4] px-2.5 py-1 text-xs font-semibold text-[#594b87]">Public source only</span>
+                  <span className="rounded-full bg-[#eeeaf4] px-2.5 py-1 text-xs font-semibold text-[#594b87]">Public + SAP briefs</span>
                 </summary>
                 <p className="mt-3 text-sm leading-relaxed text-[#625d69]">
-                  Public-source searches run only when Public is selected and use the active Tavily key shown below. Any saved personal key remains encrypted and separate from SAP credentials; SAP briefs do not send Tavily searches.
+                  Public searches use the active Tavily key shown below. SAP briefs also use Tavily for public reports and the separate SAP connection for internal records; each credential is stored and billed independently.
                 </p>
                 <div className="pt-3">
                   <TavilyKeySettings
@@ -1915,11 +2044,11 @@ function Home() {
                     <div>
                       <h2 id="sap-area-heading" className="text-base font-semibold text-[#245d5b]">SAP business-data areas</h2>
                       <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[#486d6b]">
-                        Choose the internal records to include. SAP is read only; it does not use Tavily. The selection is not read until you press Brief.
+                        SAP briefs combine cited public research from Tavily with read-only internal SAP records. Both connections must be ready; nothing is requested until you press Brief.
                       </p>
                     </div>
-                    <span className={`rounded-full px-3 py-1.5 text-sm font-semibold ${sapConfigured ? 'bg-[#e5f2e9] text-[#32634a]' : 'bg-[#fff2de] text-[#79531f]'}`} data-testid="sap-connection-status">
-                      {sapConfigured ? 'SAP connection configured' : 'Setup required'}
+                    <span className={`rounded-full px-3 py-1.5 text-sm font-semibold ${sapSetupComplete && tavilyConfigured ? 'bg-[#e5f2e9] text-[#32634a]' : 'bg-[#fff2de] text-[#79531f]'}`} data-testid="sap-connection-status">
+                      {sapSetupComplete && tavilyConfigured ? 'SAP + Tavily ready' : 'Setup required'}
                     </span>
                   </div>
                   <fieldset className="mt-4">
@@ -2088,14 +2217,14 @@ function Home() {
                         ? 'Public search is connected through Tavily.'
                         : 'Public search key not available. Check source search key settings above.'
                       : sourceMode === 'sap'
-                        ? sapConfigured
-                          ? 'SAP S/4HANA connection settings are present. SAP access is checked only when you press Brief.'
-                          : 'SAP S/4HANA connection is not configured. No SAP data is read.'
+                        ? sapSetupComplete && tavilyConfigured
+                          ? 'SAP and Tavily are ready. Public research and approved SAP records are collected only when you press Brief.'
+                          : 'SAP briefs need a ready SAP connection, at least one mapped area, and an active Tavily key. No data is read until Brief.'
                         : 'Private sources are not connected. No private data is read.'}
                 </p>
-                {sourceMode === 'public' && canStart && dailyCrawlStartsUsed !== null && dailyCrawlStartsLimit !== null && (
+                {(sourceMode === 'public' || sourceMode === 'sap') && canStart && dailyCrawlStartsUsed !== null && dailyCrawlStartsLimit !== null && (
                   <p className="rounded-lg border border-[#d7cde9] bg-[#f5f1fb] px-4 py-3 font-semibold text-[#40345f]" data-testid="text-daily-briefing-events">
-                    Today’s Tavily briefing events: {dailyCrawlStartsUsed}/{dailyCrawlStartsLimit} used · {dailyCrawlStartsRemaining ?? 0} remaining (resets at midnight IST). All selected tabs and the resulting print/copy belong to one event.
+                    Today’s Tavily briefing events: {dailyCrawlStartsUsed}/{dailyCrawlStartsLimit} used · {dailyCrawlStartsRemaining ?? 0} remaining (resets at midnight IST).{dailySearchRequestsLimit !== null && dailySearchRequestsRemaining !== null ? ` Topic searches remaining: ${dailySearchRequestsRemaining}/${dailySearchRequestsLimit}.` : ''} All selected tabs and the resulting print/copy belong to one event.
                   </p>
                 )}
                 {sourceMode === 'public' && (
@@ -2105,7 +2234,7 @@ function Home() {
                 )}
                 {sourceMode === 'sap' && (
                   <p>
-                    SAP uses one read-only request per selected area whose configured topic is selected. It does not use Tavily credits or Tavily request limits. The company or associated company must match the server-approved SAP scope.
+                    Tavily uses one request per selected topic; SAP uses read-only requests for selected mapped areas. Both run under the same two-minute limit, with the existing three-minute backup stop and app-wide Tavily rate limit. The company or associated company must match the server-approved SAP scope.
                   </p>
                 )}
               </div>
