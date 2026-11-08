@@ -23,10 +23,24 @@ AI is off; the AI control panel is a guardrails prototype, not a connected AI se
 
 ## Sign-in, owner lock, and crawl procedure
 
-1. Open the app and sign in through Clerk. Sign-up is available for reviewers.
+The repository includes the Clerk sign-in and sign-up screens, browser session handling, API authentication middleware, and protected API routes. The Clerk tenant and its private keys are not stored in Git; each deployment must connect its own Clerk environment.
+
+### Use your own clone
+
+Each clone can be configured for its own operator. To let the person running a clone use their own Tavily account and PIN:
+
+1. Configure Clerk for that clone and create an account in the same Clerk environment the app will use. Set `BRIEFING_OWNER_EMAIL` to that account's email.
+2. Set a new four-digit `BRIEFING_START_PIN` in that clone's server-side secret manager. This clone's PIN is not included in the repository.
+3. Set a unique `USER_CREDENTIALS_ENCRYPTION_KEY` in the clone's server-side secret manager.
+4. Leave `TAVILY_API_KEY` unset in that clone. Sign in as its configured owner and save that owner's Tavily key in the app's Tavily settings. Searches then use that saved key and are billed by Tavily to that key's account.
+5. Configure the clone's database and Clerk keys, apply the database schema, and start the app as described below.
+
+The sign-up screen is in the repository, but account creation must also be enabled in that deployment's Clerk environment. The app intentionally permits only the single account named by `BRIEFING_OWNER_EMAIL` to start briefings on a deployment. Therefore, a member can run their own clone by configuring their own Clerk account as its owner; this is not a shared multi-member deployment with separate PINs.
+
+1. Open the app and sign in through Clerk. Sign-up availability is controlled by the deployment's Clerk environment.
 2. Enter a company or person, complete the required role details, set the meeting time, and choose at least one topic. Context is optional.
 3. Press **Brief**. The app prompts for the four-digit start PIN.
-4. The configured developer account and `BRIEFING_START_PIN` are required to start a crawl. This keeps use of the project Tavily key with its owner.
+4. The configured owner account and `BRIEFING_START_PIN` are required to start a crawl. In a personal clone with no project key configured, the owner uses their separately saved Tavily key.
 5. After a successful crawl, follow source links to verify claims. Use Print for the one-page layout.
 
 The PIN and owner email are server-side secrets. Configure their values in Replit Secrets or your hosting provider's secret manager; never put the PIN value in the README, source code, or Git history. Repeated incorrect PIN attempts are temporarily rate-limited.
