@@ -18,6 +18,7 @@
 //   export type Post = typeof postsTable.$inferSelect;
 
 export * from "./ai-guardrails";
+export * from "./ai-user-credentials";
 export * from "./briefing-tavily-request-usage";
 export * from "./briefing-tavily-usage";
 export * from "./person-profiles";

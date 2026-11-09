@@ -20,6 +20,12 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AiActivationStatus,
+  AiCredentialInput,
+  AiCredentialStatus,
+  AiGuardrailStatus,
+  AiPasscodeInput,
+  AiPasscodeStatus,
   BriefingInput,
   BriefingResult,
   BriefingSourceStatus,
@@ -305,6 +311,572 @@ export const useDeleteTavilyCredential = <TError = ErrorType<Error>,
         TContext
       > => {
       return useMutation(getDeleteTavilyCredentialMutationOptions(options));
+    }
+
+export const getGetAiCredentialUrl = () => {
+
+
+
+
+  return `/api/ai-credentials`
+}
+
+/**
+ * @summary Get the signed-in user's AI provider connection status
+ */
+export const getAiCredential = async ( options?: Parameters<typeof customFetch>[1]): Promise<AiCredentialStatus> => {
+
+  return customFetch<AiCredentialStatus>(getGetAiCredentialUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAiCredentialQueryKey = () => {
+    return [
+    `/api/ai-credentials`
+    ] as const;
+    }
+
+
+export const getGetAiCredentialQueryOptions = <TData = Awaited<ReturnType<typeof getAiCredential>>, TError = ErrorType<Error>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAiCredential>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAiCredentialQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAiCredential>>> = ({ signal }) => getAiCredential({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAiCredential>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAiCredentialQueryResult = NonNullable<Awaited<ReturnType<typeof getAiCredential>>>
+export type GetAiCredentialQueryError = ErrorType<Error>
+
+
+/**
+ * @summary Get the signed-in user's AI provider connection status
+ */
+
+export function useGetAiCredential<TData = Awaited<ReturnType<typeof getAiCredential>>, TError = ErrorType<Error>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAiCredential>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAiCredentialQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSaveAiCredentialUrl = () => {
+
+
+
+
+  return `/api/ai-credentials`
+}
+
+/**
+ * @summary Save the signed-in user's OpenAI API key and model ID
+ */
+export const saveAiCredential = async (aiCredentialInput: AiCredentialInput, options?: Parameters<typeof customFetch>[1]): Promise<AiCredentialStatus> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<AiCredentialStatus>(getSaveAiCredentialUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(aiCredentialInput)
+  }
+);}
+
+
+
+
+
+export const getSaveAiCredentialMutationKey = () => ['saveAiCredential'] as const;
+
+export const getSaveAiCredentialMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveAiCredential>>, TError,SaveAiCredentialMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof saveAiCredential>>, TError,SaveAiCredentialMutationVariables, TContext> => {
+
+const mutationKey = getSaveAiCredentialMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof saveAiCredential>>, SaveAiCredentialMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  saveAiCredential(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SaveAiCredentialMutationResult = NonNullable<Awaited<ReturnType<typeof saveAiCredential>>>
+    export type SaveAiCredentialMutationBody = BodyType<AiCredentialInput>
+    export type SaveAiCredentialMutationError = ErrorType<Error>
+    export type SaveAiCredentialMutationVariables = {data: BodyType<AiCredentialInput>}
+
+    /**
+ * @summary Save the signed-in user's OpenAI API key and model ID
+ */
+export const useSaveAiCredential = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveAiCredential>>, TError,SaveAiCredentialMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof saveAiCredential>>,
+        TError,
+        SaveAiCredentialMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSaveAiCredentialMutationOptions(options));
+    }
+
+export const getDeleteAiCredentialUrl = () => {
+
+
+
+
+  return `/api/ai-credentials`
+}
+
+/**
+ * @summary Remove the signed-in user's saved AI provider key
+ */
+export const deleteAiCredential = async ( options?: Parameters<typeof customFetch>[1]): Promise<AiCredentialStatus> => {
+
+  return customFetch<AiCredentialStatus>(getDeleteAiCredentialUrl(),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteAiCredentialMutationKey = () => ['deleteAiCredential'] as const;
+
+export const getDeleteAiCredentialMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAiCredential>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteAiCredential>>, TError,void, TContext> => {
+
+const mutationKey = getDeleteAiCredentialMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteAiCredential>>, void> = () => {
+
+
+          return  deleteAiCredential(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteAiCredentialMutationResult = NonNullable<Awaited<ReturnType<typeof deleteAiCredential>>>
+
+    export type DeleteAiCredentialMutationError = ErrorType<Error>
+
+
+    /**
+ * @summary Remove the signed-in user's saved AI provider key
+ */
+export const useDeleteAiCredential = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAiCredential>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteAiCredential>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getDeleteAiCredentialMutationOptions(options));
+    }
+
+export const getGetAiGuardrailsUrl = () => {
+
+
+
+
+  return `/api/ai/guardrails`
+}
+
+/**
+ * @summary Get AI activation and cost-guardrail status for the signed-in user
+ */
+export const getAiGuardrails = async ( options?: Parameters<typeof customFetch>[1]): Promise<AiGuardrailStatus> => {
+
+  return customFetch<AiGuardrailStatus>(getGetAiGuardrailsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAiGuardrailsQueryKey = () => {
+    return [
+    `/api/ai/guardrails`
+    ] as const;
+    }
+
+
+export const getGetAiGuardrailsQueryOptions = <TData = Awaited<ReturnType<typeof getAiGuardrails>>, TError = ErrorType<Error>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAiGuardrails>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAiGuardrailsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAiGuardrails>>> = ({ signal }) => getAiGuardrails({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAiGuardrails>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAiGuardrailsQueryResult = NonNullable<Awaited<ReturnType<typeof getAiGuardrails>>>
+export type GetAiGuardrailsQueryError = ErrorType<Error>
+
+
+/**
+ * @summary Get AI activation and cost-guardrail status for the signed-in user
+ */
+
+export function useGetAiGuardrails<TData = Awaited<ReturnType<typeof getAiGuardrails>>, TError = ErrorType<Error>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAiGuardrails>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAiGuardrailsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSaveAiGuardrailPasscodeUrl = () => {
+
+
+
+
+  return `/api/ai/guardrails/passcode`
+}
+
+/**
+ * @summary Set or replace the signed-in user's AI activation passcode
+ */
+export const saveAiGuardrailPasscode = async (aiPasscodeInput: AiPasscodeInput, options?: Parameters<typeof customFetch>[1]): Promise<AiPasscodeStatus> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<AiPasscodeStatus>(getSaveAiGuardrailPasscodeUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(aiPasscodeInput)
+  }
+);}
+
+
+
+
+
+export const getSaveAiGuardrailPasscodeMutationKey = () => ['saveAiGuardrailPasscode'] as const;
+
+export const getSaveAiGuardrailPasscodeMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveAiGuardrailPasscode>>, TError,SaveAiGuardrailPasscodeMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof saveAiGuardrailPasscode>>, TError,SaveAiGuardrailPasscodeMutationVariables, TContext> => {
+
+const mutationKey = getSaveAiGuardrailPasscodeMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof saveAiGuardrailPasscode>>, SaveAiGuardrailPasscodeMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  saveAiGuardrailPasscode(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SaveAiGuardrailPasscodeMutationResult = NonNullable<Awaited<ReturnType<typeof saveAiGuardrailPasscode>>>
+    export type SaveAiGuardrailPasscodeMutationBody = BodyType<AiPasscodeInput>
+    export type SaveAiGuardrailPasscodeMutationError = ErrorType<unknown>
+    export type SaveAiGuardrailPasscodeMutationVariables = {data: BodyType<AiPasscodeInput>}
+
+    /**
+ * @summary Set or replace the signed-in user's AI activation passcode
+ */
+export const useSaveAiGuardrailPasscode = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveAiGuardrailPasscode>>, TError,SaveAiGuardrailPasscodeMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof saveAiGuardrailPasscode>>,
+        TError,
+        SaveAiGuardrailPasscodeMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSaveAiGuardrailPasscodeMutationOptions(options));
+    }
+
+export const getActivateAiGuardrailsUrl = () => {
+
+
+
+
+  return `/api/ai/guardrails/activate`
+}
+
+/**
+ * @summary Activate optional AI for the signed-in user's account
+ */
+export const activateAiGuardrails = async (aiPasscodeInput: AiPasscodeInput, options?: Parameters<typeof customFetch>[1]): Promise<AiActivationStatus> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<AiActivationStatus>(getActivateAiGuardrailsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(aiPasscodeInput)
+  }
+);}
+
+
+
+
+
+export const getActivateAiGuardrailsMutationKey = () => ['activateAiGuardrails'] as const;
+
+export const getActivateAiGuardrailsMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof activateAiGuardrails>>, TError,ActivateAiGuardrailsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof activateAiGuardrails>>, TError,ActivateAiGuardrailsMutationVariables, TContext> => {
+
+const mutationKey = getActivateAiGuardrailsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof activateAiGuardrails>>, ActivateAiGuardrailsMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  activateAiGuardrails(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ActivateAiGuardrailsMutationResult = NonNullable<Awaited<ReturnType<typeof activateAiGuardrails>>>
+    export type ActivateAiGuardrailsMutationBody = BodyType<AiPasscodeInput>
+    export type ActivateAiGuardrailsMutationError = ErrorType<Error>
+    export type ActivateAiGuardrailsMutationVariables = {data: BodyType<AiPasscodeInput>}
+
+    /**
+ * @summary Activate optional AI for the signed-in user's account
+ */
+export const useActivateAiGuardrails = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof activateAiGuardrails>>, TError,ActivateAiGuardrailsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof activateAiGuardrails>>,
+        TError,
+        ActivateAiGuardrailsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getActivateAiGuardrailsMutationOptions(options));
+    }
+
+export const getDeactivateAiGuardrailsUrl = () => {
+
+
+
+
+  return `/api/ai/guardrails/deactivate`
+}
+
+/**
+ * @summary Stop optional AI for the signed-in user's account
+ */
+export const deactivateAiGuardrails = async ( options?: Parameters<typeof customFetch>[1]): Promise<AiActivationStatus> => {
+
+  return customFetch<AiActivationStatus>(getDeactivateAiGuardrailsUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeactivateAiGuardrailsMutationKey = () => ['deactivateAiGuardrails'] as const;
+
+export const getDeactivateAiGuardrailsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deactivateAiGuardrails>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deactivateAiGuardrails>>, TError,void, TContext> => {
+
+const mutationKey = getDeactivateAiGuardrailsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deactivateAiGuardrails>>, void> = () => {
+
+
+          return  deactivateAiGuardrails(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeactivateAiGuardrailsMutationResult = NonNullable<Awaited<ReturnType<typeof deactivateAiGuardrails>>>
+
+    export type DeactivateAiGuardrailsMutationError = ErrorType<unknown>
+
+
+    /**
+ * @summary Stop optional AI for the signed-in user's account
+ */
+export const useDeactivateAiGuardrails = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deactivateAiGuardrails>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deactivateAiGuardrails>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getDeactivateAiGuardrailsMutationOptions(options));
     }
 
 export const getGetTelegramCredentialUrl = () => {

@@ -6,6 +6,18 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './aiActivationStatus';
+export * from './aiActivationStatusRequestsPerTab';
+export * from './aiActivationStatusSpeechLimitSeconds';
+export * from './aiCredentialInput';
+export * from './aiCredentialStatus';
+export * from './aiGuardrailStatus';
+export * from './aiGuardrailStatusRequestsPerTab';
+export * from './aiGuardrailStatusSpeechLimitSeconds';
+export * from './aiPasscodeInput';
+export * from './aiPasscodeStatus';
+export * from './aiTopicSummary';
+export * from './aiTopicSummaryCategory';
 export * from './briefingHighlight';
 export * from './briefingHighlightCategory';
 export * from './briefingInput';

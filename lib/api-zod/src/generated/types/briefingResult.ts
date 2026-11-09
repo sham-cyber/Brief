@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AiTopicSummary } from './aiTopicSummary';
 import type { BriefingHighlight } from './briefingHighlight';
 import type { BriefingOverview } from './briefingOverview';
 import type { BriefingQuestion } from './briefingQuestion';
@@ -57,6 +58,13 @@ export interface BriefingResult {
   highlights: BriefingHighlight[];
   questions: BriefingQuestion[];
   topicBriefs: BriefingTopicBrief[];
+  /** Optional summaries grounded in accepted public source snippets; empty when AI is not enabled. */
+  aiSummaries: AiTopicSummary[];
+  /**
+     * Non-sensitive status if an optional AI summary could not be produced.
+     * @nullable
+     */
+  aiSummaryNotice: string | null;
   sources: BriefSource[];
   /** Cited records from the selected SAP S/4HANA areas. Empty for non-SAP briefs. */
   sapData: SapBriefingDataItem[];

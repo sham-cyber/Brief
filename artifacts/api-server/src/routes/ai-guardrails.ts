@@ -4,6 +4,11 @@ import { getAuth } from "@clerk/express";
 import { pool } from "@workspace/db";
 import { Router, type IRouter } from "express";
 import { z } from "zod";
+import {
+  getAiCredentialStatus,
+  getUserAiConfig,
+  isAiCredentialStorageAvailable,
+} from "../lib/user-ai-credentials";
 
 const router: IRouter = Router();
 const scryptAsync = promisify(scrypt);
@@ -26,14 +31,39 @@ function aiServerEnabled() {
   return process.env.AI_FEATURE_ENABLED === "true";
 }
 
-function aiProviderAvailableForUser(_userId: string) {
-  // Fail closed until per-user AI-key storage and an AI provider route are added.
-  return false;
+async function aiProviderAvailableForUser(userId: string) {
+  try {
+    return Boolean(await getUserAiConfig(userId));
+  } catch {
+    return false;
+  }
 }
 
 function authenticatedUserId(req: Parameters<typeof getAuth>[0]) {
   return getAuth(req).userId ?? null;
 }
+
+function sameOriginRequest(req: Parameters<typeof getAuth>[0]): boolean {
+  const origin = req.get("origin");
+  const host = (req.get("x-forwarded-host") ?? req.get("host") ?? "")
+    .split(",")[0]
+    .trim()
+    .toLowerCase();
+  if (!origin || !host) return false;
+  try {
+    return new URL(origin).host.toLowerCase() === host;
+  } catch {
+    return false;
+  }
+}
+
+router.use((req, res, next) => {
+  if (req.method !== "GET" && !sameOriginRequest(req)) {
+    res.status(403).json({ error: "The AI settings request must come from this app." });
+    return;
+  }
+  next();
+});
 
 async function hashPasscode(passcode: string, salt: string) {
   const derived = (await scryptAsync(passcode, salt, 64)) as Buffer;
@@ -50,6 +80,32 @@ function validHash(candidate: string, stored: string) {
   );
 }
 
+export async function getAiGuardrailStatus(userId: string) {
+  const [result, credentialStatus] = await Promise.all([
+    pool.query<{ is_activated: boolean }>(
+      "SELECT is_activated FROM user_ai_guardrails WHERE user_id = $1",
+      [userId],
+    ),
+    getAiCredentialStatus(userId),
+  ]);
+  const providerConnected = await aiProviderAvailableForUser(userId);
+  const serverEnabled = aiServerEnabled();
+  return {
+    serverEnabled,
+    passcodeConfigured: (result.rowCount ?? 0) > 0,
+    activated:
+      result.rows[0]?.is_activated === true &&
+      serverEnabled &&
+      providerConnected,
+    requestsPerTab: AI_REQUESTS_PER_TAB,
+    speechLimitSeconds: AI_SPEECH_LIMIT_SECONDS,
+    aiProviderConnected: providerConnected,
+    aiCredentialStorageReady:
+      credentialStatus.storageReady && isAiCredentialStorageAvailable(),
+    model: credentialStatus.model,
+  };
+}
+
 router.get("/ai/guardrails", async (req, res): Promise<void> => {
   const userId = authenticatedUserId(req);
   if (!userId) {
@@ -58,21 +114,7 @@ router.get("/ai/guardrails", async (req, res): Promise<void> => {
   }
 
   try {
-    const result = await pool.query(
-      "SELECT is_activated FROM user_ai_guardrails WHERE user_id = $1",
-      [userId],
-    );
-    res.json({
-      serverEnabled: aiServerEnabled(),
-      passcodeConfigured: (result.rowCount ?? 0) > 0,
-      activated:
-        result.rows[0]?.is_activated === true &&
-        aiServerEnabled() &&
-        aiProviderAvailableForUser(userId),
-      requestsPerTab: AI_REQUESTS_PER_TAB,
-      speechLimitSeconds: AI_SPEECH_LIMIT_SECONDS,
-      aiProviderConnected: aiProviderAvailableForUser(userId),
-    });
+    res.json(await getAiGuardrailStatus(userId));
   } catch {
     res.status(503).json({ error: "AI access settings are unavailable." });
   }
@@ -124,7 +166,7 @@ router.post("/ai/guardrails/activate", async (req, res): Promise<void> => {
     res.status(503).json({ error: "AI is disabled by the server switch." });
     return;
   }
-  if (!aiProviderAvailableForUser(userId)) {
+  if (!await aiProviderAvailableForUser(userId)) {
     res.status(503).json({ error: "AI cannot be activated until this account has a provider connection." });
     return;
   }
@@ -213,6 +255,7 @@ export async function reserveAiBriefingRequest(
   tab: z.infer<typeof aiRequestTab>,
 ): Promise<boolean> {
   if (!aiServerEnabled()) return false;
+  if (!await aiProviderAvailableForUser(userId)) return false;
 
   const state = await pool.query(
     "SELECT is_activated FROM user_ai_guardrails WHERE user_id = $1",

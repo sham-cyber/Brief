@@ -98,6 +98,15 @@ type AiGuardrailsStatus = {
   requestsPerTab: number;
   speechLimitSeconds: number;
   aiProviderConnected: boolean;
+  aiCredentialStorageReady: boolean;
+  model: string | null;
+};
+
+type AiCredentialStatus = {
+  connected: boolean;
+  storageReady: boolean;
+  model: string | null;
+  updatedAt: string | null;
 };
 
 type SavedPersonProfile = {
@@ -131,6 +140,8 @@ async function sendGuardrailRequest(path: string, method: string, body?: unknown
   const response = await fetch(apiUrl(path), {
     method,
     credentials: 'include',
+    cache: 'no-store',
+    referrerPolicy: 'no-referrer',
     headers: body ? { 'content-type': 'application/json' } : undefined,
     body: body ? JSON.stringify(body) : undefined,
   });
@@ -567,11 +578,14 @@ function AuthActions() {
   );
 }
 
-function AiGuardrailPanel() {
+function AiGuardrailPanel({ onStatusChange }: { onStatusChange?: (status: AiGuardrailsStatus | null) => void }) {
   const { isLoaded, isSignedIn } = useUser();
   const [status, setStatus] = useState<AiGuardrailsStatus | null>(null);
+  const [credentialStatus, setCredentialStatus] = useState<AiCredentialStatus | null>(null);
   const [passcode, setPasscode] = useState('');
   const [confirmPasscode, setConfirmPasscode] = useState('');
+  const [apiKey, setApiKey] = useState('');
+  const [model, setModel] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -580,17 +594,66 @@ function AiGuardrailPanel() {
     const payload = await response.json().catch(() => ({})) as AiGuardrailsStatus & { error?: string };
     if (!response.ok) throw new Error(payload.error ?? 'Could not load AI guardrails.');
     setStatus(payload);
+    onStatusChange?.(payload);
+  }, [onStatusChange]);
+
+  const refreshCredentialStatus = useCallback(async () => {
+    const payload = await sendAccountRequest('ai-credentials', 'GET') as AiCredentialStatus;
+    setCredentialStatus(payload);
+    if (payload.model) setModel(payload.model);
   }, []);
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn) {
       setStatus(null);
+      setCredentialStatus(null);
+      onStatusChange?.(null);
       return;
     }
-    void refreshStatus().catch((error: unknown) => {
-      setMessage(error instanceof Error ? error.message : 'Could not load AI guardrails.');
+    void Promise.all([refreshStatus(), refreshCredentialStatus()]).catch((error: unknown) => {
+      setMessage(error instanceof Error ? error.message : 'Could not load AI settings.');
     });
-  }, [isLoaded, isSignedIn, refreshStatus]);
+  }, [isLoaded, isSignedIn, onStatusChange, refreshCredentialStatus, refreshStatus]);
+
+  const saveAiCredential = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setMessage('');
+    if (apiKey.trim().length < 20 || !/^[A-Za-z0-9._-]{1,100}$/.test(model.trim())) {
+      setMessage('Enter your OpenAI API key and the model ID enabled for your account.');
+      return;
+    }
+    setBusy(true);
+    try {
+      const payload = await sendAccountRequest('ai-credentials', 'PUT', {
+        apiKey: apiKey.trim(),
+        model: model.trim(),
+      }) as AiCredentialStatus;
+      setApiKey('');
+      setCredentialStatus(payload);
+      setMessage('Your key is saved encrypted for this account. AI remains off until you activate it.');
+      await refreshStatus();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'The AI key could not be saved.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removeAiCredential = async () => {
+    setBusy(true);
+    setMessage('');
+    try {
+      const payload = await sendAccountRequest('ai-credentials', 'DELETE') as AiCredentialStatus;
+      setApiKey('');
+      setCredentialStatus(payload);
+      setMessage('The saved key was removed and AI deactivated. Revoke the key separately in your OpenAI account.');
+      await refreshStatus();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'The saved AI key could not be removed.');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const savePasscode = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -650,14 +713,56 @@ function AiGuardrailPanel() {
   return (
     <details open className="no-print mt-4 rounded-xl border border-[#ded9e2] bg-[#f8f6fb] px-4 py-3" aria-label="AI activation guardrails" data-testid="ai-guardrails">
       <summary className="cursor-pointer text-base font-semibold text-[#35364a]" data-testid="summary-ai-guardrails">
-        AI control <span className="ml-2 rounded-full border border-[#e4b7b2] bg-[#bb5048] px-3 py-1 text-sm font-bold text-white">STOPPED · AI OFF</span>
+        AI control <span className={`ml-2 rounded-full border px-3 py-1 text-sm font-bold text-white ${status?.activated ? 'border-[#218752] bg-[#218752]' : 'border-[#e4b7b2] bg-[#bb5048]'}`}>{status?.activated ? 'ACTIVE · OPT-IN' : 'STOPPED · AI OFF'}</span>
       </summary>
       <div className="pt-3 text-base">
       <p className="leading-relaxed text-muted-foreground">
-        No AI model or provider is connected. If configured later, limits are {status?.requestsPerTab ?? AI_REQUESTS_PER_TAB} request per selected tab and a {Math.floor((status?.speechLimitSeconds ?? AI_SPEECH_LIMIT_SECONDS) / 60)}-minute speech cap.
+        AI is optional; public crawling and the source-based brief work with AI off. When enabled, the app makes at most {status?.requestsPerTab ?? AI_REQUESTS_PER_TAB} summary request per selected topic and keeps the combined speech text under a {Math.floor((status?.speechLimitSeconds ?? AI_SPEECH_LIMIT_SECONDS) / 60)}-minute limit.
       </p>
       {status ? (
         <>
+          <form className="mt-3 grid gap-2 sm:grid-cols-[1fr_1fr_auto]" onSubmit={saveAiCredential}>
+            <input
+              aria-label="Your OpenAI API key"
+              autoComplete="new-password"
+              type="password"
+              minLength={20}
+              maxLength={512}
+              value={apiKey}
+              onChange={(event) => setApiKey(event.target.value)}
+              placeholder={credentialStatus?.connected ? 'Replace your saved OpenAI key' : 'Your OpenAI API key'}
+              className="h-11 min-w-0 rounded-lg border border-[#d8d1e5] bg-white px-3 text-base text-[#292e46] outline-none focus:ring-2 focus:ring-[#887ba7]"
+              data-testid="input-ai-api-key"
+            />
+            <input
+              aria-label="OpenAI model ID"
+              autoComplete="off"
+              type="text"
+              maxLength={100}
+              value={model}
+              onChange={(event) => setModel(event.target.value)}
+              placeholder="Model ID enabled for your account"
+              className="h-11 min-w-0 rounded-lg border border-[#d8d1e5] bg-white px-3 text-base text-[#292e46] outline-none focus:ring-2 focus:ring-[#887ba7]"
+              data-testid="input-ai-model"
+            />
+            <button type="submit" disabled={busy || !status.aiCredentialStorageReady} className="h-11 rounded-lg bg-[#292e46] px-4 text-base font-semibold text-white disabled:opacity-50">
+              {busy ? 'Saving…' : 'Save AI key'}
+            </button>
+          </form>
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+            <span data-testid="text-ai-key-status">
+              {credentialStatus?.connected ? `OpenAI key saved · model ${credentialStatus.model}` : 'No personal OpenAI key saved'}
+            </span>
+            {credentialStatus?.connected && (
+              <button type="button" onClick={() => void removeAiCredential()} disabled={busy} className="font-semibold text-[#98453e] underline underline-offset-2 disabled:opacity-50" data-testid="button-remove-ai-key">
+                Remove saved key
+              </button>
+            )}
+          </div>
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+            The API key is encrypted at rest on the server and never returned to this page. This is not end-to-end encryption: an operator with access to both the database and encryption secret could decrypt it. OpenAI receives the subject name, topic, and accepted public-source titles and snippets—not SAP records. Provider charges go to the OpenAI account that owns this key. Removing it here does not revoke it at OpenAI.
+          </p>
+          <p className="mt-1 text-sm leading-relaxed text-muted-foreground">AI may misstate evidence; check each linked source before relying on a summary.</p>
           <form className="mt-3 grid gap-2 sm:grid-cols-[1fr_1fr_auto]" onSubmit={savePasscode}>
             <input
               aria-label="AI activation passcode"
@@ -688,7 +793,7 @@ function AiGuardrailPanel() {
             <button type="button" onClick={() => void deactivate()} disabled={busy || !status.activated} className="h-11 rounded-lg border border-[#d8d1e5] bg-white px-4 text-base font-semibold text-[#443a66] disabled:cursor-not-allowed disabled:opacity-50">Stop AI</button>
           </div>
           {!status.serverEnabled && <p className="mt-2 text-[#98453e]">The server switch is off. No AI request can run.</p>}
-          {!status.aiProviderConnected && <p className="mt-1 text-muted-foreground">Per-user AI key setup is not available yet; AI remains stopped and no AI request can run.</p>}
+          {!status.aiProviderConnected && <p className="mt-1 text-muted-foreground">Save your own OpenAI key, set an activation passcode, and enable the server switch before AI can be activated.</p>}
         </>
       ) : (
         <p className="mt-2 text-[#98453e]" role="status">{message || 'AI access settings are unavailable.'}</p>
@@ -893,10 +998,10 @@ function VoiceControls({ text }: { text: string }) {
       <span
         id="ai-voice-status"
         className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#e4b7b2] bg-[#fbefed] px-4 text-sm font-bold text-[#98453e]"
-        aria-label="AI is off and stopped"
+        aria-label="AI voice is off; device read-aloud is available"
         data-testid="status-ai-off"
       >
-        <span className="h-2 w-2 rounded-full bg-[#c45b50]" aria-hidden="true" /> AI off · stopped
+        <span className="h-2 w-2 rounded-full bg-[#c45b50]" aria-hidden="true" /> AI voice off · device read-aloud
       </span>
       <div className="flex flex-wrap items-center gap-2">
           <button
@@ -948,6 +1053,7 @@ function TopicBlock({
   questions,
   sources,
   openRoleSearchSubject,
+  aiSummary,
 }: {
   topic: Topic;
   title: string;
@@ -955,6 +1061,7 @@ function TopicBlock({
   questions?: BriefingResult['questions'];
   sources: BriefSource[];
   openRoleSearchSubject?: string;
+  aiSummary?: BriefingResult['aiSummaries'][number];
 }) {
   const [filter, setFilter] = useState('');
   const filteredHighlights = highlights.filter((item) => `${item.title} ${item.summary}`.toLowerCase().includes(filter.toLowerCase()));
@@ -978,6 +1085,14 @@ function TopicBlock({
           data-testid={`input-filter-${topic}`}
         />
       </label>
+      {aiSummary && (
+        <aside className="mt-4 rounded-xl border border-[#b8a9e5] bg-[#f4f0ff] px-4 py-4" aria-label={`AI summary for ${title}`} data-testid={`ai-summary-${topic}`}>
+          <p className="text-xs font-bold uppercase tracking-[.12em] text-[#54447e]">AI-assisted summary · public sources</p>
+          <p className="briefing-prose mt-2 text-base leading-relaxed text-[#37334a]">
+            {aiSummary.summary}<References sourceIds={aiSummary.sourceIds} sources={sources} />
+          </p>
+        </aside>
+      )}
       {filteredHighlights.length || filteredQuestions.length ? (
         <div className="mt-4 space-y-3">
           {filteredHighlights.map((item, index) => (
@@ -1361,6 +1476,12 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
         })}
       </nav>
 
+      {result.aiSummaryNotice && (
+        <p className="mt-4 rounded-lg border border-[#e7c49c] bg-[#fff7e9] px-4 py-3 text-sm leading-relaxed text-[#714d21]" role="status" data-testid="ai-summary-notice">
+          {result.aiSummaryNotice}
+        </p>
+      )}
+
       {visibleTopics.map((topic) => {
         const selected = TOPICS.find((item) => item.value === topic)!;
         return (
@@ -1372,6 +1493,7 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
             questions={topic === 'risk' ? visibleQuestions : undefined}
             sources={result.sources}
             openRoleSearchSubject={topic === 'hire' ? openRoleSearchSubject : undefined}
+            aiSummary={result.aiSummaries.find((summary) => summary.category === topic)}
           />
         );
       })}
@@ -1692,6 +1814,8 @@ function Home() {
   const [topics, setTopics] = useState<Topic[]>(TOPICS.map((topic) => topic.value));
   const [meetingAt, setMeetingAt] = useState('');
   const [context, setContext] = useState('');
+  const [aiStatus, setAiStatus] = useState<AiGuardrailsStatus | null>(null);
+  const [useAi, setUseAi] = useState(false);
   const [resultKey, setResultKey] = useState('');
   const [failedKey, setFailedKey] = useState('');
   const [timedOutKey, setTimedOutKey] = useState('');
@@ -1700,7 +1824,7 @@ function Home() {
   const [pinDialogError, setPinDialogError] = useState('');
   const activeRequestKey = useRef('');
   const timeoutRef = useRef<number | undefined>(undefined);
-  const requestKey = JSON.stringify([subject.trim(), subjectType, personRole, publicRoleTitle.trim(), companyName.trim(), sourceMode, sourceMode === 'sap' ? sapAreas : [], meetingAt, topics, context.trim()]);
+  const requestKey = JSON.stringify([subject.trim(), subjectType, personRole, publicRoleTitle.trim(), companyName.trim(), sourceMode, sourceMode === 'sap' ? sapAreas : [], meetingAt, topics, context.trim(), useAi]);
   const meetingTimeIsValid = !meetingAt || !Number.isNaN(new Date(meetingAt).getTime());
   const hasValidSubject = subject.trim().length >= 2;
   const hasValidRoleSelection = subjectType !== 'person' || Boolean(personRole);
@@ -1759,6 +1883,10 @@ function Home() {
     selectedSavedProfile.personName.trim().toLocaleLowerCase() === subject.trim().toLocaleLowerCase() &&
     selectedSavedProfile.personRole === personRole,
   );
+  const handleAiStatusChange = useCallback((nextStatus: AiGuardrailsStatus | null) => {
+    setAiStatus(nextStatus);
+    if (!nextStatus?.activated) setUseAi(false);
+  }, []);
 
   const handleSourceModeChange = (nextSource: SourceMode) => {
     setSourceModeAlert('');
@@ -1916,7 +2044,7 @@ function Home() {
       (sourceMode === 'sap' &&
         sapSourceReady &&
         hasSapOrganization);
-    if (!/^\d{4}$/.test(pin) || !isSignedIn || !selectedSourceReady || !startPinConfigured || !ownerAccountConfigured || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || mutation.isPending) return;
+    if (!/^\d{4}$/.test(pin) || !isSignedIn || !selectedSourceReady || !startPinConfigured || !ownerAccountConfigured || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || (useAi && !aiStatus?.activated) || mutation.isPending) return;
     activeRequestKey.current = key;
     setFailedKey('');
     setTimedOutKey('');
@@ -1943,6 +2071,7 @@ function Home() {
           sapAreas: sourceMode === 'sap' ? sapAreas : [],
           meetingAt: meetingAt ? new Date(meetingAt).toISOString() : undefined,
           topics,
+          useAi,
           ...(context.trim() ? { context: context.trim() } : {}),
         },
       },
@@ -1976,7 +2105,7 @@ function Home() {
         },
       },
     );
-  }, [companyName, context, crawlAlreadyActive, dailyCrawlStartLimitReached, dailySearchQuotaInsufficient, hasSapOrganization, hasTopics, hasValidRole, hasValidSubject, isSignedIn, meetingAt, meetingTimeIsValid, mutation.isPending, mutation.mutate, ownerAccountConfigured, personRole, publicRoleTitle, sapAreas, sapAreasUnavailable.length, sapAvailableAreas, sapConfigured, sapSourceReady, sourceMode, sourceStatusQuery.refetch, startPinConfigured, subject, subjectType, tavilyConfigured, topics]);
+  }, [aiStatus?.activated, companyName, context, crawlAlreadyActive, dailyCrawlStartLimitReached, dailySearchQuotaInsufficient, hasSapOrganization, hasTopics, hasValidRole, hasValidSubject, isSignedIn, meetingAt, meetingTimeIsValid, mutation.isPending, mutation.mutate, ownerAccountConfigured, personRole, publicRoleTitle, sapAreas, sapAreasUnavailable.length, sapAvailableAreas, sapConfigured, sapSourceReady, sourceMode, sourceStatusQuery.refetch, startPinConfigured, subject, subjectType, tavilyConfigured, topics, useAi]);
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -2100,7 +2229,7 @@ function Home() {
               <div className="mb-5 rounded-2xl border border-[#d8d2df] bg-[#f4f1f8] px-5 py-6 sm:px-8 sm:py-8">
                 <p className="font-mono text-xs uppercase tracking-[.14em] text-[#655487]">Briefing Agent · source-first research</p>
                 <h1 id="create-heading" className="mt-2 max-w-3xl font-serif text-4xl leading-tight tracking-[-.025em] text-[#282d43] sm:text-5xl">A short brief for the meeting ahead.</h1>
-                <p className="mt-4 max-w-2xl text-lg leading-relaxed text-[#514e5c]">Review a company or person’s latest 30 days with factual links to the reporting. AI stays off; nothing runs until you request a brief.</p>
+                <p className="mt-4 max-w-2xl text-lg leading-relaxed text-[#514e5c]">Review a company or person’s latest 30 days with factual links to the reporting. AI summaries are optional and stay off unless you enable them in your signed-in settings.</p>
               </div>
             )}
             <form onSubmit={submit} className="rounded-2xl border border-[#d8d2df] bg-[#fbfaf6] p-5 shadow-[0_12px_35px_rgba(38,37,55,.06)] sm:p-6" aria-describedby={isSignedIn ? 'form-note' : undefined}>
@@ -2513,6 +2642,24 @@ function Home() {
               />
               <div className="mt-1 text-right text-sm text-[#625d69]">{context.length} / 1500</div>
 
+              <label className={`mt-4 flex items-start gap-3 rounded-xl border p-4 ${aiStatus?.activated ? 'cursor-pointer border-[#b8a9e5] bg-[#f7f4ff]' : 'cursor-not-allowed border-[#ded9e2] bg-[#f6f4f0]'}`} data-testid="label-use-ai-briefing">
+                <input
+                  type="checkbox"
+                  checked={useAi}
+                  disabled={!aiStatus?.activated}
+                  onChange={(event) => setUseAi(event.target.checked)}
+                  className="mt-1 h-5 w-5 shrink-0 accent-[#655487]"
+                  data-testid="checkbox-use-ai-briefing"
+                />
+                <span>
+                  <span className="block text-base font-semibold text-[#35364a]">Add AI summaries for selected topics</span>
+            <span className="mt-1 block text-sm leading-relaxed text-[#625d69]">
+                    Off by default. When enabled, one request is allowed per selected topic. The subject name and accepted public-source titles and snippets are sent to OpenAI; SAP records remain separate.
+                    {!aiStatus?.activated ? ' Set up and activate AI below before selecting this.' : ''}
+                  </span>
+                </span>
+              </label>
+
               <div className="mt-5 flex flex-col gap-3 border-t border-[#e5e0e7] pt-4 sm:flex-row sm:items-center" data-testid="brief-action-row">
                 <div
                   className={`flex min-h-12 flex-1 items-center gap-3 rounded-xl border px-4 py-3 text-base font-semibold ${readinessStyles}`}
@@ -2570,10 +2717,10 @@ function Home() {
                   </p>
                 )}
               </div>
-              <AiGuardrailPanel />
               </>
               )}
             </form>
+            {isSignedIn && <AiGuardrailPanel onStatusChange={handleAiStatusChange} />}
 
             {pinPromptOpen && (
               <div

@@ -18,6 +18,8 @@ tags:
     description: Owner-managed SAP S/4HANA OData connection
   - name: telegram
     description: Owner-only encrypted Telegram PDF delivery
+  - name: ai
+    description: Optional source-grounded AI summaries with per-account controls
 paths:
   /tavily-credentials:
     get:
@@ -101,6 +103,166 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /ai-credentials:
+    get:
+      operationId: getAiCredential
+      tags: [ai]
+      summary: Get the signed-in user's AI provider connection status
+      responses:
+        "200":
+          description: Connection status and model name without returning the API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiCredentialStatus"
+        "401":
+          description: Sign-in is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    put:
+      operationId: saveAiCredential
+      tags: [ai]
+      summary: Save the signed-in user's OpenAI API key and model ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiCredentialInput"
+      responses:
+        "200":
+          description: Saved connection status without returning the API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiCredentialStatus"
+        "400":
+          description: Invalid key or model ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Sign-in is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Request did not come from this app
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: Encrypted credential storage is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: deleteAiCredential
+      tags: [ai]
+      summary: Remove the signed-in user's saved AI provider key
+      responses:
+        "200":
+          description: Disconnected status without returning the API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiCredentialStatus"
+        "401":
+          description: Sign-in is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Request did not come from this app
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /ai/guardrails:
+    get:
+      operationId: getAiGuardrails
+      tags: [ai]
+      summary: Get AI activation and cost-guardrail status for the signed-in user
+      responses:
+        "200":
+          description: AI state without exposing secrets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiGuardrailStatus"
+        "401":
+          description: Sign-in is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /ai/guardrails/passcode:
+    put:
+      operationId: saveAiGuardrailPasscode
+      tags: [ai]
+      summary: Set or replace the signed-in user's AI activation passcode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiPasscodeInput"
+      responses:
+        "200":
+          description: Passcode set and AI left deactivated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiPasscodeStatus"
+  /ai/guardrails/activate:
+    post:
+      operationId: activateAiGuardrails
+      tags: [ai]
+      summary: Activate optional AI for the signed-in user's account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiPasscodeInput"
+      responses:
+        "200":
+          description: AI guardrail activated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiActivationStatus"
+        "403":
+          description: Passcode is incorrect
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: AI is disabled by the server or has no provider connection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /ai/guardrails/deactivate:
+    post:
+      operationId: deactivateAiGuardrails
+      tags: [ai]
+      summary: Stop optional AI for the signed-in user's account
+      responses:
+        "200":
+          description: AI deactivated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiActivationStatus"
   /telegram-credentials:
     get:
       operationId: getTelegramCredential
@@ -626,6 +788,10 @@ components:
         context:
           type: string
           maxLength: 1500
+        useAi:
+          type: boolean
+          default: false
+          description: Explicitly opt this briefing into source-grounded AI summaries. Defaults to off.
         topics:
           type: array
           minItems: 1
@@ -911,6 +1077,82 @@ components:
           minLength: 20
           maxLength: 4096
       required: [apiKey]
+    AiCredentialStatus:
+      type: object
+      properties:
+        connected:
+          type: boolean
+        storageReady:
+          type: boolean
+        model:
+          type: ["string", "null"]
+        updatedAt:
+          type: ["string", "null"]
+          format: date-time
+      required: [connected, storageReady, model, updatedAt]
+    AiCredentialInput:
+      type: object
+      properties:
+        apiKey:
+          type: string
+          minLength: 20
+          maxLength: 512
+        model:
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: "^[A-Za-z0-9._-]+$"
+      required: [apiKey, model]
+    AiGuardrailStatus:
+      type: object
+      properties:
+        serverEnabled:
+          type: boolean
+        passcodeConfigured:
+          type: boolean
+        activated:
+          type: boolean
+        requestsPerTab:
+          type: integer
+          enum: [1]
+        speechLimitSeconds:
+          type: integer
+          enum: [120]
+        aiProviderConnected:
+          type: boolean
+        aiCredentialStorageReady:
+          type: boolean
+        model:
+          type: ["string", "null"]
+      required: [serverEnabled, passcodeConfigured, activated, requestsPerTab, speechLimitSeconds, aiProviderConnected, aiCredentialStorageReady, model]
+    AiPasscodeInput:
+      type: object
+      properties:
+        passcode:
+          type: string
+          minLength: 8
+          maxLength: 128
+      required: [passcode]
+    AiPasscodeStatus:
+      type: object
+      properties:
+        passcodeConfigured:
+          type: boolean
+        activated:
+          type: boolean
+      required: [passcodeConfigured, activated]
+    AiActivationStatus:
+      type: object
+      properties:
+        activated:
+          type: boolean
+        requestsPerTab:
+          type: integer
+          enum: [1]
+        speechLimitSeconds:
+          type: integer
+          enum: [120]
+      required: [activated]
     TelegramCredentialStatus:
       type: object
       properties:
@@ -1034,6 +1276,21 @@ components:
         topNegative:
           $ref: "#/components/schemas/BriefingSignal"
       required: [category, text, sourceIds, topPositive, topNegative]
+    AiTopicSummary:
+      type: object
+      properties:
+        category:
+          type: string
+          enum: [news, hire, launch, financial, risk]
+        summary:
+          type: string
+          maxLength: 1200
+        sourceIds:
+          type: array
+          minItems: 1
+          items:
+            type: string
+      required: [category, summary, sourceIds]
     BriefingQuestion:
       type: object
       properties:
@@ -1112,6 +1369,14 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/BriefingTopicBrief"
+        aiSummaries:
+          type: array
+          items:
+            $ref: "#/components/schemas/AiTopicSummary"
+          description: Optional summaries grounded in accepted public source snippets; empty when AI is not enabled.
+        aiSummaryNotice:
+          type: ["string", "null"]
+          description: Non-sensitive status if an optional AI summary could not be produced.
         sources:
           type: array
           items:
@@ -1142,6 +1407,8 @@ components:
         - highlights
         - questions
         - topicBriefs
+        - aiSummaries
+        - aiSummaryNotice
         - sources
         - sapData
     SapBriefingDataItem:

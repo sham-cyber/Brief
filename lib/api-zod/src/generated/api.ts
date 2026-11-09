@@ -48,6 +48,115 @@ export const DeleteTavilyCredentialResponse = zod.object({
 
 
 /**
+ * @summary Get the signed-in user's AI provider connection status
+ */
+export const GetAiCredentialResponse = zod.object({
+  "connected": zod.boolean(),
+  "storageReady": zod.boolean(),
+  "model": zod.string().nullable(),
+  "updatedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Save the signed-in user's OpenAI API key and model ID
+ */
+export const saveAiCredentialBodyApiKeyMin = 20;
+export const saveAiCredentialBodyApiKeyMax = 512;
+
+export const saveAiCredentialBodyModelMax = 100;
+
+
+export const saveAiCredentialBodyModelRegExp = new RegExp('^[A-Za-z0-9._-]+$');
+
+
+export const SaveAiCredentialBody = zod.object({
+  "apiKey": zod.string().min(saveAiCredentialBodyApiKeyMin).max(saveAiCredentialBodyApiKeyMax),
+  "model": zod.string().min(1).max(saveAiCredentialBodyModelMax).regex(saveAiCredentialBodyModelRegExp)
+})
+
+export const SaveAiCredentialResponse = zod.object({
+  "connected": zod.boolean(),
+  "storageReady": zod.boolean(),
+  "model": zod.string().nullable(),
+  "updatedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Remove the signed-in user's saved AI provider key
+ */
+export const DeleteAiCredentialResponse = zod.object({
+  "connected": zod.boolean(),
+  "storageReady": zod.boolean(),
+  "model": zod.string().nullable(),
+  "updatedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Get AI activation and cost-guardrail status for the signed-in user
+ */
+export const GetAiGuardrailsResponse = zod.object({
+  "serverEnabled": zod.boolean(),
+  "passcodeConfigured": zod.boolean(),
+  "activated": zod.boolean(),
+  "requestsPerTab": zod.literal(1),
+  "speechLimitSeconds": zod.literal(120),
+  "aiProviderConnected": zod.boolean(),
+  "aiCredentialStorageReady": zod.boolean(),
+  "model": zod.string().nullable()
+})
+
+
+/**
+ * @summary Set or replace the signed-in user's AI activation passcode
+ */
+export const saveAiGuardrailPasscodeBodyPasscodeMin = 8;
+export const saveAiGuardrailPasscodeBodyPasscodeMax = 128;
+
+
+
+export const SaveAiGuardrailPasscodeBody = zod.object({
+  "passcode": zod.string().min(saveAiGuardrailPasscodeBodyPasscodeMin).max(saveAiGuardrailPasscodeBodyPasscodeMax)
+})
+
+export const SaveAiGuardrailPasscodeResponse = zod.object({
+  "passcodeConfigured": zod.boolean(),
+  "activated": zod.boolean()
+})
+
+
+/**
+ * @summary Activate optional AI for the signed-in user's account
+ */
+export const activateAiGuardrailsBodyPasscodeMin = 8;
+export const activateAiGuardrailsBodyPasscodeMax = 128;
+
+
+
+export const ActivateAiGuardrailsBody = zod.object({
+  "passcode": zod.string().min(activateAiGuardrailsBodyPasscodeMin).max(activateAiGuardrailsBodyPasscodeMax)
+})
+
+export const ActivateAiGuardrailsResponse = zod.object({
+  "activated": zod.boolean(),
+  "requestsPerTab": zod.literal(1).optional(),
+  "speechLimitSeconds": zod.literal(120).optional()
+})
+
+
+/**
+ * @summary Stop optional AI for the signed-in user's account
+ */
+export const DeactivateAiGuardrailsResponse = zod.object({
+  "activated": zod.boolean(),
+  "requestsPerTab": zod.literal(1).optional(),
+  "speechLimitSeconds": zod.literal(120).optional()
+})
+
+
+/**
  * @summary Get Telegram connection and delivery-limit status
  */
 export const getTelegramCredentialResponseLimitMin = 0;
@@ -407,7 +516,7 @@ export const createBriefingBodySapAreasMax = 11;
 
 export const createBriefingBodyContextMax = 1500;
 
-
+export const createBriefingBodyUseAiDefault = false;
 
 
 export const CreateBriefingBody = zod.object({
@@ -421,6 +530,7 @@ export const CreateBriefingBody = zod.object({
   "sapAreas": zod.array(zod.enum(['store', 'production', 'maintenance', 'inventory', 'sales', 'hr', 'power_electrical_solar', 'purchase', 'scrap', 'order', 'delivery'])).max(createBriefingBodySapAreasMax).optional().describe('SAP S/4HANA data areas selected for this briefing. Required only when sourceMode is sap.'),
   "meetingAt": zod.coerce.date().optional(),
   "context": zod.string().max(createBriefingBodyContextMax).optional(),
+  "useAi": zod.boolean().default(createBriefingBodyUseAiDefault).describe('Explicitly opt this briefing into source-grounded AI summaries. Defaults to off.'),
   "topics": zod.array(zod.enum(['news', 'hire', 'launch', 'financial', 'risk'])).min(1)
 })
 
@@ -433,6 +543,9 @@ export const createBriefingResponseSearchCreditsUsedMin = 0;
 export const createBriefingResponseSourceSearchesCompletedMin = 0;
 
 export const createBriefingResponseSearchResultsReturnedMin = 0;
+
+
+export const createBriefingResponseAiSummariesItemSummaryMax = 1200;
 
 
 
@@ -490,6 +603,12 @@ export const CreateBriefingResponse = zod.object({
   "sourceIds": zod.array(zod.string())
 })
 })),
+  "aiSummaries": zod.array(zod.object({
+  "category": zod.enum(['news', 'hire', 'launch', 'financial', 'risk']),
+  "summary": zod.string().max(createBriefingResponseAiSummariesItemSummaryMax),
+  "sourceIds": zod.array(zod.string()).min(1)
+})).describe('Optional summaries grounded in accepted public source snippets; empty when AI is not enabled.'),
+  "aiSummaryNotice": zod.string().nullable().describe('Non-sensitive status if an optional AI summary could not be produced.'),
   "sources": zod.array(zod.object({
   "id": zod.string(),
   "title": zod.string(),

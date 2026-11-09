@@ -19,7 +19,7 @@ A source-first pre-meeting briefing app. Choose a company or person, select the 
 - Provides a concise brief and a one-page print with up to 400 words of briefing text, plus its cited source list, and browser read-aloud.
 - SAP briefs combine Tavily public research with approved, read-only SAP S/4HANA records; public links and internal records remain in separate sections.
 
-AI is off; the AI control panel is a guardrails prototype, not a connected AI search. No AI model or provider is connected. Email, WhatsApp, and other private sources are not connected.
+AI summaries are optional and off by default. When enabled, an account can use its own OpenAI API key to summarize accepted public-source results; each generated summary links back to returned sources. The normal source-based brief works without an AI key or AI request. SAP records and private sources are not sent to OpenAI.
 
 ## Technologies used
 
@@ -27,6 +27,7 @@ AI is off; the AI control panel is a guardrails prototype, not a connected AI se
 - **API:** Node.js and Express, with Clerk for sign-in and access control.
 - **Database:** PostgreSQL with Drizzle ORM.
 - **Public research:** Tavily Search API, with source-link and relevance checks in the application.
+- **Optional AI summaries:** OpenAI API using each account's own encrypted key and selected model ID; one call per selected topic when the user opts in.
 - **SAP connection:** SAP S/4HANA business OData APIs using OAuth; SAP records remain separate from public search results.
 - **Validation and API contracts:** Zod and an OpenAPI specification, with generated TypeScript API clients.
 - **PDF and project tooling:** `pdf-lib`, pnpm workspaces, and TypeScript type checks.
@@ -62,6 +63,15 @@ The PIN and owner email are server-side secrets. Configure their values in Repli
 - The configured developer account is limited to 10 briefing events per Asia/Kolkata calendar day and up to 50 topic searches per day (10 events × five topics).
 - Each event has a two-minute collection limit and a three-minute backup stop. Only one Tavily-backed event can run at a time; the app also limits Tavily to 10 requests per rolling five minutes.
 - Provider usage is charged to the Tavily account whose key is used. Store the project key in the hosting secret manager.
+
+### Optional AI summaries and guardrails
+
+- AI is off by default. The briefing and source-based print workflow continue to work without an AI provider key.
+- The hosting operator must explicitly set `AI_FEATURE_ENABLED=true`; each account must also save its own OpenAI API key and model ID, set an AI activation passcode, activate AI, and opt in on the briefing form.
+- AI makes at most one request for each selected topic in a briefing, with no automatic retries. The subject name, selected topic, and accepted public-source titles and snippets are sent to OpenAI. SAP records and private sources remain outside this AI step.
+- Each generated topic summary is limited to 50 words and must cite source IDs returned for that topic. Invalid or unavailable summaries do not replace the source-based brief.
+- OpenAI usage is billed to the account that owns the submitted API key. The key is encrypted in the app database and is never returned to the browser. Removing the saved copy does not revoke the provider key; revoke it separately in the OpenAI account.
+- The existing read-aloud text has a separate 280-word cap (about two minutes at the app's estimate); AI summary generation does not start speech automatically.
 
 ### Personal Tavily key security
 
@@ -171,7 +181,8 @@ Set values in Replit Secrets or your hosting provider's secret manager. This tab
 | `BRIEFING_OWNER_EMAIL` | Clerk email allowed to start crawls and manage the SAP connection |
 | `BRIEFING_START_PIN` | Four-digit server-side Brief PIN; keep its value only in the secret manager |
 | `TAVILY_API_KEY` | Project Tavily key, if used; only the configured owner can use it. The owner may instead save a personal Tavily key in the app. |
-| `USER_CREDENTIALS_ENCRYPTION_KEY` | Needed to save a personal Tavily key or SAP OAuth credentials; use a unique 64-character hexadecimal value. |
+| `USER_CREDENTIALS_ENCRYPTION_KEY` | Needed to save personal Tavily/OpenAI keys or SAP OAuth credentials; use a unique 64-character hexadecimal value. |
+| `AI_FEATURE_ENABLED` | Optional server switch for AI summaries; leave unset or set to `false` to keep AI off. |
 
 Clerk development and production environments may have separate accounts. Create and test the owner account in the environment where its owner email and PIN are configured. Give each fork or separate deployment its own database, Clerk configuration, owner email, PIN, and Tavily key.
 

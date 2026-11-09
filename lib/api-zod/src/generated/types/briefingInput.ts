@@ -39,6 +39,8 @@ export interface BriefingInput {
   meetingAt?: Date;
   /** @maxLength 1500 */
   context?: string;
+  /** Explicitly opt this briefing into source-grounded AI summaries. Defaults to off. */
+  useAi?: boolean;
   /** @minItems 1 */
   topics: BriefingInputTopicsItem[];
 }

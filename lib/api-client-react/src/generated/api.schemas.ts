@@ -98,6 +98,8 @@ export interface BriefingInput {
   meetingAt?: string;
   /** @maxLength 1500 */
   context?: string;
+  /** Explicitly opt this briefing into source-grounded AI summaries. Defaults to off. */
+  useAi?: boolean;
   /** @minItems 1 */
   topics: BriefingInputTopicsItem[];
 }
@@ -329,6 +331,88 @@ export interface TavilyCredentialInput {
   apiKey: string;
 }
 
+export interface AiCredentialStatus {
+  connected: boolean;
+  storageReady: boolean;
+  /** @nullable */
+  model: string | null;
+  /** @nullable */
+  updatedAt: string | null;
+}
+
+export interface AiCredentialInput {
+  /**
+     * @minLength 20
+     * @maxLength 512
+     */
+  apiKey: string;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     * @pattern ^[A-Za-z0-9._-]+$
+     */
+  model: string;
+}
+
+export type AiGuardrailStatusRequestsPerTab = typeof AiGuardrailStatusRequestsPerTab[keyof typeof AiGuardrailStatusRequestsPerTab];
+
+
+export const AiGuardrailStatusRequestsPerTab = {
+  NUMBER_1: 1,
+} as const;
+
+export type AiGuardrailStatusSpeechLimitSeconds = typeof AiGuardrailStatusSpeechLimitSeconds[keyof typeof AiGuardrailStatusSpeechLimitSeconds];
+
+
+export const AiGuardrailStatusSpeechLimitSeconds = {
+  NUMBER_120: 120,
+} as const;
+
+export interface AiGuardrailStatus {
+  serverEnabled: boolean;
+  passcodeConfigured: boolean;
+  activated: boolean;
+  requestsPerTab: AiGuardrailStatusRequestsPerTab;
+  speechLimitSeconds: AiGuardrailStatusSpeechLimitSeconds;
+  aiProviderConnected: boolean;
+  aiCredentialStorageReady: boolean;
+  /** @nullable */
+  model: string | null;
+}
+
+export interface AiPasscodeInput {
+  /**
+     * @minLength 8
+     * @maxLength 128
+     */
+  passcode: string;
+}
+
+export interface AiPasscodeStatus {
+  passcodeConfigured: boolean;
+  activated: boolean;
+}
+
+export type AiActivationStatusRequestsPerTab = typeof AiActivationStatusRequestsPerTab[keyof typeof AiActivationStatusRequestsPerTab];
+
+
+export const AiActivationStatusRequestsPerTab = {
+  NUMBER_1: 1,
+} as const;
+
+export type AiActivationStatusSpeechLimitSeconds = typeof AiActivationStatusSpeechLimitSeconds[keyof typeof AiActivationStatusSpeechLimitSeconds];
+
+
+export const AiActivationStatusSpeechLimitSeconds = {
+  NUMBER_120: 120,
+} as const;
+
+export interface AiActivationStatus {
+  activated: boolean;
+  requestsPerTab?: AiActivationStatusRequestsPerTab;
+  speechLimitSeconds?: AiActivationStatusSpeechLimitSeconds;
+}
+
 export interface TelegramCredentialStatus {
   connected: boolean;
   storageReady: boolean;
@@ -428,6 +512,25 @@ export interface BriefingTopicBrief {
   topNegative: BriefingSignal;
 }
 
+export type AiTopicSummaryCategory = typeof AiTopicSummaryCategory[keyof typeof AiTopicSummaryCategory];
+
+
+export const AiTopicSummaryCategory = {
+  news: 'news',
+  hire: 'hire',
+  launch: 'launch',
+  financial: 'financial',
+  risk: 'risk',
+} as const;
+
+export interface AiTopicSummary {
+  category: AiTopicSummaryCategory;
+  /** @maxLength 1200 */
+  summary: string;
+  /** @minItems 1 */
+  sourceIds: string[];
+}
+
 export interface BriefingQuestion {
   text: string;
   sourceIds: string[];
@@ -523,6 +626,13 @@ export interface BriefingResult {
   highlights: BriefingHighlight[];
   questions: BriefingQuestion[];
   topicBriefs: BriefingTopicBrief[];
+  /** Optional summaries grounded in accepted public source snippets; empty when AI is not enabled. */
+  aiSummaries: AiTopicSummary[];
+  /**
+     * Non-sensitive status if an optional AI summary could not be produced.
+     * @nullable
+     */
+  aiSummaryNotice: string | null;
   sources: BriefSource[];
   /** Cited records from the selected SAP S/4HANA areas. Empty for non-SAP briefs. */
   sapData: SapBriefingDataItem[];

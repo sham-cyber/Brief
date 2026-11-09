@@ -33,6 +33,12 @@ import {
 } from "../lib/user-tavily-credentials";
 import { resolveOwnerUserId } from "../lib/briefing-owner";
 import { verifyBriefingStartPin } from "../lib/briefing-start-pin";
+import { generateAiBriefingSummaries } from "../lib/ai-briefing-summary";
+import { getUserAiConfig } from "../lib/user-ai-credentials";
+import {
+  getAiGuardrailStatus,
+  reserveAiBriefingRequest,
+} from "./ai-guardrails";
 import {
   getSapConfigurationStatus,
   searchSapS4Hana,
@@ -66,6 +72,58 @@ type SearchNewsResult = {
   creditsUsed: number | null;
   searchesCompleted: number;
 };
+
+async function getOptionalAiSummaries(input: {
+  enabled: boolean;
+  userId: string;
+  briefingId: string;
+  subject: string;
+  topics: BriefingTopic[];
+  publicSources: SearchResult[];
+}): Promise<{
+  aiSummaries: Awaited<ReturnType<typeof generateAiBriefingSummaries>>["summaries"];
+  aiSummaryNotice: string | null;
+}> {
+  if (!input.enabled) return { aiSummaries: [], aiSummaryNotice: null };
+  try {
+    const config = await getUserAiConfig(input.userId);
+    const evidenceByTopic = Object.fromEntries(input.topics.map((topic) => [
+      topic,
+      input.publicSources
+        .filter(({ source, searchedAs }) =>
+          classifySource(source, searchedAs, input.topics) === topic,
+        )
+        .map(({ source }) => ({
+          id: source.id,
+          title: source.title,
+          publisher: source.publisher,
+          publishedAt: source.publishedAt,
+          snippet: source.snippet,
+        })),
+    ]));
+    const result = await generateAiBriefingSummaries({
+      userId: input.userId,
+      briefingId: input.briefingId,
+      subject: input.subject,
+      topics: input.topics,
+      evidenceByTopic,
+      config,
+      reserveRequest: reserveAiBriefingRequest,
+    });
+    return {
+      aiSummaries: result.summaries,
+      aiSummaryNotice: result.failedCategories.length
+        ? "Some selected AI summaries could not be generated. The source-based briefing is still available."
+        : null,
+    };
+  } catch {
+    return {
+      aiSummaries: [],
+      aiSummaryNotice:
+        "AI summaries could not be generated. The source-based briefing is still available.",
+    };
+  }
+}
 
 class BriefingSearchFailure extends Error {
   constructor(
@@ -786,6 +844,24 @@ router.post("/briefings", async (req, res): Promise<void> => {
     return;
   }
 
+  if (input.data.useAi === true) {
+    let aiStatus: Awaited<ReturnType<typeof getAiGuardrailStatus>>;
+    try {
+      aiStatus = await getAiGuardrailStatus(userId);
+    } catch {
+      res.status(503).json({
+        error: "AI readiness could not be checked. No Tavily search was sent.",
+      });
+      return;
+    }
+    if (!aiStatus.serverEnabled || !aiStatus.activated || !aiStatus.aiProviderConnected) {
+      res.status(409).json({
+        error: "AI is off or not ready for this account. Turn off AI for this brief, or complete the AI setup and activation first. No Tavily search was sent.",
+      });
+      return;
+    }
+  }
+
   if (input.data.subjectType === "person" && !input.data.personRole) {
     res.status(400).json({ error: "Choose a briefing context for the person: Chairman / CEO, MP, or Corporate." });
     return;
@@ -1049,9 +1125,18 @@ router.post("/briefings", async (req, res): Promise<void> => {
         .filter((source, index, all) =>
           all.findIndex((candidate) => candidate.id === source.id) === index,
         );
+      const briefingId = randomUUID();
+      const aiSummaryFields = await getOptionalAiSummaries({
+        enabled: input.data.useAi === true,
+        userId,
+        briefingId,
+        subject: input.data.subject.trim(),
+        topics,
+        publicSources,
+      });
 
       const result = CreateBriefingResponse.parse({
-        briefingId: randomUUID(),
+        briefingId,
         subject: input.data.subject.trim(),
         subjectType: input.data.subjectType,
         personRole: input.data.personRole,
@@ -1068,6 +1153,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
         sourceSearchesCompleted: sapResult.requestsCompleted,
         searchResultsReturned: tavilyResult.resultsReturned + sapResult.resultsReturned,
         ...content,
+        ...aiSummaryFields,
         sources: combinedSources,
         sapData: sapResult.sapData,
       });
@@ -1273,9 +1359,18 @@ router.post("/briefings", async (req, res): Promise<void> => {
       companyName,
     );
     const sources = relevant.map(({ source }) => source);
+    const briefingId = randomUUID();
+    const aiSummaryFields = await getOptionalAiSummaries({
+      enabled: input.data.useAi === true,
+      userId,
+      briefingId,
+      subject: input.data.subject.trim(),
+      topics,
+      publicSources: relevant,
+    });
 
     const result = CreateBriefingResponse.parse({
-      briefingId: randomUUID(),
+      briefingId,
       subject: input.data.subject.trim(),
       subjectType: input.data.subjectType,
       personRole: input.data.personRole,
@@ -1292,6 +1387,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
       sourceSearchesCompleted: searchResult.searchesCompleted,
       searchResultsReturned: searchResult.resultsReturned,
       ...content,
+      ...aiSummaryFields,
       sources,
       sapData: [],
     });
