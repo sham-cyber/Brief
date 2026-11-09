@@ -21,6 +21,16 @@ A source-first pre-meeting briefing app. Choose a company or person, select the 
 
 AI is off; the AI control panel is a guardrails prototype, not a connected AI search. No AI model or provider is connected. Email, WhatsApp, and other private sources are not connected.
 
+## Technologies used
+
+- **Web app:** React, TypeScript, Vite, Tailwind CSS, Radix UI, and TanStack Query.
+- **API:** Node.js and Express, with Clerk for sign-in and access control.
+- **Database:** PostgreSQL with Drizzle ORM.
+- **Public research:** Tavily Search API, with source-link and relevance checks in the application.
+- **SAP connection:** SAP S/4HANA business OData APIs using OAuth; SAP records remain separate from public search results.
+- **Validation and API contracts:** Zod and an OpenAPI specification, with generated TypeScript API clients.
+- **PDF and project tooling:** `pdf-lib`, pnpm workspaces, and TypeScript type checks.
+
 ## Sign-in, owner lock, and crawl procedure
 
 The repository includes the Clerk sign-in and sign-up screens, browser session handling, API authentication middleware, and protected API routes. The Clerk tenant and its private keys are not stored in Git; each deployment must connect its own Clerk environment.
@@ -180,7 +190,7 @@ Hackathon rules differ, so follow the event's submission form and deadline. A ty
 
 This repository is licensed under the Apache License 2.0. See [LICENSE](./LICENSE) and [NOTICE](./NOTICE). Third-party packages and assets remain subject to their respective licenses.
 
-Before public release, review the repository contents and include the information required by the event.
+Before submission, review the repository contents and include any additional information required by the event.
 
 ## Project layout
 
