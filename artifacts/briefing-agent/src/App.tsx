@@ -2642,11 +2642,11 @@ function Home() {
               />
               <div className="mt-1 text-right text-sm text-[#625d69]">{context.length} / 1500</div>
 
-              <label className={`mt-4 flex items-start gap-3 rounded-xl border p-4 ${aiStatus?.activated ? 'cursor-pointer border-[#b8a9e5] bg-[#f7f4ff]' : 'cursor-not-allowed border-[#ded9e2] bg-[#f6f4f0]'}`} data-testid="label-use-ai-briefing">
+              <label className={`mt-4 flex items-start gap-3 rounded-xl border p-4 ${aiStatus?.activated && canStart ? 'cursor-pointer border-[#b8a9e5] bg-[#f7f4ff]' : 'cursor-not-allowed border-[#ded9e2] bg-[#f6f4f0]'}`} data-testid="label-use-ai-briefing">
                 <input
                   type="checkbox"
                   checked={useAi}
-                  disabled={!aiStatus?.activated}
+                  disabled={!aiStatus?.activated || !canStart}
                   onChange={(event) => setUseAi(event.target.checked)}
                   className="mt-1 h-5 w-5 shrink-0 accent-[#655487]"
                   data-testid="checkbox-use-ai-briefing"
@@ -2655,7 +2655,11 @@ function Home() {
                   <span className="block text-base font-semibold text-[#35364a]">Add AI summaries for selected topics</span>
             <span className="mt-1 block text-sm leading-relaxed text-[#625d69]">
                     Off by default. When enabled, one request is allowed per selected topic. The subject name and accepted public-source titles and snippets are sent to OpenAI; SAP records remain separate.
-                    {!aiStatus?.activated ? ' Set up and activate AI below before selecting this.' : ''}
+                    {!canStart
+                      ? ' Add an active Tavily key first; AI can only summarize results Tavily returns.'
+                      : !aiStatus?.activated
+                        ? ' Set up and activate AI below before selecting this.'
+                        : ''}
                   </span>
                 </span>
               </label>
