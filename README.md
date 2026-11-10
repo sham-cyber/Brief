@@ -4,11 +4,26 @@
 
 **Copyright:** © 2026 Sham Mohite
 
-A source-first pre-meeting briefing app. Choose a company or person, select the topics that matter, and gather public reporting from the 30 days ending when the briefing starts. Each factual item links to its source.
+A source-first pre-meeting briefing app. Choose a company or person, select the topics that matter, and use Tavily's AI-powered search and retrieval to gather public reporting from the 30 days ending when the briefing starts. Each factual item links to its source.
 
 **GitHub repository:** [sham-cyber/Brief](https://github.com/sham-cyber/Brief)
 
-> **Hackathon prototype:** Add the demo URL and presentation links here when they are ready for submission.
+## Submission overview
+
+| Requirement | Project information |
+| --- | --- |
+| Rules | Check the event organizer's current rules and submission form; add any event-specific requirements before submitting. |
+| Working project or demo | Open this Replit project and use **Preview** while the web and API workflows are running. Sign-in and a configured Tavily key are needed to run a briefing. Add the published demo URL here for reviewer access. |
+| Source code or repository | [github.com/sham-cyber/Brief](https://github.com/sham-cyber/Brief) |
+| Project description and problem | See [Project problem and solution](#project-problem-and-solution). |
+| Technologies and tools | See [Technologies used](#technologies-used). |
+| How AI is used | See [How AI is used](#how-ai-is-used). |
+
+## Project problem and solution
+
+Preparing for a meeting can mean searching across scattered company or person updates, hiring, launches, financial facts, and risks, then checking each claim against its original source. That takes time and makes it difficult to bring a concise, verifiable view into the meeting.
+
+Briefing Agent gathers public reporting from the 30 days ending when the user starts a briefing. The user selects Company or Person, the topics, and optional meeting context. Tavily's AI-powered search and retrieval finds public material; the app checks it for relevance and recency, then presents source-linked findings in a compact brief that can be printed on one page.
 
 ## What it does
 
@@ -19,14 +34,14 @@ A source-first pre-meeting briefing app. Choose a company or person, select the 
 - Provides a concise brief and a one-page print with up to 400 words of briefing text, plus its cited source list, and browser read-aloud.
 - SAP briefs combine Tavily public research with approved, read-only SAP S/4HANA records; public links and internal records remain in separate sections.
 
-AI summaries are optional and off by default. When enabled, an account can use its own OpenAI API key to summarize accepted public-source results; each generated summary links back to returned sources. The normal source-based brief works without an AI key or AI request. SAP records and private sources are not sent to OpenAI.
+The default research flow uses Tavily's AI-powered search and retrieval; it can return cited results without a generative OpenAI call. Optional OpenAI summaries are off by default. When enabled, an account can use its own OpenAI API key to summarize accepted public-source results; each generated summary links back to returned sources. SAP records and private sources are not sent to OpenAI.
 
 ## Technologies used
 
 - **Web app:** React, TypeScript, Vite, Tailwind CSS, Radix UI, and TanStack Query.
 - **API:** Node.js and Express, with Clerk for sign-in and access control.
 - **Database:** PostgreSQL with Drizzle ORM.
-- **Public research:** Tavily Search API, with source-link and relevance checks in the application.
+- **AI-powered retrieval:** Tavily Search API finds public reporting for selected topics; the app checks source links, date range, subject match, and relevance.
 - **Optional AI summaries:** OpenAI API using each account's own encrypted key and selected model ID; one call per selected topic when the user opts in.
 - **SAP connection:** SAP S/4HANA business OData APIs using OAuth; SAP records remain separate from public search results.
 - **Validation and API contracts:** Zod and an OpenAPI specification, with generated TypeScript API clients.
@@ -64,13 +79,14 @@ The PIN and owner email are server-side secrets. Configure their values in Repli
 - Each event has a two-minute collection limit and a three-minute backup stop. Only one Tavily-backed event can run at a time; the app also limits Tavily to 10 requests per rolling five minutes.
 - Provider usage is charged to the Tavily account whose key is used. Store the project key in the hosting secret manager.
 
-### Optional AI summaries and guardrails
+### How AI is used
 
-- AI is off by default. The briefing and source-based print workflow continue to work without an AI provider key.
-- The hosting operator must explicitly set `AI_FEATURE_ENABLED=true`; each account must also save its own OpenAI API key and model ID, set an AI activation passcode, activate AI, and opt in on the briefing form.
-- AI makes at most one request for each selected topic in a briefing, with no automatic retries. The subject name, selected topic, and accepted public-source titles and snippets are sent to OpenAI. SAP records and private sources remain outside this AI step.
+- **Tavily retrieval (default):** Tavily's AI-powered Search API finds public sources for the selected topics. Tavily can return the cited research without an OpenAI call.
+- **OpenAI summaries (optional):** Off by default and run only after a successful Tavily crawl; without an active Tavily key, the crawl cannot start and OpenAI is not called. The hosting operator must explicitly set `AI_FEATURE_ENABLED=true`; each account must also save its own OpenAI API key and model ID, set an AI activation passcode, activate AI, and opt in on the briefing form.
+
+- OpenAI makes at most one request for each selected topic in a briefing, with no automatic retries. The subject name, selected topic, and accepted public-source titles and snippets are sent to OpenAI. SAP records and private sources remain outside this AI step.
 - Each generated topic summary is limited to 50 words and must cite source IDs returned for that topic. Invalid or unavailable summaries do not replace the source-based brief.
-- OpenAI usage is billed to the account that owns the submitted API key. The key is encrypted in the app database and is never returned to the browser. Removing the saved copy does not revoke the provider key; revoke it separately in the OpenAI account.
+- OpenAI usage is billed to the account that owns the submitted API key. The key is encrypted at rest in the app database, is not returned to the browser, and is not end-to-end encrypted. Removing the saved copy does not revoke the provider key; revoke it separately in the OpenAI account.
 - The existing read-aloud text has a separate 280-word cap (about two minutes at the app's estimate); AI summary generation does not start speech automatically.
 
 ### Personal Tavily key security
