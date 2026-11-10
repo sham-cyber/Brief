@@ -8,12 +8,14 @@ A source-first pre-meeting briefing app. Choose a company or person, select the 
 
 **GitHub repository:** [sham-cyber/Brief](https://github.com/sham-cyber/Brief)
 
+**Published demo:** [pre-meeting-briefing-agent.replit.app](https://pre-meeting-briefing-agent.replit.app)
+
 ## Submission overview
 
 | Requirement | Project information |
 | --- | --- |
 | Rules | Check the event organizer's current rules and submission form; add any event-specific requirements before submitting. |
-| Working project or demo | Open this Replit project and use **Preview** while the web and API workflows are running. Sign-in and a configured Tavily key are needed to run a briefing. Add the published demo URL here for reviewer access. |
+| Working project or demo | [Open the published app](https://pre-meeting-briefing-agent.replit.app). Sign-in and a configured Tavily key are needed to run a briefing. |
 | Source code or repository | [github.com/sham-cyber/Brief](https://github.com/sham-cyber/Brief) |
 | Project description and problem | See [Project problem and solution](#project-problem-and-solution). |
 | Technologies and tools | See [Technologies used](#technologies-used). |
