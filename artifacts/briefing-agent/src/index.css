@@ -309,6 +309,50 @@
 .settings-neon [role="status"] { line-height: 1.5; }
 .settings-neon a:not([href^="#"]) { color: #54cee0 !important; }
 
+/* Light settings cards keep dark text even inside the dark Settings shell. */
+.settings-neon :is(
+  [class*="bg-white"],
+  [class*="bg-[#f"],
+  [class*="bg-[#e"],
+  [class*="bg-[#d"],
+  [class*="bg-[#c"]
+) {
+  color: #000 !important;
+  text-shadow: none !important;
+}
+.settings-neon :is(
+  [class*="bg-white"],
+  [class*="bg-[#f"],
+  [class*="bg-[#e"],
+  [class*="bg-[#d"],
+  [class*="bg-[#c"]
+) :is(p, label, span, h1, h2, h3, legend, summary, a):not(button *) {
+  color: #000 !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+  filter: none !important;
+}
+.settings-neon :is(
+  [class*="bg-white"],
+  [class*="bg-[#f"],
+  [class*="bg-[#e"],
+  [class*="bg-[#d"],
+  [class*="bg-[#c"]
+) :is(p, label, legend, summary) {
+  font-size: 1rem !important;
+  line-height: 1.5 !important;
+}
+.settings-neon :is(
+  [class*="bg-white"],
+  [class*="bg-[#f"],
+  [class*="bg-[#e"],
+  [class*="bg-[#d"],
+  [class*="bg-[#c"]
+) :is([class*="text-xs"], [class*="text-[11px]"]) {
+  font-size: .9375rem !important;
+  line-height: 1.4 !important;
+}
+
 @media (max-width: 640px) {
   .settings-neon { background-size: auto, 32px 32px, 32px 32px; }
   .settings-neon form[aria-describedby="form-note"] { padding: 1rem !important; }
@@ -416,7 +460,7 @@
 .print-only { display: none; }
 
 @media print {
-  html, body { width: 100% !important; min-height: 0 !important; margin: 0 !important; background: white !important; color: #202638 !important; }
+  html, body { width: 100% !important; min-height: 0 !important; margin: 0 !important; background: white !important; color: #000 !important; }
   body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
   .paper-grid { min-height: 0 !important; margin: 0 !important; padding: 0 !important; overflow: visible !important; background: white !important; }
   .paper-grid::before, .no-print, .screen-brief { display: none !important; }
@@ -427,44 +471,51 @@
     display: grid !important;
     box-sizing: border-box;
     width: 100% !important;
-    height: 260mm !important;
-    max-height: 260mm !important;
+    height: 255mm !important;
+    max-height: 255mm !important;
     margin: 0 !important;
-    grid-template-rows: 26mm 36mm minmax(0, 1fr) 34mm;
-    gap: 1.5mm;
+    grid-template-rows: 32mm 42mm minmax(0, 1fr) 48mm;
+    gap: 1mm;
     overflow: hidden !important;
     break-inside: avoid !important;
     page-break-inside: avoid !important;
-    color: #202638 !important;
+    color: #000 !important;
+    font-size: 10pt;
     font-family: Arial, sans-serif;
+  }
+  .print-one-page,
+  .print-one-page * {
+    color: #000 !important;
+    text-shadow: none !important;
   }
   .print-page-header {
     overflow: hidden;
-    padding: 3mm 5mm;
-    background: #262b42 !important;
-    color: #fff !important;
+    padding: 2.5mm 4mm;
+    border-bottom: .4mm solid #000;
+    background: #fff !important;
+    color: #000 !important;
   }
-  .print-page-header p { margin: 0 0 1mm; color: #d5c9ec; font-size: 7pt; letter-spacing: .12em; text-transform: uppercase; }
-  .print-page-header h1 { margin: 0; overflow: hidden; font-family: Georgia, serif; font-size: 19pt; line-height: 1.05; text-overflow: ellipsis; white-space: nowrap; }
-  .print-page-header .print-date-details { display: grid; gap: .4mm; margin-top: 1mm; color: #e0dce7; font-size: 6.5pt; line-height: 1.15; }
-  .print-page-overview { overflow: hidden; border: .25mm solid #d8d2df; padding: 3mm 4mm; }
-  .print-page-overview h2, .print-page-sources h2 { margin: 0 0 1mm; font-family: Georgia, serif; font-size: 10pt; }
-  .print-page-overview p { display: -webkit-box; margin: 0; overflow: hidden; font-size: 8pt; line-height: 1.25; -webkit-box-orient: vertical; -webkit-line-clamp: 5; }
-  .print-sap-data { min-height: 0; overflow: hidden; border: .25mm solid #c2ddda; padding: 3mm 4mm; }
-  .print-sap-data h2 { margin: 0 0 2mm; color: #245d5b; font-family: Georgia, serif; font-size: 10pt; }
-  .print-sap-data p { display: -webkit-box; margin: 0 0 1.5mm; overflow: hidden; font-size: 7pt; line-height: 1.2; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+  .print-page-header p { margin: 0 0 1mm; font-size: 9pt; font-weight: 600; letter-spacing: .08em; line-height: 1.2; text-transform: uppercase; }
+  .print-page-header h1 { margin: 0; overflow: hidden; font-family: Georgia, serif; font-size: 20pt; line-height: 1.05; text-overflow: ellipsis; white-space: nowrap; }
+  .print-page-header .print-date-details { display: grid; gap: .5mm; margin-top: 1mm; font-size: 9pt; line-height: 1.2; }
+  .print-page-overview { overflow: hidden; border: .3mm solid #000; padding: 3mm 4mm; }
+  .print-page-overview h2, .print-page-sources h2 { margin: 0 0 1.5mm; font-family: Georgia, serif; font-size: 12pt; }
+  .print-page-overview p { display: -webkit-box; margin: 0 0 1mm; overflow: hidden; font-size: 10pt; line-height: 1.25; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+  .print-sap-data { min-height: 0; overflow: hidden; border: .3mm solid #000; padding: 3mm 4mm; }
+  .print-sap-data h2 { margin: 0 0 2mm; font-family: Georgia, serif; font-size: 12pt; }
+  .print-sap-data p { display: -webkit-box; margin: 0 0 1.5mm; overflow: hidden; font-size: 9.5pt; line-height: 1.25; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
   .print-topic-grid { display: grid; min-height: 0; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(3, minmax(0, 1fr)); gap: 1.5mm; }
-  .print-topic { min-height: 0; overflow: hidden; border: .25mm solid #d8d2df; padding: 2.5mm 3mm; }
-  .print-topic h2 { margin: 0 0 1.5mm; color: #4f426f; font-family: Georgia, serif; font-size: 9pt; }
-  .print-topic p { display: -webkit-box; margin: 0 0 1.2mm; overflow: hidden; font-size: 6.7pt; line-height: 1.15; -webkit-box-orient: vertical; -webkit-line-clamp: 4; }
+  .print-topic { min-height: 0; overflow: hidden; border: .3mm solid #000; padding: 2.5mm 3mm; }
+  .print-topic h2 { margin: 0 0 1.5mm; font-family: Georgia, serif; font-size: 12pt; }
+  .print-topic p { display: -webkit-box; margin: 0 0 1.2mm; overflow: hidden; font-size: 10pt; line-height: 1.22; -webkit-box-orient: vertical; -webkit-line-clamp: 4; }
   .print-topic .print-highlight-extra { border-top: .2mm solid #e6e1ea; padding-top: 1mm; }
   .print-topic .print-question { border-top: .2mm solid #ddd8e3; padding-top: 1.5mm; -webkit-line-clamp: 3; }
-  .print-page-sources { overflow: hidden; border-top: .25mm solid #d8d2df; padding-top: 1.5mm; }
-  .print-page-sources ol { display: grid; max-height: 26mm; grid-template-columns: 1fr 1fr; gap: .3mm 3mm; margin: 0; overflow: hidden; padding: 0; list-style: none; }
-  .print-page-sources li { min-width: 0; overflow: hidden; font-size: 5.4pt; line-height: 1.05; overflow-wrap: anywhere; }
+  .print-page-sources { overflow: hidden; border-top: .3mm solid #000; padding-top: 1.5mm; }
+  .print-page-sources ol { display: grid; max-height: 42mm; grid-template-columns: 1fr 1fr; gap: .7mm 3mm; margin: 0; overflow: hidden; padding: 0; list-style: none; }
+  .print-page-sources li { min-width: 0; overflow: hidden; font-size: 8pt; line-height: 1.15; overflow-wrap: anywhere; }
   .print-page-sources li span { font-weight: 700; }
-  .print-page-sources a { color: #453990 !important; }
-  .print-page-sources .print-source-url { display: block; color: #5d5966 !important; font-size: 4.4pt; line-height: 1.05; text-decoration: none; }
-  .reference-pill { min-width: 0; height: auto; border: 0; padding: 0 .5mm; color: #453990 !important; font-size: 6pt; }
-  a { color: inherit; }
+  .print-page-sources a { color: #000 !important; text-decoration: underline; }
+  .print-page-sources .print-source-url { display: block; color: #000 !important; font-size: 7.5pt; line-height: 1.15; text-decoration: underline; }
+  .reference-pill { min-width: 0; height: auto; border: 0; padding: 0 .5mm; color: #000 !important; font-size: 8pt; }
+  a { color: #000 !important; }
 }
