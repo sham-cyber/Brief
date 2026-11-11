@@ -4,8 +4,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { getGetBriefingSourceStatusQueryKey, useCreateBriefing, useGetBriefingSourceStatus } from '@workspace/api-client-react';
-import type { BriefingResult, BriefSource, SapDataArea } from '@workspace/api-client-react';
+import { getGetBriefingSourceStatusQueryKey, useCreateBriefing, useCreateCustomerSearch, useGetBriefingSourceStatus } from '@workspace/api-client-react';
+import type { BriefingResult, BriefSource, CustomerSearchResponse, SapDataArea } from '@workspace/api-client-react';
 import { ClerkProvider, SignIn, SignUp, Show, useClerk, useUser } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
@@ -1679,6 +1679,166 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
   );
 }
 
+function CustomerSearchDocument({ result }: { result: CustomerSearchResponse }) {
+  const [copied, setCopied] = useState(false);
+  const printSources = result.sources.slice(0, 5);
+  const copyCustomerSearch = async () => {
+    const lines = [
+      `Customer Search — ${result.productOrCategory}`,
+      `Person: ${result.personName} · ${personContextLabel(result.personRole, null, result.companyName)}`,
+      `Location: ${result.city}, ${result.state}`,
+      `Prepared: ${formatDate(result.generatedAt)}`,
+      'Tavily requests: 1',
+      result.dataSourceNotice,
+      '',
+      'PUBLIC BUSINESS SOURCES',
+      ...result.sources.flatMap((source, index) => [
+        `${index + 1}. ${source.businessName}`,
+        `Phone: ${source.phone ?? 'Not listed in the source snippet'} · Business email: ${source.email ?? 'Not listed in the source snippet'}`,
+        source.excerpt,
+        `Source: ${source.sourceUrl}`,
+        '',
+      ]),
+    ];
+    try {
+      await navigator.clipboard.writeText(lines.join('\n'));
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2200);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  return (
+    <article
+      className="fade-up min-w-0"
+      aria-label={`Customer Search for ${result.productOrCategory} in ${result.city}, ${result.state}`}
+      data-testid="customer-search-result"
+    >
+      <div className="screen-brief">
+        <div className="rounded-2xl bg-[#292e46] px-6 py-7 text-white sm:px-9 sm:py-9">
+          <SectionEyebrow>Person · current public search · one Tavily request</SectionEyebrow>
+          <h2 className="mt-3 font-serif text-3xl leading-tight sm:text-4xl">{result.productOrCategory}</h2>
+          <p className="mt-3 text-base text-white/80">
+            {result.city}, {result.state} · prepared for {result.personName}
+          </p>
+          <p className="mt-3 text-sm text-white/75" data-testid="customer-search-usage">
+            Tavily credits reported: {result.searchCreditsUsed ?? 'not reported'} · {result.searchResultsReturned} source-backed results
+          </p>
+        </div>
+
+        <p className="mt-4 rounded-xl border border-[#d7cde9] bg-[#f5f1fb] px-4 py-3 text-sm leading-relaxed text-[#40345f]" data-testid="customer-search-source-notice">
+          {result.dataSourceNotice}
+        </p>
+
+        <section className="mt-6 space-y-3" aria-label="Public business search results">
+          {result.sources.length === 0 ? (
+            <p className="rounded-xl border border-[#ded9e5] bg-white px-4 py-4 text-base leading-relaxed text-[#625d69]" role="status" data-testid="customer-search-empty-state">
+              Tavily returned no usable public business pages for this category and location. No contact details were guessed.
+            </p>
+          ) : result.sources.map((source, index) => (
+            <article key={source.id} className="rounded-xl border border-[#d9d4df] bg-white p-4 sm:p-5" data-testid="customer-search-source">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <p className="font-mono text-xs font-bold uppercase tracking-wide text-[#71658e]">
+                    Business / page title · {source.publisher}
+                  </p>
+                  <h3 className="mt-1 font-serif text-xl leading-snug text-[#292e46]">{source.businessName}</h3>
+                </div>
+                <span className="rounded-full bg-[#f1eef7] px-3 py-1 text-xs font-semibold text-[#5d5279]">Source {index + 1}</span>
+              </div>
+              <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+                <div>
+                  <dt className="font-semibold text-[#35364a]">Public business phone</dt>
+                  <dd className="mt-0.5 break-words text-[#514e5c]">{source.phone ?? 'Not listed in the returned source snippet'}</dd>
+                </div>
+                <div>
+                  <dt className="font-semibold text-[#35364a]">Role-based business email</dt>
+                  <dd className="mt-0.5 break-words text-[#514e5c]">{source.email ?? 'Not listed in the returned source snippet'}</dd>
+                </div>
+              </dl>
+              <p className="mt-3 text-sm leading-relaxed text-[#514e5c]">{source.excerpt}</p>
+              <a
+                href={source.sourceUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-3 inline-flex min-h-10 items-center gap-2 break-all text-sm font-semibold text-[#594b87] underline underline-offset-4"
+                data-testid={`link-customer-source-${index + 1}`}
+              >
+                <Link2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+                Open cited source
+              </a>
+            </article>
+          ))}
+        </section>
+        <div className="mt-5 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => void copyCustomerSearch()}
+            className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-[#292e46] px-4 py-2.5 text-base font-semibold text-white hover:bg-[#3c4160]"
+            data-testid="button-copy-customer-search"
+          >
+            <Clipboard className="h-4 w-4" aria-hidden="true" />
+            {copied ? 'Copied' : 'Copy results'}
+          </button>
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[#d9d4df] bg-white px-4 py-2.5 text-base font-semibold text-[#292e46] hover:bg-[#f4f1f8]"
+            data-testid="button-print-customer-search"
+          >
+            <Printer className="h-4 w-4" aria-hidden="true" />
+            Print one page
+          </button>
+        </div>
+      </div>
+
+      <section className="print-only print-one-page customer-search-print" aria-label="One-page printable Customer Search" data-testid="print-customer-search">
+        <header className="print-page-header">
+          <p>Customer Search · Public Tavily search</p>
+          <h1>{result.productOrCategory}</h1>
+          <div className="print-date-details">
+            <span>Person: {result.personName} · {personContextLabel(result.personRole, null, result.companyName)}</span>
+            <span>Location: {result.city}, {result.state} · Prepared: {formatDate(result.generatedAt)}</span>
+          </div>
+        </header>
+        <section className="print-page-overview">
+          <h2>Source and contact note</h2>
+          <p>{result.dataSourceNotice}</p>
+          {result.sources.length > printSources.length && (
+            <p>Showing the first {printSources.length} of {result.sources.length} results on this one-page print.</p>
+          )}
+        </section>
+        <div className="print-topic-grid customer-search-print-results">
+          {printSources.length === 0 ? (
+            <section className="print-topic">
+              <h2>No results</h2>
+              <p>Tavily returned no usable public business pages. No contact details were guessed.</p>
+            </section>
+          ) : printSources.map((source, index) => (
+            <section className="print-topic" key={source.id}>
+              <h2>{index + 1}. {source.businessName}</h2>
+              <p>Phone: {source.phone ?? 'Not listed'} · Business email: {source.email ?? 'Not listed'}</p>
+              <p>{source.excerpt}</p>
+            </section>
+          ))}
+        </div>
+        <footer className="print-page-sources">
+          <h2>Source links</h2>
+          <ol>
+            {printSources.map((source, index) => (
+              <li key={source.id}>
+                <span>{index + 1}. {source.businessName}</span>
+                <a className="print-source-url" href={source.sourceUrl}>{source.sourceUrl}</a>
+              </li>
+            ))}
+          </ol>
+        </footer>
+      </section>
+    </article>
+  );
+}
+
 function SectionEyebrow({ children }: { children: ReactNode }) {
   return <p className="font-mono text-[10px] font-medium uppercase tracking-[.17em] text-[#71658e]">{children}</p>;
 }
@@ -1935,6 +2095,8 @@ function Home() {
   const abortControllerRef = useRef<AbortController | null>(null);
   const briefingOutputRef = useRef<HTMLElement | null>(null);
   const mutation = useCreateBriefing({ request: { get signal() { return abortControllerRef.current?.signal; } } });
+  const customerSearchMutation = useCreateCustomerSearch({ request: { get signal() { return abortControllerRef.current?.signal; } } });
+  const isAnySearchPending = mutation.isPending || customerSearchMutation.isPending;
   const [subject, setSubject] = useState('');
   const [subjectType, setSubjectType] = useState<'company' | 'person'>('company');
   const [personRole, setPersonRole] = useState<PersonRole | null>(null);
@@ -1948,6 +2110,10 @@ function Home() {
   const [sourceModeAlert, setSourceModeAlert] = useState('');
   const [sapAreas, setSapAreas] = useState<SapDataArea[]>([]);
   const [topics, setTopics] = useState<Topic[]>(TOPICS.map((topic) => topic.value));
+  const [customerSearchSelected, setCustomerSearchSelected] = useState(false);
+  const [customerProductOrCategory, setCustomerProductOrCategory] = useState('');
+  const [customerCity, setCustomerCity] = useState('');
+  const [customerState, setCustomerState] = useState('');
   const [meetingAt, setMeetingAt] = useState('');
   const [context, setContext] = useState('');
   const [question, setQuestion] = useState('');
@@ -1955,6 +2121,7 @@ function Home() {
   const [aiStatus, setAiStatus] = useState<AiGuardrailsStatus | null>(null);
   const [useAi, setUseAi] = useState(false);
   const [resultKey, setResultKey] = useState('');
+  const [customerSearchResultKey, setCustomerSearchResultKey] = useState('');
   const [failedKey, setFailedKey] = useState('');
   const [timedOutKey, setTimedOutKey] = useState('');
   const [cancelledKey, setCancelledKey] = useState('');
@@ -1963,7 +2130,7 @@ function Home() {
   const [pinDialogError, setPinDialogError] = useState('');
   const activeRequestKey = useRef('');
   const timeoutRef = useRef<number | undefined>(undefined);
-  const requestKey = JSON.stringify([subject.trim(), subjectType, personRole, publicRoleTitle.trim(), companyName.trim(), sourceMode, sourceMode === 'sap' ? sapAreas : [], meetingAt, topics, context.trim(), question.trim(), useAi]);
+  const requestKey = JSON.stringify([subject.trim(), subjectType, personRole, publicRoleTitle.trim(), companyName.trim(), sourceMode, sourceMode === 'sap' ? sapAreas : [], meetingAt, topics, customerSearchSelected, customerProductOrCategory.trim(), customerCity.trim(), customerState.trim(), context.trim(), question.trim(), useAi]);
   const meetingTimeIsValid = !meetingAt || !Number.isNaN(new Date(meetingAt).getTime());
   const hasValidSubject = subject.trim().length >= 2;
   const hasValidRoleSelection = subjectType !== 'person' || Boolean(personRole);
@@ -1975,7 +2142,16 @@ function Home() {
         : personRole === 'corporate'
   );
   const hasValidRole = hasValidRoleSelection && hasValidPersonDetails;
-  const hasTopics = topics.length > 0;
+  const hasTopics = customerSearchSelected || topics.length > 0;
+  const hasCustomerSearchFields = customerProductOrCategory.trim().length >= 2 &&
+    customerCity.trim().length >= 2 &&
+    customerState.trim().length >= 2;
+  const customerSearchAvailable = subjectType === 'person' && sourceMode === 'public';
+  const customerSearchReady = customerSearchSelected &&
+    customerSearchAvailable &&
+    hasValidSubject &&
+    hasValidRole &&
+    hasCustomerSearchFields;
   const tavilyConfigured = sourceStatusQuery.data?.configured === true;
   const sapConfigured = sourceStatusQuery.data?.sapConfigured === true;
   const sapAvailableAreas = sourceStatusQuery.data?.sapAvailableAreas ?? [];
@@ -1989,10 +2165,11 @@ function Home() {
   const dailySearchRequestsRemaining = sourceStatusQuery.data?.dailySearchRequestsRemaining ?? null;
   const dailyCrawlActive = sourceStatusQuery.data?.dailyCrawlActive === true;
   const dailyCrawlStartLimitReached = canStart && dailyCrawlStartsRemaining === 0;
+  const dailySearchRequestsNeeded = customerSearchSelected ? 1 : topics.length;
   const dailySearchQuotaInsufficient = canStart &&
     dailySearchRequestsRemaining !== null &&
-    dailySearchRequestsRemaining < topics.length;
-  const crawlAlreadyActive = dailyCrawlActive && !mutation.isPending;
+    dailySearchRequestsRemaining < dailySearchRequestsNeeded;
+  const crawlAlreadyActive = dailyCrawlActive && !isAnySearchPending;
   const sapAreasUnavailable = sapAreas.filter((area) => !sapAvailableAreas.includes(area));
   const sapSetupComplete = canStart && sapConfigured && sapAvailableAreas.length > 0;
   const sapSourceReady = sapSetupComplete &&
@@ -2010,19 +2187,26 @@ function Home() {
     : sourceMode === 'sap'
       ? sapSourceReady && hasSapOrganization
       : false;
-  const hasRequiredSelections = hasTopics && (sourceMode !== 'sap' || sapAreas.length > 0);
-  const hasCurrentResult = Boolean(mutation.data && resultKey === requestKey);
+  const hasRequiredSelections = customerSearchSelected
+    ? customerSearchReady
+    : hasTopics && (sourceMode !== 'sap' || sapAreas.length > 0);
+  const hasCurrentResult = !customerSearchSelected && Boolean(mutation.data && resultKey === requestKey);
   const result = hasCurrentResult ? mutation.data : undefined;
+  const hasCurrentCustomerSearchResult = customerSearchSelected &&
+    Boolean(customerSearchMutation.data && customerSearchResultKey === requestKey);
+  const customerSearchResult = hasCurrentCustomerSearchResult
+    ? customerSearchMutation.data
+    : undefined;
   useEffect(() => {
-    if (!result) return;
+    if (!result && !customerSearchResult) return;
     const frame = window.requestAnimationFrame(() => {
       briefingOutputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [result?.briefingId]);
-  const currentRequestIsPending = mutation.isPending && activeRequestKey.current === requestKey;
+  }, [customerSearchResult?.generatedAt, result?.briefingId]);
+  const currentRequestIsPending = isAnySearchPending && activeRequestKey.current === requestKey;
   const currentRequestCancelled = cancelledKey === requestKey;
-  const currentRequestFailed = !currentRequestCancelled && ((mutation.isError && failedKey === requestKey) || timedOutKey === requestKey);
+  const currentRequestFailed = !currentRequestCancelled && (((mutation.isError || customerSearchMutation.isError) && failedKey === requestKey) || timedOutKey === requestKey);
   useEffect(() => {
     const stopRequestOnPageExit = () => {
       abortControllerRef.current?.abort();
@@ -2056,6 +2240,7 @@ function Home() {
 
   const handleSourceModeChange = (nextSource: SourceMode) => {
     setSourceModeAlert('');
+    if (nextSource !== 'public') setCustomerSearchSelected(false);
     if (nextSource !== 'sap') {
       setSourceMode(nextSource);
       return;
@@ -2082,6 +2267,12 @@ function Home() {
     }
     setSourceMode('sap');
   };
+
+  useEffect(() => {
+    if (subjectType !== 'person' || sourceMode !== 'public') {
+      setCustomerSearchSelected(false);
+    }
+  }, [sourceMode, subjectType]);
 
   useEffect(() => {
     if (sourceMode !== 'sap' || sourceStatusQuery.isLoading) return;
@@ -2201,16 +2392,26 @@ function Home() {
   }, []);
 
   const runBriefing = useCallback((key: string, pin: string) => {
-    const selectedSourceReady =
-      (sourceMode === 'public' &&
-        tavilyConfigured &&
-        !dailyCrawlStartLimitReached &&
-        !dailySearchQuotaInsufficient &&
-        !crawlAlreadyActive) ||
-      (sourceMode === 'sap' &&
-        sapSourceReady &&
-        hasSapOrganization);
-    if (!/^\d{4}$/.test(pin) || !isSignedIn || !selectedSourceReady || !startPinConfigured || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || (useAi && !aiStatus?.activated) || mutation.isPending) return;
+    const selectedSourceReady = sourceReady &&
+      !dailyCrawlStartLimitReached &&
+      !dailySearchQuotaInsufficient &&
+      !crawlAlreadyActive;
+    const inputsReady = hasValidSubject &&
+      hasValidRole &&
+      (customerSearchSelected
+        ? customerSearchReady
+        : meetingTimeIsValid && hasTopics);
+    const requestIsPending = mutation.isPending || customerSearchMutation.isPending;
+    if (
+      !/^\d{4}$/.test(pin) ||
+      !isSignedIn ||
+      !selectedSourceReady ||
+      !startPinConfigured ||
+      !inputsReady ||
+      (!customerSearchSelected && useAi && !aiStatus?.activated) ||
+      requestIsPending
+    ) return;
+
     activeRequestKey.current = key;
     setFailedKey('');
     setTimedOutKey('');
@@ -2225,6 +2426,60 @@ function Home() {
         abortControllerRef.current?.abort();
       }
     }, 120_000);
+    const callbacks = {
+      onSuccess: () => {
+        if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
+        abortControllerRef.current = null;
+        if (activeRequestKey.current === key) {
+          if (customerSearchSelected) {
+            setCustomerSearchResultKey(key);
+          } else {
+            setResultKey(key);
+          }
+          setFailedKey('');
+          setPinPromptOpen(false);
+          setStartPin('');
+        }
+      },
+      onError: (error: unknown) => {
+        if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
+        abortControllerRef.current = null;
+        if (activeRequestKey.current === key) {
+          setFailedKey(key);
+          setStartPin('');
+          const errorMessage = error instanceof Error ? error.message : 'The PIN could not be verified.';
+          if (!customerSearchSelected && sourceMode === 'sap' && /(SAP setup is incomplete|SAP briefs require an active Tavily key)/i.test(errorMessage)) {
+            setSourceMode('public');
+            setSourceModeAlert(`SAP is not ready; returned to Public. ${errorMessage}`);
+          }
+          setPinDialogError(errorMessage);
+        }
+      },
+      onSettled: () => {
+        void sourceStatusQuery.refetch();
+      },
+    };
+
+    if (customerSearchSelected) {
+      if (!personRole) return;
+      customerSearchMutation.mutate(
+        {
+          data: {
+            startPin: pin,
+            personName: subject.trim(),
+            personRole,
+            ...(personRole === 'business_owner' ? { companyName: companyName.trim() } : {}),
+            ...(personRole === 'mp' ? { publicRoleTitle: publicRoleTitle.trim() } : {}),
+            productOrCategory: customerProductOrCategory.trim(),
+            city: customerCity.trim(),
+            state: customerState.trim(),
+          },
+        },
+        callbacks,
+      );
+      return;
+    }
+
     mutation.mutate(
       {
         data: {
@@ -2243,37 +2498,9 @@ function Home() {
           ...(context.trim() ? { context: context.trim() } : {}),
         },
       },
-      {
-        onSuccess: () => {
-          if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
-          abortControllerRef.current = null;
-          if (activeRequestKey.current === key) {
-            setResultKey(key);
-            setFailedKey('');
-            setPinPromptOpen(false);
-            setStartPin('');
-          }
-        },
-        onError: (error) => {
-          if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
-          abortControllerRef.current = null;
-          if (activeRequestKey.current === key) {
-            setFailedKey(key);
-            setStartPin('');
-            const errorMessage = error instanceof Error ? error.message : 'The PIN could not be verified.';
-            if (sourceMode === 'sap' && /(SAP setup is incomplete|SAP briefs require an active Tavily key)/i.test(errorMessage)) {
-              setSourceMode('public');
-              setSourceModeAlert(`SAP is not ready; returned to Public. ${errorMessage}`);
-            }
-            setPinDialogError(errorMessage);
-          }
-        },
-        onSettled: () => {
-          void sourceStatusQuery.refetch();
-        },
-      },
+      callbacks,
     );
-  }, [aiStatus?.activated, companyName, context, crawlAlreadyActive, dailyCrawlStartLimitReached, dailySearchQuotaInsufficient, hasSapOrganization, hasTopics, hasValidRole, hasValidSubject, isSignedIn, meetingAt, meetingTimeIsValid, mutation.isPending, mutation.mutate, personRole, publicRoleTitle, question, sapAreas, sapAreasUnavailable.length, sapAvailableAreas, sapConfigured, sapSourceReady, sourceMode, sourceStatusQuery.refetch, startPinConfigured, subject, subjectType, tavilyConfigured, topics, useAi]);
+  }, [aiStatus?.activated, companyName, context, crawlAlreadyActive, customerCity, customerProductOrCategory, customerSearchMutation.isPending, customerSearchMutation.mutate, customerSearchReady, customerSearchSelected, customerState, dailyCrawlStartLimitReached, dailySearchQuotaInsufficient, hasTopics, hasValidRole, hasValidSubject, isSignedIn, meetingAt, meetingTimeIsValid, mutation.isPending, mutation.mutate, personRole, publicRoleTitle, question, sapAreas, sourceReady, sourceMode, sourceStatusQuery.refetch, startPinConfigured, subject, subjectType, useAi]);
 
   const handleGenerateBriefing = () => {
     const pendingQuestion = question.trim();
@@ -2301,14 +2528,14 @@ function Home() {
     runBriefing(requestKey, startPin);
   };
   const closePinPrompt = () => {
-    if (mutation.isPending) return;
+    if (isAnySearchPending) return;
     setPinPromptOpen(false);
     setStartPin('');
     setPinDialogError('');
   };
 
-  const apiError = mutation.error as (Error & { data?: { error?: string } }) | null;
-  const errorMessage = apiError?.data?.error ?? apiError?.message ?? 'The briefing could not be generated. Check your connection and try again.';
+  const apiError = (customerSearchSelected ? customerSearchMutation.error : mutation.error) as (Error & { data?: { error?: string } }) | null;
+  const errorMessage = apiError?.data?.error ?? apiError?.message ?? (customerSearchSelected ? 'Customer Search could not be completed. Check your connection and try again.' : 'The briefing could not be generated. Check your connection and try again.');
   const readinessState = !isSignedIn
     ? 'not-ready'
     : currentRequestCancelled
@@ -2317,7 +2544,7 @@ function Home() {
       ? 'error'
       : currentRequestIsPending
         ? 'crawling'
-        : hasCurrentResult
+        : hasCurrentResult || hasCurrentCustomerSearchResult
           ? 'ready'
           : 'not-ready';
   const readinessStyles = {
@@ -2348,9 +2575,11 @@ function Home() {
                         : personRole === 'mp'
                           ? 'Not ready — enter the public office or title.'
                           : 'Not ready — complete the person context.'
-                    : !meetingTimeIsValid
+                  : customerSearchSelected && !hasCustomerSearchFields
+                    ? 'Not ready — enter the product or category, city, and state.'
+                    : !customerSearchSelected && !meetingTimeIsValid
                       ? 'Not ready — enter a valid meeting time or leave it blank.'
-                      : !hasTopics
+                      : !customerSearchSelected && !hasTopics
                         ? 'Not ready — select at least one topic.'
                         : sourceMode === 'sap' && !hasSapOrganization
                           ? 'Not ready — SAP briefings need a Company subject or a Chairman / CEO with a company.'
@@ -2367,17 +2596,23 @@ function Home() {
                                     : (sourceMode === 'public' || sourceMode === 'sap') && dailyCrawlStartLimitReached
                                       ? 'Not ready — all 10 Tavily briefing events for today have been used. The counter resets at midnight IST.'
                                       : (sourceMode === 'public' || sourceMode === 'sap') && dailySearchQuotaInsufficient
-                                        ? `Not ready — only ${dailySearchRequestsRemaining ?? 0} daily Tavily topic searches remain; reduce selected topics or try after the IST reset.`
+                                         ? customerSearchSelected
+                                           ? 'Not ready — no daily Tavily request remains for Customer Search. Try after the IST reset.'
+                                           : `Not ready — only ${dailySearchRequestsRemaining ?? 0} daily Tavily search requests remain; reduce selected topics or try after the IST reset.`
                                         : readinessState === 'error'
                                           ? timedOutKey === requestKey
-                                            ? 'Not ready — the two-minute stop ended this briefing.'
+                                           ? `Not ready — the two-minute stop ended this ${customerSearchSelected ? 'search' : 'briefing'}.`
                                             : 'Not ready — source collection failed. Try again.'
                                           : readinessState === 'crawling'
-                                            ? sourceMode === 'sap'
+                                             ? customerSearchSelected
+                                               ? 'Searching current public business pages with Tavily only — one request, no Ollama.'
+                                               : sourceMode === 'sap'
                                               ? 'Collecting Tavily public sources and approved SAP data — this briefing has up to two minutes.'
                                               : 'Collecting public sources — this briefing has up to two minutes.'
                                             : readinessState === 'ready'
-                                              ? 'Brief ready — sources collected for the selected subject, meeting and topics.'
+                                               ? customerSearchSelected
+                                                 ? 'Customer Search ready — public source links and any listed business contacts are available.'
+                                                 : 'Brief ready — sources collected for the selected subject, meeting and topics.'
                                               : !hasRequiredSelections
                                                 ? 'Not ready — complete the selected source settings.'
                                                 : 'Not ready — press Brief when the settings are complete.';
@@ -2414,7 +2649,9 @@ function Home() {
             {isSignedIn ? (
               <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
                 <div>
-                  <p className="font-mono text-xs uppercase tracking-[.14em] text-[#655487]">30-day meeting brief</p>
+                  <p className="font-mono text-xs uppercase tracking-[.14em] text-[#655487]">
+                    {customerSearchSelected ? 'Person customer search · current public listings' : '30-day meeting brief'}
+                  </p>
                   <h1 id="create-heading" className="mt-1 font-serif text-3xl leading-tight tracking-[-.02em] text-[#282d43]">Settings</h1>
                 </div>
                 <p className="text-base font-medium text-[#625d69]">Start a crawl only when you press Brief.</p>
@@ -2479,8 +2716,8 @@ function Home() {
               ) : (
               <>
               <div className="mb-4 flex items-center justify-between border-b border-[#e5e0e7] pb-3">
-                <span className="text-base font-semibold text-[#292e46]">Briefing details</span>
-                <span className="rounded-full bg-[#eeeaf4] px-3 py-1 font-mono text-xs font-semibold text-[#594b87]">30 DAYS</span>
+                 <span className="text-base font-semibold text-[#292e46]">{customerSearchSelected ? 'Customer Search details' : 'Briefing details'}</span>
+                 <span className="rounded-full bg-[#eeeaf4] px-3 py-1 font-mono text-xs font-semibold text-[#594b87]">{customerSearchSelected ? 'CURRENT' : '30 DAYS'}</span>
               </div>
               <fieldset className="mt-4">
                     <legend className="mb-2 text-base font-semibold text-[#35364a]">Briefing subject</legend>
@@ -2808,14 +3045,16 @@ function Home() {
               <fieldset className="min-w-0">
                 <legend className="mb-3 flex w-full items-center justify-between gap-2 text-base font-semibold text-[#35364a]">
                   <span>Choose what to include</span>
-                  <span className="font-mono text-xs font-normal text-[#6d6576]">{topics.length} of 5 selected</span>
+                  <span className="font-mono text-xs font-normal text-[#6d6576]">
+                    {customerSearchSelected ? 'Customer Search · 1 request' : `${topics.length} of 5 selected`}
+                  </span>
                 </legend>
                 {sourceMode === 'sap' && (
                   <p className="mb-3 text-sm leading-relaxed text-[#486d6b]">
                     These topics organize any matching SAP records; the separate SAP Data section lists records from every selected SAP area.
                   </p>
                 )}
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                {!customerSearchSelected && <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
                   {TOPICS.map((topic, index) => (
                     <label
                       key={topic.value}
@@ -2829,7 +3068,7 @@ function Home() {
                       <input
                         type="checkbox"
                         checked={topics.includes(topic.value)}
-                        onChange={(event) => setTopics((selected) => event.target.checked ? [...selected, topic.value] : selected.filter((value) => value !== topic.value))}
+                      onChange={(event) => setTopics((selected) => event.target.checked ? [...selected, topic.value] : selected.filter((value) => value !== topic.value))}
                         className="h-4 w-4 shrink-0 rounded accent-[#655487]"
                         data-testid={`checkbox-topic-${topic.value}`}
                       />
@@ -2839,10 +3078,93 @@ function Home() {
                       </span>
                     </label>
                   ))}
-                </div>
+                </div>}
+                {customerSearchAvailable && (
+                  <div className="mt-3">
+                    <label
+                      className={`flex min-h-14 cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 text-base transition ${
+                        customerSearchSelected
+                          ? 'border-[#54a7a3] bg-[#edf7f5] text-[#245d5b]'
+                          : 'border-[#d9d4df] bg-[#fffefa] text-[#49405e] hover:border-[#8ab9b5]'
+                      }`}
+                      data-testid="customer-search-choice"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={customerSearchSelected}
+                        onChange={(event) => {
+                          setCustomerSearchSelected(event.target.checked);
+                          if (event.target.checked) setUseAi(false);
+                          setPinDialogError('');
+                        }}
+                        className="h-5 w-5 shrink-0 accent-[#277b77]"
+                        data-testid="checkbox-customer-search"
+                      />
+                      <span>
+                        <span className="block font-semibold">Customer Search</span>
+                        <span className="mt-0.5 block text-sm font-normal leading-relaxed">
+                          Current public search for relevant businesses in a chosen city and state.
+                        </span>
+                      </span>
+                    </label>
+                    {customerSearchSelected && (
+                      <div className="mt-3 rounded-xl border border-[#d5e4e2] bg-[#f7fbfa] p-4" data-testid="customer-search-fields">
+                        <p className="mb-4 text-sm leading-relaxed text-[#355c59]">
+                          Enter every required field before the PIN prompt opens. This uses one Tavily request only; the regular topic choices are unchanged, and Ollama is not used.
+                        </p>
+                        <div className="grid gap-3 sm:grid-cols-3">
+                          <label className="block text-sm font-semibold text-[#35364a]">
+                            Product or business category
+                            <input
+                              value={customerProductOrCategory}
+                              onChange={(event) => setCustomerProductOrCategory(event.target.value)}
+                              required
+                              minLength={2}
+                              maxLength={120}
+                              placeholder="BOPP tape or software company"
+                              className="mt-1.5 h-11 w-full rounded-lg border border-[#d9d4df] bg-white px-3 text-base font-normal text-[#292e46] placeholder:text-[#777280]"
+                              data-testid="input-customer-product-category"
+                            />
+                          </label>
+                          <label className="block text-sm font-semibold text-[#35364a]">
+                            City
+                            <input
+                              value={customerCity}
+                              onChange={(event) => setCustomerCity(event.target.value)}
+                              required
+                              minLength={2}
+                              maxLength={100}
+                              placeholder="Pune"
+                              className="mt-1.5 h-11 w-full rounded-lg border border-[#d9d4df] bg-white px-3 text-base font-normal text-[#292e46] placeholder:text-[#777280]"
+                              data-testid="input-customer-city"
+                            />
+                          </label>
+                          <label className="block text-sm font-semibold text-[#35364a]">
+                            State
+                            <input
+                              value={customerState}
+                              onChange={(event) => setCustomerState(event.target.value)}
+                              required
+                              minLength={2}
+                              maxLength={100}
+                              placeholder="Maharashtra"
+                              className="mt-1.5 h-11 w-full rounded-lg border border-[#d9d4df] bg-white px-3 text-base font-normal text-[#292e46] placeholder:text-[#777280]"
+                              data-testid="input-customer-state"
+                            />
+                          </label>
+                        </div>
+                        <p className="mt-3 text-sm leading-relaxed text-[#486d6b]">
+                          Only public results returned by Tavily are shown. Phone and role-based email appear only when present in the source snippet; every result includes its source link.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </fieldset>
               </div>
 
+              {!customerSearchSelected && (
+                <>
               <div className="mb-1.5 mt-5 flex items-center justify-between">
                 <label htmlFor="briefing-question" className="text-base font-semibold text-[#35364a]">Open question (optional)</label>
                 <span className="text-sm text-[#625d69]">{question.length} / 500</span>
@@ -2914,6 +3236,8 @@ function Home() {
                   </span>
                 </span>
               </label>
+                </>
+              )}
 
               <div className="mt-5 flex flex-col gap-3 border-t border-[#e5e0e7] pt-4 sm:flex-row sm:items-center" data-testid="brief-action-row">
                 <div
@@ -2933,13 +3257,15 @@ function Home() {
                 <button
                   type="button"
                   onClick={() => { setPinDialogError(''); setStartPin(''); setPinPromptOpen(true); }}
-                  disabled={mutation.isPending || !canStart || !sourceReady || !startPinConfigured || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasRequiredSelections}
+                  disabled={!isSignedIn || isAnySearchPending || !canStart || !sourceReady || !startPinConfigured || !hasValidSubject || !hasValidRole || (!customerSearchSelected && !meetingTimeIsValid) || !hasRequiredSelections}
                   className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#292e46] px-8 text-lg font-bold text-white transition hover:bg-[#3c4160] disabled:cursor-not-allowed disabled:opacity-45"
                   data-testid="button-generate-briefing"
                 >
-                  {mutation.isPending
-                    ? <><LoaderCircle className="h-5 w-5 animate-spin" aria-hidden="true" />Preparing brief…</>
-                    : <><FileText className="h-5 w-5" aria-hidden="true" />Brief<ArrowDown className="h-4 w-4" aria-hidden="true" /></>}
+                  {isAnySearchPending
+                    ? <><LoaderCircle className="h-5 w-5 animate-spin" aria-hidden="true" />{customerSearchSelected ? 'Searching customers…' : 'Preparing brief…'}</>
+                    : customerSearchSelected
+                      ? <><Search className="h-5 w-5" aria-hidden="true" />Search customers<ArrowDown className="h-4 w-4" aria-hidden="true" /></>
+                      : <><FileText className="h-5 w-5" aria-hidden="true" />Brief<ArrowDown className="h-4 w-4" aria-hidden="true" /></>}
                 </button>
               </div>
               <div id="form-note" className="mt-3 space-y-2 text-sm leading-relaxed text-[#625d69]" data-testid="text-source-setup">
@@ -2959,7 +3285,7 @@ function Home() {
                 {(sourceMode === 'public' || sourceMode === 'sap') && canStart && dailyCrawlStartsUsed !== null && dailyCrawlStartsLimit !== null && (
                   <>
                     <p className="rounded-lg border border-[#d7cde9] bg-[#f5f1fb] px-4 py-3 font-semibold text-[#40345f]" data-testid="text-daily-briefing-events">
-                      Today’s briefing events: {dailyCrawlStartsUsed}/{dailyCrawlStartsLimit} used · {dailyCrawlStartsRemaining ?? 0} remaining (resets at midnight IST).{dailySearchRequestsLimit !== null && dailySearchRequestsRemaining !== null ? ` Topic searches remaining: ${dailySearchRequestsRemaining}/${dailySearchRequestsLimit}.` : ''} All selected tabs and the resulting brief belong to one event.
+                      Today’s briefing events: {dailyCrawlStartsUsed}/{dailyCrawlStartsLimit} used · {dailyCrawlStartsRemaining ?? 0} remaining (resets at midnight IST).{dailySearchRequestsLimit !== null && dailySearchRequestsRemaining !== null ? ` Search requests remaining: ${dailySearchRequestsRemaining}/${dailySearchRequestsLimit}.` : ''} {customerSearchSelected ? 'Customer Search uses one request and one event.' : 'All selected tabs and the resulting brief belong to one event.'}
                     </p>
                     <DailyBriefingEventLimitSettings
                       currentLimit={dailyCrawlStartsLimit}
@@ -2969,7 +3295,9 @@ function Home() {
                 )}
                 {sourceMode === 'public' && (
                   <p>
-                    Each event can search up to five selected topic tabs, one Tavily request per tab. A crawl can run for up to two minutes; the three-minute backup stop remains. The app-wide rate limit is five Tavily requests per rolling five minutes. Briefing starts only when you press Brief and verify the PIN.
+                    {customerSearchSelected
+                      ? 'Customer Search makes one current public-web Tavily request, without a 30-day date filter and without Ollama. It runs only after every required field is filled, you press Search customers, and verify the PIN. The two-minute limit and three-minute backup stop still apply.'
+                      : 'Each event can search up to five selected topic tabs, one Tavily request per tab. A crawl can run for up to two minutes; the three-minute backup stop remains. The app-wide rate limit is five Tavily requests per rolling five minutes. Briefing starts only when you press Brief and verify the PIN.'}
                   </p>
                 )}
                 {sourceMode === 'sap' && (
@@ -3005,7 +3333,9 @@ function Home() {
                   <p className="font-mono text-[10px] uppercase tracking-[.16em] text-[#766a93]">Protected crawl</p>
                   <h2 id="start-pin-title" className="mt-2 font-serif text-2xl text-[#292e46]">Enter the start PIN</h2>
                   <p id="start-pin-description" className="mt-2 text-sm leading-relaxed text-[#625d69]">
-                    The API Server checks this PIN for each crawl. It is not saved on this device.
+                    {customerSearchSelected
+                      ? 'The API Server checks this PIN before one public Tavily Customer Search. Ollama and private sources are not used.'
+                      : 'The API Server checks this PIN for each crawl. It is not saved on this device.'}
                   </p>
                   <form onSubmit={submitStartPin} className="mt-5">
                     <label htmlFor="briefing-start-pin" className="mb-1.5 block text-xs font-semibold text-[#35364a]">Four-digit PIN</label>
@@ -3034,7 +3364,7 @@ function Home() {
                       <button
                         type="button"
                         onClick={closePinPrompt}
-                        disabled={mutation.isPending}
+                        disabled={isAnySearchPending}
                         className="h-10 rounded-lg border border-[#d9d4df] px-4 text-sm font-semibold text-[#49405e] disabled:opacity-50"
                         data-testid="button-cancel-start-pin"
                       >
@@ -3042,11 +3372,13 @@ function Home() {
                       </button>
                       <button
                         type="submit"
-                        disabled={mutation.isPending || startPin.length !== 4}
+                        disabled={isAnySearchPending || startPin.length !== 4}
                         className="h-10 rounded-lg bg-[#292e46] px-4 text-sm font-semibold text-white disabled:opacity-50"
                         data-testid="button-confirm-start-pin"
                       >
-                        {mutation.isPending ? 'Starting crawl…' : 'Verify PIN & start'}
+                        {isAnySearchPending
+                          ? customerSearchSelected ? 'Searching public businesses…' : 'Starting crawl…'
+                          : customerSearchSelected ? 'Verify PIN & search' : 'Verify PIN & start'}
                       </button>
                     </div>
                   </form>
@@ -3054,10 +3386,10 @@ function Home() {
               </div>
             )}
 
-            {mutation.isPending && (
+            {isAnySearchPending && (
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#ddd6e8] bg-[#f4f1f8] px-4 py-3" role="status" aria-live="polite" data-testid="status-generating">
                 <span className="mt-1 flex h-4 w-4 shrink-0 items-center justify-center"><span className="h-2 w-2 animate-pulse rounded-full bg-[#796a9d]" /></span>
-                <div className="min-w-0 flex-1"><p className="text-xs font-semibold text-[#49405e]">Reading the latest coverage</p><p className="mt-1 text-[11px] leading-relaxed text-[#777082]">Tavily searches first; optional Qwen follows. The whole request stops after two minutes.</p></div>
+                <div className="min-w-0 flex-1"><p className="text-xs font-semibold text-[#49405e]">{customerSearchSelected ? 'Searching public businesses' : 'Reading the latest coverage'}</p><p className="mt-1 text-[11px] leading-relaxed text-[#777082]">{customerSearchSelected ? 'One Tavily request only. Ollama is not used. The search stops after two minutes.' : 'Tavily searches first; optional Qwen follows. The whole request stops after two minutes.'}</p></div>
                 <button
                   type="button"
                   onClick={() => {
@@ -3072,28 +3404,32 @@ function Home() {
                   className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#e4b7b2] bg-[#fbefed] px-4 text-sm font-semibold text-[#98453e]"
                   data-testid="button-stop-briefing"
                 >
-                  <Square className="h-4 w-4 fill-current" aria-hidden="true" /> Stop Tavily + Qwen
+                  <Square className="h-4 w-4 fill-current" aria-hidden="true" /> {customerSearchSelected ? 'Stop Tavily Search' : 'Stop Tavily + Qwen'}
                 </button>
               </div>
             )}
-            {currentRequestCancelled && !mutation.isPending && (
+            {currentRequestCancelled && !isAnySearchPending && (
               <div className="mt-4 rounded-xl border border-[#e4c9c3] bg-[#fbf0ed] p-4" role="status" data-testid="status-briefing-cancelled">
-                Tavily search and any follow-up Qwen request were stopped.
+                {customerSearchSelected
+                  ? 'The Tavily Customer Search was stopped. Ollama was not used.'
+                  : 'Tavily search and any follow-up Qwen request were stopped.'}
               </div>
             )}
             {currentRequestFailed && !pinPromptOpen && (
               <div className="mt-4 rounded-xl border border-[#e4c9c3] bg-[#fbf0ed] p-4" role="alert" data-testid="status-generation-error">
-                <p className="text-xs font-semibold text-[#8b4039]">Couldn’t prepare this briefing</p>
+                <p className="text-xs font-semibold text-[#8b4039]">{customerSearchSelected ? 'Couldn’t complete Customer Search' : 'Couldn’t prepare this briefing'}</p>
                 <p className="mt-1 text-xs leading-relaxed text-[#795750]">{errorMessage}</p>
-                <p className="mt-3 text-xs font-semibold text-[#78443f]">Press Start again when you want to retry.</p>
+                <p className="mt-3 text-xs font-semibold text-[#78443f]">Enter the PIN again when you want to retry.</p>
               </div>
             )}
 
           </section>
 
           <section ref={briefingOutputRef} className="min-w-0 scroll-mt-6" aria-live="polite" aria-label="Briefing" tabIndex={-1}>
-            {currentRequestIsPending && !result ? (
-              <LoadingBrief />
+            {currentRequestIsPending && !result && !customerSearchResult ? (
+              <LoadingBrief customerSearch={customerSearchSelected} />
+            ) : customerSearchResult ? (
+              <CustomerSearchDocument result={customerSearchResult} />
             ) : result ? (
               <BriefingDocument result={result} />
             ) : null}
@@ -3104,7 +3440,7 @@ function Home() {
   );
 }
 
-function LoadingBrief() {
+function LoadingBrief({ customerSearch = false }: { customerSearch?: boolean }) {
   return (
     <div className="fade-up space-y-4" role="status" aria-live="polite" data-testid="loading-briefing">
       <div className="h-5 w-36 animate-pulse rounded bg-[#e4e0e8]" />
@@ -3119,7 +3455,9 @@ function LoadingBrief() {
         <div className="mt-3 h-5 w-4/5 animate-pulse rounded bg-[#efecf1]" />
         <div className="mt-3 h-5 w-2/3 animate-pulse rounded bg-[#efecf1]" />
       </div>
-      <p className="text-center font-mono text-[10px] uppercase tracking-[.14em] text-[#71658e]">Gathering what’s worth your attention</p>
+      <p className="text-center font-mono text-[10px] uppercase tracking-[.14em] text-[#71658e]">
+        {customerSearch ? 'Searching current public business sources' : 'Gathering what’s worth your attention'}
+      </p>
     </div>
   );
 }

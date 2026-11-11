@@ -560,14 +560,74 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "503":
+          description: Tavily, SAP, or start-PIN configuration is unavailable, or a private source is not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "504":
           description: The crawl reached its three-minute hard stop
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /customer-search:
+    post:
+      operationId: createCustomerSearch
+      tags: [briefings]
+      summary: Find cited public business prospects for a person
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomerSearchInput"
+      responses:
+        "200":
+          description: Public business search results with source-grounded contact details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerSearchResponse"
+        "400":
+          description: Invalid customer search request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Sign-in is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: The start PIN is incorrect
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: The start PIN attempt limit or search allowance is exhausted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "502":
+          description: Tavily search failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "504":
+          description: The search reached its hard stop
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "503":
-          description: Tavily, SAP, or start-PIN configuration is unavailable, or a private source is not configured
+          description: The Tavily key or secure credential storage is unavailable
           content:
             application/json:
               schema:
@@ -758,6 +818,95 @@ components:
             type: string
             enum: [news, hire, launch, financial, risk]
       required: [startPin, subject, subjectType, personRole, sourceMode, topics]
+    CustomerSearchInput:
+      type: object
+      properties:
+        startPin:
+          type: string
+          minLength: 4
+          maxLength: 4
+          pattern: "^[0-9]{4}$"
+        personName:
+          type: string
+          minLength: 2
+          maxLength: 200
+        personRole:
+          type: string
+          enum: [business_owner, mp, corporate]
+        companyName:
+          type: string
+          maxLength: 200
+        publicRoleTitle:
+          type: string
+          maxLength: 80
+        productOrCategory:
+          type: string
+          minLength: 2
+          maxLength: 120
+        city:
+          type: string
+          minLength: 2
+          maxLength: 100
+        state:
+          type: string
+          minLength: 2
+          maxLength: 100
+      required: [startPin, personName, personRole, productOrCategory, city, state]
+    CustomerSearchSource:
+      type: object
+      properties:
+        id:
+          type: string
+        businessName:
+          type: string
+        sourceUrl:
+          type: string
+          format: uri
+        publisher:
+          type: string
+        excerpt:
+          type: string
+          maxLength: 700
+        phone:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        publishedAt:
+          type: ["string", "null"]
+          format: date-time
+      required: [id, businessName, sourceUrl, publisher, excerpt, phone, email, publishedAt]
+    CustomerSearchResponse:
+      type: object
+      properties:
+        personName:
+          type: string
+        personRole:
+          type: string
+          enum: [business_owner, mp, corporate]
+        companyName:
+          type: ["string", "null"]
+        productOrCategory:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        generatedAt:
+          type: string
+          format: date-time
+        searchCreditsUsed:
+          type: ["integer", "null"]
+          minimum: 0
+        searchResultsReturned:
+          type: integer
+          minimum: 0
+        sources:
+          type: array
+          items:
+            $ref: "#/components/schemas/CustomerSearchSource"
+        dataSourceNotice:
+          type: string
+      required: [personName, personRole, companyName, productOrCategory, city, state, generatedAt, searchCreditsUsed, searchResultsReturned, sources, dataSourceNotice]
     SapDataArea:
       type: string
       enum: [store, production, maintenance, inventory, sales, hr, power_electrical_solar, purchase, scrap, order, delivery]

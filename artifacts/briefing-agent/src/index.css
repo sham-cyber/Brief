@@ -510,6 +510,10 @@
   .print-topic p { display: -webkit-box; margin: 0 0 1.2mm; overflow: hidden; font-size: 10pt; line-height: 1.22; -webkit-box-orient: vertical; -webkit-line-clamp: 4; }
   .print-topic .print-highlight-extra { border-top: .2mm solid #e6e1ea; padding-top: 1mm; }
   .print-topic .print-question { border-top: .2mm solid #ddd8e3; padding-top: 1.5mm; -webkit-line-clamp: 3; }
+  .customer-search-print .print-topic h2 { font-size: 11pt; }
+  .customer-search-print .print-topic p { font-size: 10.5pt; -webkit-line-clamp: 3; }
+  .customer-search-print .print-page-sources li { font-size: 9pt; }
+  .customer-search-print .print-page-sources .print-source-url { font-size: 8.5pt; }
   .print-page-sources { overflow: hidden; border-top: .3mm solid #000; padding-top: 1.5mm; }
   .print-page-sources ol { display: grid; max-height: 42mm; grid-template-columns: 1fr 1fr; gap: .7mm 3mm; margin: 0; overflow: hidden; padding: 0; list-style: none; }
   .print-page-sources li { min-width: 0; overflow: hidden; font-size: 8pt; line-height: 1.15; overflow-wrap: anywhere; }

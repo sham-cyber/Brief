@@ -5,6 +5,8 @@ import { Router, type IRouter } from "express";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
+  CreateCustomerSearchBody,
+  CreateCustomerSearchResponse,
   CreateBriefingBody,
   CreateBriefingResponse,
   GetBriefingSourceStatusResponse,
@@ -28,6 +30,11 @@ import {
   TAVILY_REQUEST_LIMIT,
 } from "../lib/tavily-rate-limit";
 import { searchTavily, TavilySearchError } from "../lib/tavily";
+import {
+  buildCustomerSearchQuery,
+  CUSTOMER_SEARCH_EXCLUDED_DOMAINS,
+  normalizeCustomerSearchResults,
+} from "../lib/customer-search";
 import {
   getTavilyCredentialStatus,
   getUserTavilyApiKey,
@@ -1526,6 +1533,258 @@ router.post("/briefings", async (req, res): Promise<void> => {
     );
     res.status(502).json({
       error: "The briefing could not be generated. Please try again shortly.",
+    });
+  } finally {
+    clearTimeout(dailyBudgetTimer);
+    clearTimeout(hardStopTimer);
+    res.off("close", stopOnClientDisconnect);
+  }
+});
+
+router.post("/customer-search", async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId;
+  if (!userId) {
+    res.status(401).json({ error: "Sign in before using Customer Search." });
+    return;
+  }
+
+  const input = CreateCustomerSearchBody.safeParse(req.body);
+  if (!input.success) {
+    res.status(400).json({
+      error: "Complete the person, product or category, city, state, and four-digit PIN fields.",
+    });
+    return;
+  }
+
+  const personName = input.data.personName.trim();
+  const companyName = input.data.companyName?.trim() || null;
+  const publicRoleTitle = input.data.publicRoleTitle?.trim() || null;
+  const productOrCategory = input.data.productOrCategory.trim();
+  const city = input.data.city.trim();
+  const state = input.data.state.trim();
+
+  if (
+    personName.length < 2 ||
+    productOrCategory.length < 2 ||
+    city.length < 2 ||
+    state.length < 2
+  ) {
+    res.status(400).json({
+      error: "Complete every required Customer Search field before starting.",
+    });
+    return;
+  }
+  if (input.data.personRole === "business_owner" && !companyName) {
+    res.status(400).json({ error: "Enter the Chairman / CEO's company." });
+    return;
+  }
+  if (input.data.personRole === "mp" && !publicRoleTitle) {
+    res.status(400).json({
+      error: "Enter the public role or organization for this Person brief.",
+    });
+    return;
+  }
+
+  let isProjectKeyOwner = false;
+  const ownerEmail = process.env.BRIEFING_OWNER_EMAIL?.trim().toLowerCase();
+  if (ownerEmail && process.env.TAVILY_API_KEY?.trim()) {
+    try {
+      isProjectKeyOwner = (await resolveOwnerUserId(ownerEmail)) === userId;
+    } catch (error) {
+      req.log.error({ error }, "Failed to verify project Tavily key ownership for Customer Search");
+    }
+  }
+
+  const pinCheck = await verifyBriefingStartPin(userId, input.data.startPin);
+  if (!pinCheck.valid) {
+    if (pinCheck.retryAfterSeconds) {
+      res.setHeader("Retry-After", String(pinCheck.retryAfterSeconds));
+    }
+    res.status(pinCheck.status).json({ error: pinCheck.message });
+    return;
+  }
+
+  let apiKey: string | null;
+  const projectApiKey = isProjectKeyOwner ? process.env.TAVILY_API_KEY?.trim() : undefined;
+  if (projectApiKey) {
+    apiKey = projectApiKey;
+  } else {
+    try {
+      apiKey = await getUserTavilyApiKey(userId);
+    } catch (error) {
+      req.log.error({ error }, "User Tavily credential is unavailable for Customer Search");
+      res.status(503).json({
+        error: "Secure Tavily key storage is unavailable. No search request was sent.",
+      });
+      return;
+    }
+  }
+  if (!apiKey) {
+    res.status(503).json({
+      error: "No Tavily key is available for this account. Add a Tavily key in Settings; no search was sent.",
+    });
+    return;
+  }
+
+  const quota = await reserveTavilyQuota(userId, 1);
+  if (!quota.allowed || quota.reservationId === null) {
+    if (quota.reason === "active-crawl") {
+      res.status(429).json({
+        error: "A Tavily crawl is already using the shared app allowance. Wait for it to finish.",
+      });
+      return;
+    }
+    if (quota.reason === "daily-start-limit") {
+      res.status(429).json({
+        error: `You have reached your limit of ${quota.dailyCrawlStartsLimit} search events for today's IST calendar day. It resets at midnight IST.`,
+      });
+      return;
+    }
+    if (quota.reason === "daily-search-limit") {
+      res.status(429).json({
+        error: "No daily Tavily searches remain for this account. Try again after the IST reset.",
+      });
+      return;
+    }
+    res.status(429).json({
+      error: "The two-minute Tavily limit for this search event was reached.",
+    });
+    return;
+  }
+
+  let requestRateLimit: Awaited<ReturnType<typeof reserveTavilyRequestSlots>>;
+  try {
+    requestRateLimit = await reserveTavilyRequestSlots(1);
+  } catch (error) {
+    req.log.error({ error }, "Failed to reserve Tavily request rate-limit slot for Customer Search");
+    await cancelTavilyQuotaReservation(userId, quota.reservationId).catch((cancelError) => {
+      req.log.error({ error: cancelError }, "Failed to release Customer Search quota");
+    });
+    res.status(503).json({
+      error: "The Tavily request limit could not be checked. No search was sent.",
+    });
+    return;
+  }
+  if (!requestRateLimit.allowed) {
+    await cancelTavilyQuotaReservation(userId, quota.reservationId).catch((cancelError) => {
+      req.log.error({ error: cancelError }, "Failed to release Customer Search quota");
+    });
+    res.setHeader("Retry-After", String(requestRateLimit.retryAfterSeconds));
+    res.status(429).json({
+      error: `Tavily is limited to ${TAVILY_REQUEST_LIMIT} requests per rolling five minutes across the app. Try again in ${requestRateLimit.retryAfterSeconds} seconds.`,
+    });
+    return;
+  }
+
+  const crawlStartedAt = Date.now();
+  const crawlController = new AbortController();
+  let stopReason: "daily-budget" | "hard-stop" | "client-disconnect" | null = null;
+  const stopOnClientDisconnect = () => {
+    if (res.writableEnded || crawlController.signal.aborted) return;
+    stopReason = "client-disconnect";
+    crawlController.abort(new Error("The client left Customer Search."));
+  };
+  res.once("close", stopOnClientDisconnect);
+
+  let quotaSettled = false;
+  const settleQuota = async () => {
+    if (quotaSettled || quota.reservationId === null) return;
+    quotaSettled = true;
+    const durationMs = Math.min(TAVILY_DAILY_LIMIT_MS, Date.now() - crawlStartedAt);
+    await finishTavilyQuotaReservation(userId, quota.reservationId, durationMs);
+  };
+
+  const dailyBudgetTimer = setTimeout(() => {
+    stopReason = "daily-budget";
+    crawlController.abort(new Error("The two-minute Customer Search limit was reached."));
+  }, TAVILY_DAILY_LIMIT_MS);
+  const hardStopTimer = setTimeout(() => {
+    stopReason = "hard-stop";
+    crawlController.abort(new Error("The three-minute Customer Search hard stop was reached."));
+  }, TAVILY_CRAWL_HARD_STOP_MS);
+
+  try {
+    const query = buildCustomerSearchQuery(productOrCategory, city, state);
+    const search = await searchTavily(
+      query,
+      "",
+      "",
+      apiKey,
+      crawlController.signal,
+      {
+        topic: "general",
+        dateFilter: false,
+        excludeDomains: CUSTOMER_SEARCH_EXCLUDED_DOMAINS,
+        includeImages: false,
+      },
+    );
+
+    if (stopReason) {
+      await settleQuota();
+      if (stopReason === "client-disconnect" || res.destroyed) return;
+      if (stopReason === "daily-budget") {
+        res.status(429).json({
+          error: "Customer Search reached its two-minute Tavily limit and was stopped.",
+        });
+      } else {
+        res.status(504).json({
+          error: "Customer Search reached its three-minute backup hard stop.",
+        });
+      }
+      return;
+    }
+
+    const sources = normalizeCustomerSearchResults(search.results);
+    await settleQuota();
+    const result = CreateCustomerSearchResponse.parse({
+      personName,
+      personRole: input.data.personRole,
+      companyName,
+      productOrCategory,
+      city,
+      state,
+      generatedAt: new Date().toISOString(),
+      searchCreditsUsed: search.creditsUsed,
+      searchResultsReturned: sources.length,
+      sources,
+      dataSourceNotice:
+        "No authorized free business database is connected. Results come from Tavily public web search; Justdial and IndiaMART directory pages are excluded. Contact details appear only when explicitly listed in a returned source snippet.",
+    });
+    res.json(result);
+  } catch (error) {
+    try {
+      await settleQuota();
+    } catch (settleError) {
+      req.log.error({ error: settleError }, "Failed to save Customer Search Tavily usage");
+      res.status(503).json({
+        error: "Search usage could not be saved safely. Please try again later.",
+      });
+      return;
+    }
+
+    if (stopReason === "daily-budget") {
+      res.status(429).json({
+        error: "Customer Search reached its two-minute Tavily limit and was stopped.",
+      });
+      return;
+    }
+    if (stopReason === "hard-stop") {
+      res.status(504).json({
+        error: "Customer Search reached its three-minute backup hard stop.",
+      });
+      return;
+    }
+    if (stopReason === "client-disconnect" || res.destroyed) return;
+
+    req.log.error(
+      {
+        errorName: error instanceof Error ? error.name : "unknown",
+        tavilyStatus: error instanceof TavilySearchError ? error.status : null,
+      },
+      "Customer Search Tavily request failed",
+    );
+    res.status(502).json({
+      error: "Tavily could not complete Customer Search. Check the key and account limit before retrying.",
     });
   } finally {
     clearTimeout(dailyBudgetTimer);
