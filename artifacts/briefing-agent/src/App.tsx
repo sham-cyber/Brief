@@ -21,6 +21,7 @@ const queryClient = new QueryClient();
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 const pendingQuestionStorageKey = `briefing-agent-pending-question:${basePath || '/'}`;
 const settingsThemeStorageKey = `briefing-agent-settings-theme:${basePath || '/'}`;
+const pwaInstalledStorageKey = `briefing-agent-installed:${basePath || '/'}`;
 const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
   import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
@@ -2088,10 +2089,15 @@ function Home() {
   const { isLoaded: accountLoaded, isSignedIn } = useUser();
   const [installPrompt, setInstallPrompt] = useState<PwaInstallPromptEvent | null>(null);
   const [installHelpOpen, setInstallHelpOpen] = useState(false);
-  const [appInstalled, setAppInstalled] = useState(() =>
-    window.matchMedia('(display-mode: standalone)').matches ||
-    Boolean((navigator as Navigator & { standalone?: boolean }).standalone),
-  );
+  const [appInstalled, setAppInstalled] = useState(() => {
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
+      Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
+    try {
+      return window.localStorage.getItem(pwaInstalledStorageKey) === 'true' || isStandalone;
+    } catch {
+      return isStandalone;
+    }
+  });
   const [settingsTheme, setSettingsTheme] = useState<'light' | 'dark'>(() => {
     try {
       return window.localStorage.getItem(settingsThemeStorageKey) === 'dark' ? 'dark' : 'light';
@@ -2099,6 +2105,16 @@ function Home() {
       return 'light';
     }
   });
+  const markAppInstalled = useCallback(() => {
+    setAppInstalled(true);
+    setInstallPrompt(null);
+    setInstallHelpOpen(false);
+    try {
+      window.localStorage.setItem(pwaInstalledStorageKey, 'true');
+    } catch {
+      // The installed state is still reflected for this open page.
+    }
+  }, []);
   const sourceStatusQuery = useGetBriefingSourceStatus({
     query: {
       queryKey: getGetBriefingSourceStatusQueryKey(),
@@ -2123,9 +2139,7 @@ function Home() {
       setInstallPrompt(event as PwaInstallPromptEvent);
     };
     const handleAppInstalled = () => {
-      setAppInstalled(true);
-      setInstallPrompt(null);
-      setInstallHelpOpen(false);
+      markAppInstalled();
     };
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', handleAppInstalled);
@@ -2133,7 +2147,7 @@ function Home() {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
     };
-  }, []);
+  }, [markAppInstalled]);
   const abortControllerRef = useRef<AbortController | null>(null);
   const briefingOutputRef = useRef<HTMLElement | null>(null);
   const mutation = useCreateBriefing({ request: { get signal() { return abortControllerRef.current?.signal; } } });
@@ -2571,7 +2585,7 @@ function Home() {
       await installPrompt.prompt();
       const choice = await installPrompt.userChoice;
       setInstallPrompt(null);
-      if (choice.outcome === 'accepted') setAppInstalled(true);
+      if (choice.outcome === 'accepted') markAppInstalled();
     } catch {
       setInstallHelpOpen(true);
     }
@@ -2710,17 +2724,18 @@ function Home() {
               </button>
             )}
             <AuthActions />
-            <button
-              type="button"
-              onClick={() => void handleAppDownload()}
-              disabled={appInstalled}
-              className="pwa-download-button"
-              aria-label={appInstalled ? 'Briefing Agent is installed' : 'Download or install Briefing Agent'}
-              title={appInstalled ? 'Briefing Agent is installed on this device' : 'Install Briefing Agent on this device'}
-              data-testid="button-pwa-download"
-            >
-              {appInstalled ? 'Installed' : 'Download'}
-            </button>
+            {!appInstalled && (
+              <button
+                type="button"
+                onClick={() => void handleAppDownload()}
+                className="pwa-download-button"
+                aria-label="Download or install Briefing Agent"
+                title="Install Briefing Agent on this device"
+                data-testid="button-pwa-download"
+              >
+                Download
+              </button>
+            )}
           </div>
         </nav>
 
@@ -3497,15 +3512,36 @@ function Home() {
                   <p className="mt-2 text-sm leading-relaxed text-[#4b5870]">
                     If your browser does not list Install app in its menu, use a production build over HTTPS or localhost; the development Preview may not offer native installation.
                   </p>
-                  <div className="mt-5 flex justify-end">
-                    <button
-                      type="button"
-                      onClick={() => setInstallHelpOpen(false)}
-                      className="rounded-lg bg-[#16813f] px-5 py-2.5 text-base font-bold text-white"
-                      data-testid="button-close-pwa-install"
+                  {window.self !== window.top && (
+                    <a
+                      href={window.location.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-4 inline-flex rounded-lg border border-[#16813f] px-4 py-2.5 text-base font-bold text-[#16813f] underline underline-offset-2"
+                      data-testid="link-open-app-full-page"
                     >
-                      Close
-                    </button>
+                      Open app in full browser
+                    </a>
+                  )}
+                  <div className="mt-5 flex justify-end">
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setInstallHelpOpen(false)}
+                        className="rounded-lg border border-[#cbd5e1] px-4 py-2.5 text-base font-semibold text-[#34445e]"
+                        data-testid="button-close-pwa-install"
+                      >
+                        Close
+                      </button>
+                      <button
+                        type="button"
+                        onClick={markAppInstalled}
+                        className="rounded-lg bg-[#16813f] px-4 py-2.5 text-base font-bold text-white"
+                        data-testid="button-confirm-pwa-installed"
+                      >
+                        I installed it
+                      </button>
+                    </div>
                   </div>
                 </section>
               </div>
