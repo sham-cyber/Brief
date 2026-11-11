@@ -2578,6 +2578,10 @@ function Home() {
   const handleAppDownload = async () => {
     if (appInstalled) return;
     if (!installPrompt) {
+      if (window.self !== window.top) {
+        const installTab = window.open(window.location.href, '_blank');
+        if (installTab) installTab.opener = null;
+      }
       setInstallHelpOpen(true);
       return;
     }
@@ -3510,7 +3514,7 @@ function Home() {
                     The app shell can reopen offline after it has loaded once. Sign-in, searches, and source data still require an internet connection.
                   </p>
                   <p className="mt-2 text-sm leading-relaxed text-[#4b5870]">
-                    If your browser does not list Install app in its menu, use a production build over HTTPS or localhost; the development Preview may not offer native installation.
+                    Preview may be embedded and block installation. The Download button opens this same app in a full browser when possible; there, use the browser's Install app option or follow the steps above.
                   </p>
                   {window.self !== window.top && (
                     <a
