@@ -14,7 +14,7 @@ export interface BriefingSourceStatus {
   provider: BriefingSourceStatusProvider;
   /** Whether this signed-in account has an effective Tavily key. */
   configured: boolean;
-  /** Whether this signed-in account is the configured owner allowed to start crawls. */
+  /** Whether an authenticated account may start a crawl; an effective Tavily key and that account's PIN are still required. */
   canStart: boolean;
   /** Effective key source for this account; the project key is owner-only. */
   keySource: BriefingSourceStatusKeySource;
@@ -36,7 +36,8 @@ export interface BriefingSourceStatus {
   /** @nullable */
   dailyCrawlResetsAt: Date | null;
   /**
-     * @minimum 0
+     * The signed-in user's configured daily event limit; defaults to ten and resets at midnight IST.
+     * @minimum 1
      * @maximum 10
      * @nullable
      */
@@ -52,7 +53,7 @@ export interface BriefingSourceStatus {
      */
   dailyCrawlStartsRemaining: number | null;
   /**
-     * Informational maximum of five topic searches across each of ten daily briefing events; not a separate daily start limit.
+     * The configured daily event limit multiplied by five selected-topic searches per event.
      * @minimum 0
      * @maximum 50
      * @nullable

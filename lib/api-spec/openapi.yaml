@@ -103,88 +103,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-  /ai-credentials:
-    get:
-      operationId: getAiCredential
-      tags: [ai]
-      summary: Get the signed-in user's AI provider connection status
-      responses:
-        "200":
-          description: Connection status and model name without returning the API key
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AiCredentialStatus"
-        "401":
-          description: Sign-in is required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-    put:
-      operationId: saveAiCredential
-      tags: [ai]
-      summary: Save the signed-in user's OpenAI API key and model ID
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AiCredentialInput"
-      responses:
-        "200":
-          description: Saved connection status without returning the API key
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AiCredentialStatus"
-        "400":
-          description: Invalid key or model ID
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "401":
-          description: Sign-in is required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "403":
-          description: Request did not come from this app
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "503":
-          description: Encrypted credential storage is unavailable
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-    delete:
-      operationId: deleteAiCredential
-      tags: [ai]
-      summary: Remove the signed-in user's saved AI provider key
-      responses:
-        "200":
-          description: Disconnected status without returning the API key
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AiCredentialStatus"
-        "401":
-          description: Sign-in is required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "403":
-          description: Request did not come from this app
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
   /ai/guardrails:
     get:
       operationId: getAiGuardrails
@@ -654,6 +572,42 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /briefings/daily-event-limit:
+    put:
+      operationId: setDailyBriefingEventLimit
+      tags: [briefings]
+      summary: Set the signed-in user's daily briefing event limit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DailyBriefingEventLimitInput"
+      responses:
+        "200":
+          description: The saved daily event limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DailyBriefingEventLimitResponse"
+        "400":
+          description: The limit is outside the allowed range
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Sign-in is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Request did not come from this app
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /person-profiles:
     get:
       operationId: listPersonProfiles
@@ -788,6 +742,10 @@ components:
         context:
           type: string
           maxLength: 1500
+        question:
+          type: string
+          maxLength: 500
+          description: Optional direct question to guide the selected public searches and cited overview.
         useAi:
           type: boolean
           default: false
@@ -966,6 +924,23 @@ components:
                 type: string
             required: [url, description]
       required: [id, title, url, publisher, publishedAt, snippet, affiliatedCompanyReport]
+    DailyBriefingEventLimitInput:
+      type: object
+      properties:
+        dailyEventLimit:
+          type: integer
+          minimum: 1
+          maximum: 10
+          description: Maximum number of complete briefing events for the signed-in user per Asia/Kolkata calendar day.
+      required: [dailyEventLimit]
+    DailyBriefingEventLimitResponse:
+      type: object
+      properties:
+        dailyEventLimit:
+          type: integer
+          minimum: 1
+          maximum: 10
+      required: [dailyEventLimit]
     BriefingSourceStatus:
       type: object
       properties:
@@ -977,7 +952,7 @@ components:
           description: Whether this signed-in account has an effective Tavily key.
         canStart:
           type: boolean
-          description: Whether this signed-in account is the configured owner allowed to start crawls.
+          description: Whether an authenticated account may start a crawl; an effective Tavily key and that account's PIN are still required.
         keySource:
           type: string
           enum: [project-owner, account, missing]
@@ -1002,8 +977,9 @@ components:
           format: date-time
         dailyCrawlStartsLimit:
           type: ["integer", "null"]
-          minimum: 0
+          minimum: 1
           maximum: 10
+          description: The signed-in user's configured daily event limit; defaults to ten and resets at midnight IST.
         dailyCrawlStartsUsed:
           type: ["integer", "null"]
           minimum: 0
@@ -1014,7 +990,7 @@ components:
           type: ["integer", "null"]
           minimum: 0
           maximum: 50
-          description: Informational maximum of five topic searches across each of ten daily briefing events; not a separate daily start limit.
+          description: The configured daily event limit multiplied by five selected-topic searches per event.
         dailySearchRequestsUsed:
           type: ["integer", "null"]
           minimum: 0
@@ -1077,35 +1053,14 @@ components:
           minLength: 20
           maxLength: 4096
       required: [apiKey]
-    AiCredentialStatus:
-      type: object
-      properties:
-        connected:
-          type: boolean
-        storageReady:
-          type: boolean
-        model:
-          type: ["string", "null"]
-        updatedAt:
-          type: ["string", "null"]
-          format: date-time
-      required: [connected, storageReady, model, updatedAt]
-    AiCredentialInput:
-      type: object
-      properties:
-        apiKey:
-          type: string
-          minLength: 20
-          maxLength: 512
-        model:
-          type: string
-          minLength: 1
-          maxLength: 100
-          pattern: "^[A-Za-z0-9._-]+$"
-      required: [apiKey, model]
     AiGuardrailStatus:
       type: object
       properties:
+        provider:
+          type: string
+          enum: [ollama]
+        aiProviderMessage:
+          type: ["string", "null"]
         serverEnabled:
           type: boolean
         passcodeConfigured:
@@ -1120,11 +1075,12 @@ components:
           enum: [120]
         aiProviderConnected:
           type: boolean
-        aiCredentialStorageReady:
-          type: boolean
         model:
           type: ["string", "null"]
-      required: [serverEnabled, passcodeConfigured, activated, requestsPerTab, speechLimitSeconds, aiProviderConnected, aiCredentialStorageReady, model]
+        providerEndpoint:
+          type: ["string", "null"]
+          format: uri
+      required: [provider, aiProviderMessage, serverEnabled, passcodeConfigured, activated, requestsPerTab, speechLimitSeconds, aiProviderConnected, model, providerEndpoint]
     AiPasscodeInput:
       type: object
       properties:

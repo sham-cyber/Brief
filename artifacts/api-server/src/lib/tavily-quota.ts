@@ -2,6 +2,7 @@ import { pool } from "@workspace/db";
 
 export const TAVILY_DAILY_LIMIT_MS = 120_000;
 export const TAVILY_DAILY_CRAWL_START_LIMIT = 10;
+export const TAVILY_DAILY_CRAWL_START_DEFAULT = 10;
 export const TAVILY_MAX_SEARCHES_PER_BRIEFING = 5;
 export const TAVILY_DAILY_SEARCH_REQUEST_LIMIT =
   TAVILY_DAILY_CRAWL_START_LIMIT * TAVILY_MAX_SEARCHES_PER_BRIEFING;
@@ -12,6 +13,10 @@ const STALE_RESERVATION_GRACE_MS = TAVILY_CRAWL_HARD_STOP_MS + 30_000;
 type DailyUsageRow = {
   crawl_starts: string | number;
   search_requests: string | number;
+};
+
+type UserEventLimitRow = {
+  daily_event_limit: string | number;
 };
 
 type CalendarDayRow = {
@@ -110,6 +115,22 @@ async function readDailyUsage(
   userId: string,
   dayBounds: CalendarDayBounds,
 ): Promise<TavilyDailyUsageStatus> {
+  const preference = await executor.query<UserEventLimitRow>(
+    `SELECT daily_event_limit
+     FROM user_briefing_preferences
+     WHERE user_id = $1`,
+    [userId],
+  );
+  const configuredLimit = Number(
+    preference.rows[0]?.daily_event_limit ?? TAVILY_DAILY_CRAWL_START_DEFAULT,
+  );
+  const dailyCrawlStartsLimit = Number.isSafeInteger(configuredLimit) &&
+    configuredLimit >= 1 &&
+    configuredLimit <= TAVILY_DAILY_CRAWL_START_LIMIT
+    ? configuredLimit
+    : TAVILY_DAILY_CRAWL_START_DEFAULT;
+  const dailySearchRequestsLimit =
+    dailyCrawlStartsLimit * TAVILY_MAX_SEARCHES_PER_BRIEFING;
   const result = await executor.query<DailyUsageRow>(
     `SELECT
        (COUNT(*) FILTER (WHERE search_count > 0))::integer AS crawl_starts,
@@ -131,19 +152,40 @@ async function readDailyUsage(
   const crawlStartsUsed = Math.max(0, Number(result.rows[0]?.crawl_starts ?? 0));
   const searchRequestsUsed = Math.max(0, Number(result.rows[0]?.search_requests ?? 0));
   return {
-    dailyCrawlStartsLimit: TAVILY_DAILY_CRAWL_START_LIMIT,
+    dailyCrawlStartsLimit,
     dailyCrawlStartsUsed: crawlStartsUsed,
     dailyCrawlStartsRemaining: Math.max(
       0,
-      TAVILY_DAILY_CRAWL_START_LIMIT - crawlStartsUsed,
+      dailyCrawlStartsLimit - crawlStartsUsed,
     ),
-    dailySearchRequestsLimit: TAVILY_DAILY_SEARCH_REQUEST_LIMIT,
+    dailySearchRequestsLimit,
     dailySearchRequestsUsed: searchRequestsUsed,
     dailySearchRequestsRemaining: Math.max(
       0,
-      TAVILY_DAILY_SEARCH_REQUEST_LIMIT - searchRequestsUsed,
+      dailySearchRequestsLimit - searchRequestsUsed,
     ),
   };
+}
+
+export async function saveDailyBriefingEventLimit(
+  userId: string,
+  dailyEventLimit: number,
+): Promise<void> {
+  if (
+    !Number.isSafeInteger(dailyEventLimit) ||
+    dailyEventLimit < 1 ||
+    dailyEventLimit > TAVILY_DAILY_CRAWL_START_LIMIT
+  ) {
+    throw new Error("Choose between 1 and 10 briefing events per day.");
+  }
+  await pool.query(
+    `INSERT INTO user_briefing_preferences (user_id, daily_event_limit, updated_at)
+     VALUES ($1, $2, NOW())
+     ON CONFLICT (user_id) DO UPDATE
+     SET daily_event_limit = EXCLUDED.daily_event_limit,
+         updated_at = NOW()`,
+    [userId, dailyEventLimit],
+  );
 }
 
 export async function getTavilyDailyUsageStatus(

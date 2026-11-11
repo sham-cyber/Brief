@@ -263,7 +263,7 @@ router.post(
       res.status(400).json({ error: "Enter the four-digit start PIN." });
       return;
     }
-    const pinCheck = verifyBriefingStartPin(
+    const pinCheck = await verifyBriefingStartPin(
       userId,
       header.data["X-Briefing-Start-Pin"],
     );

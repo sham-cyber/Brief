@@ -21,14 +21,14 @@ import type {
 
 import type {
   AiActivationStatus,
-  AiCredentialInput,
-  AiCredentialStatus,
   AiGuardrailStatus,
   AiPasscodeInput,
   AiPasscodeStatus,
   BriefingInput,
   BriefingResult,
   BriefingSourceStatus,
+  DailyBriefingEventLimitInput,
+  DailyBriefingEventLimitResponse,
   Error,
   HealthStatus,
   PersonProfile,
@@ -311,245 +311,6 @@ export const useDeleteTavilyCredential = <TError = ErrorType<Error>,
         TContext
       > => {
       return useMutation(getDeleteTavilyCredentialMutationOptions(options));
-    }
-
-export const getGetAiCredentialUrl = () => {
-
-
-
-
-  return `/api/ai-credentials`
-}
-
-/**
- * @summary Get the signed-in user's AI provider connection status
- */
-export const getAiCredential = async ( options?: Parameters<typeof customFetch>[1]): Promise<AiCredentialStatus> => {
-
-  return customFetch<AiCredentialStatus>(getGetAiCredentialUrl(),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-
-
-export const getGetAiCredentialQueryKey = () => {
-    return [
-    `/api/ai-credentials`
-    ] as const;
-    }
-
-
-export const getGetAiCredentialQueryOptions = <TData = Awaited<ReturnType<typeof getAiCredential>>, TError = ErrorType<Error>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAiCredential>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetAiCredentialQueryKey();
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAiCredential>>> = ({ signal }) => getAiCredential({ signal, ...requestOptions });
-
-
-
-
-
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAiCredential>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type GetAiCredentialQueryResult = NonNullable<Awaited<ReturnType<typeof getAiCredential>>>
-export type GetAiCredentialQueryError = ErrorType<Error>
-
-
-/**
- * @summary Get the signed-in user's AI provider connection status
- */
-
-export function useGetAiCredential<TData = Awaited<ReturnType<typeof getAiCredential>>, TError = ErrorType<Error>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAiCredential>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
-
- ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getGetAiCredentialQueryOptions(options)
-
-  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-
-export const getSaveAiCredentialUrl = () => {
-
-
-
-
-  return `/api/ai-credentials`
-}
-
-/**
- * @summary Save the signed-in user's OpenAI API key and model ID
- */
-export const saveAiCredential = async (aiCredentialInput: AiCredentialInput, options?: Parameters<typeof customFetch>[1]): Promise<AiCredentialStatus> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-return customFetch<AiCredentialStatus>(getSaveAiCredentialUrl(),
-  {
-    ...options,
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(aiCredentialInput)
-  }
-);}
-
-
-
-
-
-export const getSaveAiCredentialMutationKey = () => ['saveAiCredential'] as const;
-
-export const getSaveAiCredentialMutationOptions = <TError = ErrorType<Error>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveAiCredential>>, TError,SaveAiCredentialMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof saveAiCredential>>, TError,SaveAiCredentialMutationVariables, TContext> => {
-
-const mutationKey = getSaveAiCredentialMutationKey();
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof saveAiCredential>>, SaveAiCredentialMutationVariables> = (props) => {
-          const {data} = props ?? {};
-
-          return  saveAiCredential(data,requestOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type SaveAiCredentialMutationResult = NonNullable<Awaited<ReturnType<typeof saveAiCredential>>>
-    export type SaveAiCredentialMutationBody = BodyType<AiCredentialInput>
-    export type SaveAiCredentialMutationError = ErrorType<Error>
-    export type SaveAiCredentialMutationVariables = {data: BodyType<AiCredentialInput>}
-
-    /**
- * @summary Save the signed-in user's OpenAI API key and model ID
- */
-export const useSaveAiCredential = <TError = ErrorType<Error>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveAiCredential>>, TError,SaveAiCredentialMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
- ): UseMutationResult<
-        Awaited<ReturnType<typeof saveAiCredential>>,
-        TError,
-        SaveAiCredentialMutationVariables,
-        TContext
-      > => {
-      return useMutation(getSaveAiCredentialMutationOptions(options));
-    }
-
-export const getDeleteAiCredentialUrl = () => {
-
-
-
-
-  return `/api/ai-credentials`
-}
-
-/**
- * @summary Remove the signed-in user's saved AI provider key
- */
-export const deleteAiCredential = async ( options?: Parameters<typeof customFetch>[1]): Promise<AiCredentialStatus> => {
-
-  return customFetch<AiCredentialStatus>(getDeleteAiCredentialUrl(),
-  {
-    ...options,
-    method: 'DELETE'
-
-
-  }
-);}
-
-
-
-
-
-export const getDeleteAiCredentialMutationKey = () => ['deleteAiCredential'] as const;
-
-export const getDeleteAiCredentialMutationOptions = <TError = ErrorType<Error>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAiCredential>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof deleteAiCredential>>, TError,void, TContext> => {
-
-const mutationKey = getDeleteAiCredentialMutationKey();
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteAiCredential>>, void> = () => {
-
-
-          return  deleteAiCredential(requestOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type DeleteAiCredentialMutationResult = NonNullable<Awaited<ReturnType<typeof deleteAiCredential>>>
-
-    export type DeleteAiCredentialMutationError = ErrorType<Error>
-
-
-    /**
- * @summary Remove the signed-in user's saved AI provider key
- */
-export const useDeleteAiCredential = <TError = ErrorType<Error>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAiCredential>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
- ): UseMutationResult<
-        Awaited<ReturnType<typeof deleteAiCredential>>,
-        TError,
-        void,
-        TContext
-      > => {
-      return useMutation(getDeleteAiCredentialMutationOptions(options));
     }
 
 export const getGetAiGuardrailsUrl = () => {
@@ -1834,6 +1595,94 @@ export const useCreateBriefing = <TError = ErrorType<Error>,
         TContext
       > => {
       return useMutation(getCreateBriefingMutationOptions(options));
+    }
+
+export const getSetDailyBriefingEventLimitUrl = () => {
+
+
+
+
+  return `/api/briefings/daily-event-limit`
+}
+
+/**
+ * @summary Set the signed-in user's daily briefing event limit
+ */
+export const setDailyBriefingEventLimit = async (dailyBriefingEventLimitInput: DailyBriefingEventLimitInput, options?: Parameters<typeof customFetch>[1]): Promise<DailyBriefingEventLimitResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<DailyBriefingEventLimitResponse>(getSetDailyBriefingEventLimitUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(dailyBriefingEventLimitInput)
+  }
+);}
+
+
+
+
+
+export const getSetDailyBriefingEventLimitMutationKey = () => ['setDailyBriefingEventLimit'] as const;
+
+export const getSetDailyBriefingEventLimitMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setDailyBriefingEventLimit>>, TError,SetDailyBriefingEventLimitMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof setDailyBriefingEventLimit>>, TError,SetDailyBriefingEventLimitMutationVariables, TContext> => {
+
+const mutationKey = getSetDailyBriefingEventLimitMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setDailyBriefingEventLimit>>, SetDailyBriefingEventLimitMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  setDailyBriefingEventLimit(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetDailyBriefingEventLimitMutationResult = NonNullable<Awaited<ReturnType<typeof setDailyBriefingEventLimit>>>
+    export type SetDailyBriefingEventLimitMutationBody = BodyType<DailyBriefingEventLimitInput>
+    export type SetDailyBriefingEventLimitMutationError = ErrorType<Error>
+    export type SetDailyBriefingEventLimitMutationVariables = {data: BodyType<DailyBriefingEventLimitInput>}
+
+    /**
+ * @summary Set the signed-in user's daily briefing event limit
+ */
+export const useSetDailyBriefingEventLimit = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setDailyBriefingEventLimit>>, TError,SetDailyBriefingEventLimitMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof setDailyBriefingEventLimit>>,
+        TError,
+        SetDailyBriefingEventLimitMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSetDailyBriefingEventLimitMutationOptions(options));
     }
 
 export const getListPersonProfilesUrl = () => {

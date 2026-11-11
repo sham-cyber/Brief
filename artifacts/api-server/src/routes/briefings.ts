@@ -3,6 +3,7 @@
 
 import { Router, type IRouter } from "express";
 import { randomUUID } from "node:crypto";
+import { z } from "zod";
 import {
   CreateBriefingBody,
   CreateBriefingResponse,
@@ -15,10 +16,10 @@ import {
   getTavilyDailyUsageStatus,
   getTavilyQuotaStatus,
   reserveTavilyQuota,
+  saveDailyBriefingEventLimit,
   TAVILY_CRAWL_HARD_STOP_MS,
   TAVILY_DAILY_CRAWL_START_LIMIT,
   TAVILY_DAILY_LIMIT_MS,
-  TAVILY_DAILY_SEARCH_REQUEST_LIMIT,
   TAVILY_MAX_SEARCHES_PER_BRIEFING,
   TAVILY_QUOTA_TIME_ZONE,
 } from "../lib/tavily-quota";
@@ -32,11 +33,22 @@ import {
   getUserTavilyApiKey,
 } from "../lib/user-tavily-credentials";
 import { resolveOwnerUserId } from "../lib/briefing-owner";
-import { verifyBriefingStartPin } from "../lib/briefing-start-pin";
-import { generateAiBriefingSummaries } from "../lib/ai-briefing-summary";
-import { getUserAiConfig } from "../lib/user-ai-credentials";
+import {
+  isBriefingPinConfigured,
+  verifyBriefingStartPin,
+} from "../lib/briefing-start-pin";
+import { appendQuestionToSearchQuery } from "../lib/briefing-question";
+import { sourceMatchScope } from "../lib/briefing-subject-match";
+import {
+  generateAiBriefingSummaries,
+  QWEN_BRIEF_WORD_LIMIT,
+  QWEN_REQUEST_LIMIT,
+  QWEN_REQUEST_WINDOW_MS,
+} from "../lib/ai-briefing-summary";
+import { getAiProviderConfig } from "../lib/ai-provider";
 import {
   getAiGuardrailStatus,
+  reserveAiBriefingBatch,
   reserveAiBriefingRequest,
 } from "./ai-guardrails";
 import {
@@ -49,6 +61,10 @@ import {
 
 const router: IRouter = Router();
 let sapBriefingActive = false;
+const QWEN_REQUEST_WINDOW_SECONDS = QWEN_REQUEST_WINDOW_MS / 1000;
+const DailyEventLimitBody = z.object({
+  dailyEventLimit: z.number().int().min(1).max(TAVILY_DAILY_CRAWL_START_LIMIT),
+});
 
 type NewsItem = {
   id: string;
@@ -63,7 +79,6 @@ type NewsItem = {
 
 type BriefingTopic = "news" | "hire" | "launch" | "financial" | "risk";
 type PersonRole = "business_owner" | "mp" | "corporate";
-type SourceMatch = "subject" | "company";
 type RawNewsItem = Omit<NewsItem, "id" | "affiliatedCompanyReport">;
 type SearchResult = { source: NewsItem; searchedAs: BriefingTopic };
 type SearchNewsResult = {
@@ -75,23 +90,45 @@ type SearchNewsResult = {
 
 async function getOptionalAiSummaries(input: {
   enabled: boolean;
+  unavailableNotice: string | null;
   userId: string;
   briefingId: string;
   subject: string;
+  question?: string;
   topics: BriefingTopic[];
   publicSources: SearchResult[];
+  cancellationSignal?: AbortSignal;
 }): Promise<{
   aiSummaries: Awaited<ReturnType<typeof generateAiBriefingSummaries>>["summaries"];
   aiSummaryNotice: string | null;
 }> {
-  if (!input.enabled) return { aiSummaries: [], aiSummaryNotice: null };
+  if (!input.enabled) {
+    return {
+      aiSummaries: [],
+      aiSummaryNotice: input.unavailableNotice,
+    };
+  }
   try {
-    const config = await getUserAiConfig(input.userId);
+    const config = await getAiProviderConfig(input.userId);
+    if (!config) {
+      return {
+        aiSummaries: [],
+        aiSummaryNotice:
+          input.unavailableNotice ??
+          "Ollama is unavailable. Showing the source-only briefing.",
+      };
+    }
     const evidenceByTopic = Object.fromEntries(input.topics.map((topic) => [
       topic,
       input.publicSources
         .filter(({ source, searchedAs }) =>
           classifySource(source, searchedAs, input.topics) === topic,
+        )
+        .filter(({ source }) =>
+          source.title.trim().length > 0 &&
+          source.url.startsWith("https://") &&
+          source.snippet.trim().length >= 40 &&
+          Boolean(source.publishedAt),
         )
         .map(({ source }) => ({
           id: source.id,
@@ -101,26 +138,59 @@ async function getOptionalAiSummaries(input: {
           snippet: source.snippet,
         })),
     ]));
+    const topicsWithStableEvidence = input.topics.filter((topic) =>
+      (evidenceByTopic[topic] ?? []).length > 0,
+    );
+    if (!topicsWithStableEvidence.length) {
+      return { aiSummaries: [], aiSummaryNotice: null };
+    }
+
+    const batchReservation = await reserveAiBriefingBatch(
+      input.userId,
+      input.briefingId,
+      topicsWithStableEvidence,
+    );
+    if (!batchReservation.allowed) {
+      const notice = batchReservation.reason === "rate-limit"
+        ? `Qwen allows ${QWEN_REQUEST_LIMIT} topic requests per signed-in account every five minutes. Try again in ${batchReservation.retryAfterSeconds ?? QWEN_REQUEST_WINDOW_SECONDS} seconds; the source-only briefing is ready.`
+        : batchReservation.reason === "inactive"
+          ? "AI access was stopped before Qwen started. The source-only briefing is ready."
+          : "AI is disabled by the server switch. The source-only briefing is ready.";
+      return { aiSummaries: [], aiSummaryNotice: notice };
+    }
+
     const result = await generateAiBriefingSummaries({
       userId: input.userId,
       briefingId: input.briefingId,
       subject: input.subject,
-      topics: input.topics,
+      question: input.question,
+      topics: topicsWithStableEvidence,
       evidenceByTopic,
       config,
       reserveRequest: reserveAiBriefingRequest,
+      cancellationSignal: input.cancellationSignal,
     });
+    if (result.cancelled) {
+      return {
+        aiSummaries: [],
+        aiSummaryNotice: result.cancellationReason === "backup-timeout"
+          ? "Qwen reached the 120-second backup stop. The source-only briefing is ready."
+          : "AI summaries were stopped. The source-only briefing is ready.",
+      };
+    }
     return {
       aiSummaries: result.summaries,
       aiSummaryNotice: result.failedCategories.length
-        ? "Some selected AI summaries could not be generated. The source-based briefing is still available."
+        ? config?.provider === "ollama"
+          ? "A Qwen topic timed out at 26 seconds, was already used, or failed citation checks. The source-only briefing remains available."
+          : "AI summaries could not be generated. The source-only briefing remains available."
         : null,
     };
   } catch {
     return {
       aiSummaries: [],
       aiSummaryNotice:
-        "AI summaries could not be generated. The source-based briefing is still available.",
+        "AI summaries could not be generated. Showing the source-only briefing.",
     };
   }
 }
@@ -193,61 +263,6 @@ function contextRelevanceScore(source: NewsItem, terms: string[]): number {
   return score;
 }
 
-function sourceMatchScope(
-  source: NewsItem,
-  subject: string,
-  subjectType: "company" | "person",
-  associatedCompany: string | null,
-): SourceMatch | null {
-  const normalize = (value: string) =>
-    (value.match(/[\p{L}\p{N}]+/gu) ?? []).join(" ").toLocaleLowerCase();
-  const companyQualifiers = new Set([
-    "automotive", "automobiles", "bank", "cables", "cement", "chemicals",
-    "electronics", "energy", "finance", "foods", "industries", "infrastructure",
-    "logistics", "motors", "pharma", "pharmaceuticals", "power", "software",
-    "steel", "systems", "technology", "technologies", "telecom",
-  ]);
-  const title = normalize(source.title);
-  const content = normalize(`${source.title} ${source.snippet}`);
-  const includesPhrase = (value: string) => {
-    const target = normalize(value);
-    return Boolean(target && ` ${content} `.includes(` ${target} `));
-  };
-  const belongsToDifferentCompany = (requestedCompany: string) => {
-    const targetWords = normalize(requestedCompany).split(" ");
-    const titleWords = title.split(" ");
-    const targetQualifier = targetWords.find((word) => companyQualifiers.has(word));
-    const titleQualifier = titleWords.find((word) => companyQualifiers.has(word));
-    const sharesLeadingName = targetWords[0] && titleWords[0] === targetWords[0];
-    return Boolean(
-      sharesLeadingName &&
-      targetQualifier &&
-      titleQualifier &&
-      targetQualifier !== titleQualifier,
-    );
-  };
-
-  if (includesPhrase(subject)) {
-    if (
-      subjectType === "company" &&
-      belongsToDifferentCompany(subject)
-    ) {
-      return null;
-    }
-    return subjectType === "company" ? "company" : "subject";
-  }
-
-  if (
-    subjectType === "person" &&
-    associatedCompany &&
-    includesPhrase(associatedCompany) &&
-    !belongsToDifferentCompany(associatedCompany)
-  ) {
-    return "company";
-  }
-  return null;
-}
-
 function quoteSearchPhrase(value: string | null): string {
   if (!value) return "";
   const phrase = value
@@ -296,6 +311,7 @@ async function searchNews(
   start: Date,
   end: Date,
   context?: string,
+  question?: string,
   publicRoleTitle: string | null = null,
   companyName: string | null = null,
   signal?: AbortSignal,
@@ -328,9 +344,10 @@ async function searchNews(
         : "financial results investment profit loss funding",
       risk: "risk lawsuit investigation recall regulator fine breach restructuring",
     };
-    const query = isChairmanCompanyBrief
+    const baseQuery = isChairmanCompanyBrief
       ? `${quoteSearchPhrase(companyName).trim()} ${terms[topic]}`
       : `${subject}${personTerms} ${terms[topic]}`;
+    const query = appendQuestionToSearchQuery(baseQuery, question);
     return { topic, query };
   });
   const settled = await Promise.allSettled(
@@ -402,7 +419,7 @@ async function searchNews(
   const sources = [...uniqueItems.values()]
     .flatMap((entry) => {
       const matchScope = sourceMatchScope(
-        { ...entry.item, id: "", affiliatedCompanyReport: false },
+        { title: entry.item.title, snippet: entry.item.snippet },
         subject,
         subjectType,
         isChairmanCompanyBrief ? companyName : null,
@@ -480,35 +497,38 @@ const NEGATIVE_SIGNAL_PATTERNS = [
 router.get("/briefings", async (req, res): Promise<void> => {
   const userId = getAuth(req).userId ?? null;
   const ownerEmail = process.env.BRIEFING_OWNER_EMAIL?.trim().toLowerCase();
-  let canStart = false;
+  let isOwner = false;
   if (userId && ownerEmail) {
     try {
-      canStart = (await resolveOwnerUserId(ownerEmail)) === userId;
+      isOwner = (await resolveOwnerUserId(ownerEmail)) === userId;
     } catch (error) {
       req.log.error({ error }, "Failed to verify the briefing owner account for status");
     }
   }
   const credentialStatus = await getTavilyCredentialStatus(userId);
-  const projectKeyConfigured = canStart && Boolean(process.env.TAVILY_API_KEY?.trim());
+  const projectKeyConfigured = isOwner && Boolean(process.env.TAVILY_API_KEY?.trim());
   const keySource = projectKeyConfigured
     ? "project-owner"
     : credentialStatus.connected
       ? "account"
       : "missing";
   const quota = await getTavilyQuotaStatus();
-  const dailyUsage = canStart && userId
+  const dailyUsage = userId
     ? await getTavilyDailyUsageStatus(userId)
     : null;
   const sapStatus = await getSapConfigurationStatus(
-    canStart ? userId ?? undefined : undefined,
+    userId ?? undefined,
   );
+  const startPinConfigured = userId
+    ? await isBriefingPinConfigured(userId).catch(() => false)
+    : false;
   res.json(GetBriefingSourceStatusResponse.parse({
     provider: "tavily",
     configured: keySource !== "missing",
-    canStart,
+    canStart: Boolean(userId),
     keySource,
-    startPinConfigured: /^\d{4}$/.test(process.env.BRIEFING_START_PIN?.trim() ?? ""),
-    ownerAccountConfigured: Boolean(process.env.BRIEFING_OWNER_EMAIL?.trim()),
+    startPinConfigured,
+    ownerAccountConfigured: Boolean(ownerEmail),
     dailyCrawlLimitMs: TAVILY_DAILY_LIMIT_MS,
     dailyCrawlUsedMs: quota.usedMs,
     dailyCrawlRemainingMs: quota.remainingMs,
@@ -525,6 +545,41 @@ router.get("/briefings", async (req, res): Promise<void> => {
     sapConfigured: sapStatus.configured,
     sapAvailableAreas: sapStatus.availableAreas,
   }));
+});
+
+router.put("/briefings/daily-event-limit", async (req, res): Promise<void> => {
+  const userId = getAuth(req).userId;
+  if (!userId) {
+    res.status(401).json({ error: "Sign in to set your daily briefing limit." });
+    return;
+  }
+  const origin = req.get("origin");
+  const host = (req.get("x-forwarded-host") ?? req.get("host") ?? "")
+    .split(",")[0]
+    .trim()
+    .toLowerCase();
+  let sameOrigin = false;
+  try {
+    sameOrigin = Boolean(origin && host && new URL(origin).host.toLowerCase() === host);
+  } catch {
+    sameOrigin = false;
+  }
+  if (!sameOrigin) {
+    res.status(403).json({ error: "Update the daily limit from this app." });
+    return;
+  }
+  const input = DailyEventLimitBody.safeParse(req.body);
+  if (!input.success) {
+    res.status(400).json({ error: "Choose between 1 and 10 briefing events per day." });
+    return;
+  }
+  try {
+    await saveDailyBriefingEventLimit(userId, input.data.dailyEventLimit);
+    res.json({ dailyEventLimit: input.data.dailyEventLimit });
+  } catch {
+    req.log.error({}, "Could not save the user's daily briefing event limit");
+    res.status(503).json({ error: "The daily briefing limit could not be saved." });
+  }
 });
 
 function countSignalMatches(text: string, patterns: RegExp[]): number {
@@ -610,6 +665,7 @@ function buildBriefingContent(
   subject: string,
   subjectType: "company" | "person",
   context: string | undefined,
+  question: string | undefined,
   topics: BriefingTopic[],
   sources: SearchResult[],
   companyName: string | null,
@@ -637,6 +693,8 @@ function buildBriefingContent(
   }[];
 } {
   const contextTerms = getContextTerms(context);
+  const questionText = question?.replace(/\s+/g, " ").trim();
+  const questionTerms = getContextTerms(questionText);
   const evidenceLabel = sourceMode === "sap" ? "SAP S/4HANA records" : "public reports";
   const researchLabel =
     subjectType === "person" && companyName
@@ -664,7 +722,11 @@ function buildBriefingContent(
         : newest,
     ).source
     : undefined;
-  const matchingSources = context
+  const matchingSources = questionText
+    ? sources
+      .filter(({ source }) => contextRelevanceScore(source, questionTerms) > 0)
+      .slice(0, 2)
+    : context
     ? sources
       .filter(({ source }) => contextRelevanceScore(source, contextTerms) > 0)
       .slice(0, 2)
@@ -682,6 +744,9 @@ function buildBriefingContent(
     `the selected ${evidenceLabel}`,
   );
   const normalizedContext = context?.replace(/\s+/g, " ").trim();
+  const questionFocus = questionText && questionText.length > 100
+    ? `${questionText.slice(0, 97)}…`
+    : questionText;
   const shortContext = normalizedContext && normalizedContext.length > 100
     ? `${normalizedContext.slice(0, 97)}…`
     : normalizedContext;
@@ -700,7 +765,13 @@ function buildBriefingContent(
     return `${excerpt.slice(0, 122).trimEnd()}…`;
   };
   const answerSources = matchingSources.length ? matchingSources : sources.slice(0, 2);
-  const overviewText = context
+  const overviewText = questionFocus
+    ? matchingSources.length
+      ? `In answer to “${questionFocus}” about ${researchLabel}, the closest recent ${evidenceLabel} ${answerSources.length === 1 ? "is" : "are"}: ${answerSources.map(({ source }) => `${source.affiliatedCompanyReport ? "Company-level: " : ""}“${sourceExcerpt(source)}”`).join(" ")}`
+      : sources.length
+        ? `No recent ${sourceMode === "sap" ? "SAP record" : "public report"} directly answered “${questionFocus}” about ${researchLabel}. These are the closest selected-topic sources found in the 30-day window.`
+        : `No recent ${sourceMode === "sap" ? "SAP record" : "public report"} matched “${questionFocus}” about ${researchLabel} in the 30-day window.`
+    : context
     ? matchingSources.length
       ? `For “${shortContext}” related to ${researchLabel}, the closest recent ${evidenceLabel} ${answerSources.length === 1 ? "is" : "are"}: ${answerSources.map(({ source }) => `${source.affiliatedCompanyReport ? "Company-level: " : ""}“${sourceExcerpt(source)}”`).join(" ")}`
       : sources.length
@@ -772,7 +843,7 @@ function buildBriefingContent(
   return {
     overview: {
       text: overviewText,
-      sourceIds: context
+      sourceIds: questionFocus || context
         ? answerSources.map(({ source }) => source.id)
         : latest ? [latest.id] : [],
       topPositive,
@@ -805,37 +876,17 @@ router.post("/briefings", async (req, res): Promise<void> => {
     return;
   }
 
+  let isProjectKeyOwner = false;
   const ownerEmail = process.env.BRIEFING_OWNER_EMAIL?.trim().toLowerCase();
-  if (!ownerEmail) {
-    res.status(503).json({
-      error: "The allowed briefing owner is not configured in API Server Secrets.",
-    });
-    return;
-  }
-  let ownerUserId: string | null;
-  try {
-    ownerUserId = await resolveOwnerUserId(ownerEmail);
-  } catch (error) {
-    req.log.error({ error }, "Failed to verify the briefing owner account");
-    res.status(503).json({
-      error: "The briefing owner account could not be verified with Clerk.",
-    });
-    return;
-  }
-  if (!ownerUserId) {
-    res.status(503).json({
-      error: "The configured briefing owner was not found in this Clerk environment.",
-    });
-    return;
-  }
-  if (userId !== ownerUserId) {
-    res.status(403).json({
-      error: "Only the configured briefing owner can start a crawl.",
-    });
-    return;
+  if (ownerEmail && process.env.TAVILY_API_KEY?.trim()) {
+    try {
+      isProjectKeyOwner = (await resolveOwnerUserId(ownerEmail)) === userId;
+    } catch (error) {
+      req.log.error({ error }, "Failed to verify project Tavily key ownership");
+    }
   }
 
-  const pinCheck = verifyBriefingStartPin(userId, input.data.startPin);
+  const pinCheck = await verifyBriefingStartPin(userId, input.data.startPin);
   if (!pinCheck.valid) {
     if (pinCheck.retryAfterSeconds) {
       res.setHeader("Retry-After", String(pinCheck.retryAfterSeconds));
@@ -844,21 +895,24 @@ router.post("/briefings", async (req, res): Promise<void> => {
     return;
   }
 
+  let aiEnabledForBriefing = false;
+  let aiUnavailableNotice: string | null = null;
   if (input.data.useAi === true) {
-    let aiStatus: Awaited<ReturnType<typeof getAiGuardrailStatus>>;
     try {
-      aiStatus = await getAiGuardrailStatus(userId);
+      const aiStatus = await getAiGuardrailStatus(userId);
+      if (!aiStatus.serverEnabled) {
+        aiUnavailableNotice = "AI is disabled by the server. Showing the source-only briefing.";
+      } else if (!aiStatus.aiProviderConnected) {
+        aiUnavailableNotice = aiStatus.provider === "ollama"
+          ? "Ollama is offline or the selected model is missing. Showing the source-only briefing."
+          : "The selected AI provider is not connected. Showing the source-only briefing.";
+      } else if (!aiStatus.activated) {
+        aiUnavailableNotice = "AI is not activated for this account. Showing the source-only briefing.";
+      } else {
+        aiEnabledForBriefing = true;
+      }
     } catch {
-      res.status(503).json({
-        error: "AI readiness could not be checked. No Tavily search was sent.",
-      });
-      return;
-    }
-    if (!aiStatus.serverEnabled || !aiStatus.activated || !aiStatus.aiProviderConnected) {
-      res.status(409).json({
-        error: "AI is off or not ready for this account. Turn off AI for this brief, or complete the AI setup and activation first. No Tavily search was sent.",
-      });
-      return;
+      aiUnavailableNotice = "AI readiness could not be checked. Showing the source-only briefing.";
     }
   }
 
@@ -942,9 +996,9 @@ router.post("/briefings", async (req, res): Promise<void> => {
       return;
     }
     let tavilyApiKey: string | null;
-    const projectApiKey = process.env.TAVILY_API_KEY?.trim();
+    const projectApiKey = isProjectKeyOwner ? process.env.TAVILY_API_KEY?.trim() : undefined;
     if (projectApiKey) {
-      // This branch is reached only after the server has verified the configured owner account.
+      // The project key is restricted to the verified developer account.
       tavilyApiKey = projectApiKey;
     } else {
       try {
@@ -990,7 +1044,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
       }
       if (quota.reason === "daily-start-limit") {
         res.status(429).json({
-          error: `The configured developer account has reached ${TAVILY_DAILY_CRAWL_START_LIMIT} briefing events for today's IST calendar day. It resets at midnight IST.`,
+          error: `You have reached your limit of ${quota.dailyCrawlStartsLimit} briefing events for today's IST calendar day. It resets at midnight IST.`,
         });
         return;
       }
@@ -1034,7 +1088,13 @@ router.post("/briefings", async (req, res): Promise<void> => {
 
     sapBriefingActive = true;
     const crawlController = new AbortController();
-    let stopReason: "time-limit" | "hard-stop" | null = null;
+    let stopReason: "time-limit" | "hard-stop" | "client-disconnect" | null = null;
+    const stopOnClientDisconnect = () => {
+      if (res.writableEnded || crawlController.signal.aborted) return;
+      stopReason = "client-disconnect";
+      crawlController.abort(new Error("The client left the briefing page."));
+    };
+    res.once("close", stopOnClientDisconnect);
     const crawlStartedAt = Date.now();
     let quotaSettled = false;
     const settleQuota = async () => {
@@ -1067,6 +1127,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
           windowStart,
           windowEnd,
           input.data.context?.trim() || undefined,
+          input.data.question?.trim() || undefined,
           publicRoleTitle,
           companyName,
           crawlController.signal,
@@ -1084,6 +1145,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
       ]);
       if (stopReason) {
         await settleQuota();
+        if (stopReason === "client-disconnect" || res.destroyed) return;
         res.status(504).json({
           error: stopReason === "time-limit"
             ? "This combined Tavily and SAP briefing reached its two-minute collection limit and was stopped."
@@ -1103,6 +1165,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
         input.data.subject.trim(),
         input.data.subjectType,
         input.data.context?.trim() || undefined,
+        input.data.question?.trim() || undefined,
         topics,
         publicSources,
         companyName,
@@ -1115,9 +1178,11 @@ router.post("/briefings", async (req, res): Promise<void> => {
       const sapSummary = sapResult.sapData.length
         ? `SAP S/4HANA returned ${sapResult.sapData.length} cited record${sapResult.sapData.length === 1 ? "" : "s"} across ${returnedAreaCount} selected data area${returnedAreaCount === 1 ? "" : "s"} for ${organization}.`
         : `No SAP records matched the selected areas and topics for ${organization}.`;
-      content.overview.text = `${publicSummary} ${sapSummary}`;
+      content.overview.text = input.data.question?.trim()
+        ? `${content.overview.text} ${sapSummary}`
+        : `${publicSummary} ${sapSummary}`;
       content.overview.sourceIds = [...new Set([
-        ...publicSources.slice(0, 2).map(({ source }) => source.id),
+        ...content.overview.sourceIds,
         ...dataSourceIds,
       ])].slice(0, 6);
       const combinedSources = [...publicSources, ...relevantSapSources]
@@ -1127,13 +1192,17 @@ router.post("/briefings", async (req, res): Promise<void> => {
         );
       const briefingId = randomUUID();
       const aiSummaryFields = await getOptionalAiSummaries({
-        enabled: input.data.useAi === true,
+        enabled: aiEnabledForBriefing,
+        unavailableNotice: aiUnavailableNotice,
         userId,
         briefingId,
         subject: input.data.subject.trim(),
+        question: input.data.question?.trim() || undefined,
         topics,
         publicSources,
+        cancellationSignal: crawlController.signal,
       });
+      if (stopReason === "client-disconnect" || res.destroyed) return;
 
       const result = CreateBriefingResponse.parse({
         briefingId,
@@ -1170,6 +1239,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
         return;
       }
       if (stopReason) {
+        if (stopReason === "client-disconnect" || res.destroyed) return;
         res.status(504).json({
           error: stopReason === "time-limit"
             ? "This combined Tavily and SAP briefing reached its two-minute collection limit and was stopped."
@@ -1212,13 +1282,14 @@ router.post("/briefings", async (req, res): Promise<void> => {
     } finally {
       clearTimeout(durationTimer);
       clearTimeout(hardStopTimer);
+      res.off("close", stopOnClientDisconnect);
       sapBriefingActive = false;
     }
     return;
   }
 
   let apiKey: string | null;
-  const projectApiKey = process.env.TAVILY_API_KEY?.trim();
+  const projectApiKey = isProjectKeyOwner ? process.env.TAVILY_API_KEY?.trim() : undefined;
   if (projectApiKey) {
     // This branch is reached only after the server has verified the configured owner account.
     apiKey = projectApiKey;
@@ -1250,7 +1321,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
     }
     if (quota.reason === "daily-start-limit") {
       res.status(429).json({
-        error: `The configured developer account has reached ${TAVILY_DAILY_CRAWL_START_LIMIT} briefing events for today's IST calendar day. It resets at midnight IST.`,
+        error: `You have reached your limit of ${quota.dailyCrawlStartsLimit} briefing events for today's IST calendar day. It resets at midnight IST.`,
       });
       return;
     }
@@ -1294,7 +1365,13 @@ router.post("/briefings", async (req, res): Promise<void> => {
 
   const crawlStartedAt = Date.now();
   const crawlController = new AbortController();
-  let stopReason: "daily-budget" | "hard-stop" | null = null;
+  let stopReason: "daily-budget" | "hard-stop" | "client-disconnect" | null = null;
+  const stopOnClientDisconnect = () => {
+    if (res.writableEnded || crawlController.signal.aborted) return;
+    stopReason = "client-disconnect";
+    crawlController.abort(new Error("The client left the briefing page."));
+  };
+  res.once("close", stopOnClientDisconnect);
   let quotaSettled = false;
   const settleQuota = async () => {
     if (quotaSettled || quota.reservationId === null) return;
@@ -1326,12 +1403,14 @@ router.post("/briefings", async (req, res): Promise<void> => {
       windowStart,
       windowEnd,
       input.data.context?.trim() || undefined,
+      input.data.question?.trim() || undefined,
       publicRoleTitle,
       companyName,
       crawlController.signal,
     );
     if (stopReason) {
       await settleQuota();
+      if (stopReason === "client-disconnect" || res.destroyed) return;
       if (stopReason === "daily-budget") {
         res.status(429).json({
           error: "This briefing reached its two-minute Tavily crawl limit and was stopped.",
@@ -1354,6 +1433,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
       input.data.subject.trim(),
       input.data.subjectType,
       input.data.context?.trim() || undefined,
+      input.data.question?.trim() || undefined,
       topics,
       relevant,
       companyName,
@@ -1361,13 +1441,17 @@ router.post("/briefings", async (req, res): Promise<void> => {
     const sources = relevant.map(({ source }) => source);
     const briefingId = randomUUID();
     const aiSummaryFields = await getOptionalAiSummaries({
-      enabled: input.data.useAi === true,
+        enabled: aiEnabledForBriefing,
+        unavailableNotice: aiUnavailableNotice,
       userId,
       briefingId,
       subject: input.data.subject.trim(),
+      question: input.data.question?.trim() || undefined,
       topics,
       publicSources: relevant,
+        cancellationSignal: crawlController.signal,
     });
+    if (stopReason === "client-disconnect" || res.destroyed) return;
 
     const result = CreateBriefingResponse.parse({
       briefingId,
@@ -1414,6 +1498,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
       });
       return;
     }
+    if (stopReason === "client-disconnect" || res.destroyed) return;
     if (error instanceof BriefingSearchFailure) {
       req.log.error(
         {
@@ -1445,6 +1530,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
   } finally {
     clearTimeout(dailyBudgetTimer);
     clearTimeout(hardStopTimer);
+    res.off("close", stopOnClientDisconnect);
   }
 });
 

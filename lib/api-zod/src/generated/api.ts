@@ -48,64 +48,19 @@ export const DeleteTavilyCredentialResponse = zod.object({
 
 
 /**
- * @summary Get the signed-in user's AI provider connection status
- */
-export const GetAiCredentialResponse = zod.object({
-  "connected": zod.boolean(),
-  "storageReady": zod.boolean(),
-  "model": zod.string().nullable(),
-  "updatedAt": zod.coerce.date().nullable()
-})
-
-
-/**
- * @summary Save the signed-in user's OpenAI API key and model ID
- */
-export const saveAiCredentialBodyApiKeyMin = 20;
-export const saveAiCredentialBodyApiKeyMax = 512;
-
-export const saveAiCredentialBodyModelMax = 100;
-
-
-export const saveAiCredentialBodyModelRegExp = new RegExp('^[A-Za-z0-9._-]+$');
-
-
-export const SaveAiCredentialBody = zod.object({
-  "apiKey": zod.string().min(saveAiCredentialBodyApiKeyMin).max(saveAiCredentialBodyApiKeyMax),
-  "model": zod.string().min(1).max(saveAiCredentialBodyModelMax).regex(saveAiCredentialBodyModelRegExp)
-})
-
-export const SaveAiCredentialResponse = zod.object({
-  "connected": zod.boolean(),
-  "storageReady": zod.boolean(),
-  "model": zod.string().nullable(),
-  "updatedAt": zod.coerce.date().nullable()
-})
-
-
-/**
- * @summary Remove the signed-in user's saved AI provider key
- */
-export const DeleteAiCredentialResponse = zod.object({
-  "connected": zod.boolean(),
-  "storageReady": zod.boolean(),
-  "model": zod.string().nullable(),
-  "updatedAt": zod.coerce.date().nullable()
-})
-
-
-/**
  * @summary Get AI activation and cost-guardrail status for the signed-in user
  */
 export const GetAiGuardrailsResponse = zod.object({
+  "provider": zod.enum(['ollama']),
+  "aiProviderMessage": zod.string().nullable(),
   "serverEnabled": zod.boolean(),
   "passcodeConfigured": zod.boolean(),
   "activated": zod.boolean(),
   "requestsPerTab": zod.literal(1),
   "speechLimitSeconds": zod.literal(120),
   "aiProviderConnected": zod.boolean(),
-  "aiCredentialStorageReady": zod.boolean(),
-  "model": zod.string().nullable()
+  "model": zod.string().nullable(),
+  "providerEndpoint": zod.string().url().nullable()
 })
 
 
@@ -453,7 +408,6 @@ export const getBriefingSourceStatusResponseDailyCrawlUsedMsMin = 0;
 
 export const getBriefingSourceStatusResponseDailyCrawlRemainingMsMin = 0;
 
-export const getBriefingSourceStatusResponseDailyCrawlStartsLimitMin = 0;
 export const getBriefingSourceStatusResponseDailyCrawlStartsLimitMax = 10;
 
 export const getBriefingSourceStatusResponseDailyCrawlStartsUsedMin = 0;
@@ -474,7 +428,7 @@ export const getBriefingSourceStatusResponseMaxSearchesPerBriefingMax = 5;
 export const GetBriefingSourceStatusResponse = zod.object({
   "provider": zod.enum(['tavily']),
   "configured": zod.boolean().describe('Whether this signed-in account has an effective Tavily key.'),
-  "canStart": zod.boolean().describe('Whether this signed-in account is the configured owner allowed to start crawls.'),
+  "canStart": zod.boolean().describe('Whether an authenticated account may start a crawl; an effective Tavily key and that account\'s PIN are still required.'),
   "keySource": zod.enum(['project-owner', 'account', 'missing']).describe('Effective key source for this account; the project key is owner-only.'),
   "startPinConfigured": zod.boolean(),
   "ownerAccountConfigured": zod.boolean(),
@@ -483,10 +437,10 @@ export const GetBriefingSourceStatusResponse = zod.object({
   "dailyCrawlRemainingMs": zod.number().int().min(getBriefingSourceStatusResponseDailyCrawlRemainingMsMin).nullable(),
   "dailyCrawlActive": zod.boolean(),
   "dailyCrawlResetsAt": zod.coerce.date().nullable(),
-  "dailyCrawlStartsLimit": zod.number().int().min(getBriefingSourceStatusResponseDailyCrawlStartsLimitMin).max(getBriefingSourceStatusResponseDailyCrawlStartsLimitMax).nullable(),
+  "dailyCrawlStartsLimit": zod.number().int().min(1).max(getBriefingSourceStatusResponseDailyCrawlStartsLimitMax).nullable().describe('The signed-in user\'s configured daily event limit; defaults to ten and resets at midnight IST.'),
   "dailyCrawlStartsUsed": zod.number().int().min(getBriefingSourceStatusResponseDailyCrawlStartsUsedMin).nullable(),
   "dailyCrawlStartsRemaining": zod.number().int().min(getBriefingSourceStatusResponseDailyCrawlStartsRemainingMin).nullable(),
-  "dailySearchRequestsLimit": zod.number().int().min(getBriefingSourceStatusResponseDailySearchRequestsLimitMin).max(getBriefingSourceStatusResponseDailySearchRequestsLimitMax).nullable().describe('Informational maximum of five topic searches across each of ten daily briefing events; not a separate daily start limit.'),
+  "dailySearchRequestsLimit": zod.number().int().min(getBriefingSourceStatusResponseDailySearchRequestsLimitMin).max(getBriefingSourceStatusResponseDailySearchRequestsLimitMax).nullable().describe('The configured daily event limit multiplied by five selected-topic searches per event.'),
   "dailySearchRequestsUsed": zod.number().int().min(getBriefingSourceStatusResponseDailySearchRequestsUsedMin).nullable(),
   "dailySearchRequestsRemaining": zod.number().int().min(getBriefingSourceStatusResponseDailySearchRequestsRemainingMin).nullable(),
   "maxSearchesPerBriefing": zod.number().int().min(1).max(getBriefingSourceStatusResponseMaxSearchesPerBriefingMax).describe('One request per selected topic, up to five topics.'),
@@ -516,6 +470,8 @@ export const createBriefingBodySapAreasMax = 11;
 
 export const createBriefingBodyContextMax = 1500;
 
+export const createBriefingBodyQuestionMax = 500;
+
 export const createBriefingBodyUseAiDefault = false;
 
 
@@ -530,6 +486,7 @@ export const CreateBriefingBody = zod.object({
   "sapAreas": zod.array(zod.enum(['store', 'production', 'maintenance', 'inventory', 'sales', 'hr', 'power_electrical_solar', 'purchase', 'scrap', 'order', 'delivery'])).max(createBriefingBodySapAreasMax).optional().describe('SAP S/4HANA data areas selected for this briefing. Required only when sourceMode is sap.'),
   "meetingAt": zod.coerce.date().optional(),
   "context": zod.string().max(createBriefingBodyContextMax).optional(),
+  "question": zod.string().max(createBriefingBodyQuestionMax).optional().describe('Optional direct question to guide the selected public searches and cited overview.'),
   "useAi": zod.boolean().default(createBriefingBodyUseAiDefault).describe('Explicitly opt this briefing into source-grounded AI summaries. Defaults to off.'),
   "topics": zod.array(zod.enum(['news', 'hire', 'launch', 'financial', 'risk'])).min(1)
 })
@@ -630,6 +587,26 @@ export const CreateBriefingResponse = zod.object({
   "recordedAt": zod.coerce.date(),
   "sourceIds": zod.array(zod.string()).min(1)
 })).describe('Cited records from the selected SAP S/4HANA areas. Empty for non-SAP briefs.')
+})
+
+
+/**
+ * @summary Set the signed-in user's daily briefing event limit
+ */
+export const setDailyBriefingEventLimitBodyDailyEventLimitMax = 10;
+
+
+
+export const SetDailyBriefingEventLimitBody = zod.object({
+  "dailyEventLimit": zod.number().int().min(1).max(setDailyBriefingEventLimitBodyDailyEventLimitMax).describe('Maximum number of complete briefing events for the signed-in user per Asia/Kolkata calendar day.')
+})
+
+export const setDailyBriefingEventLimitResponseDailyEventLimitMax = 10;
+
+
+
+export const SetDailyBriefingEventLimitResponse = zod.object({
+  "dailyEventLimit": zod.number().int().min(1).max(setDailyBriefingEventLimitResponseDailyEventLimitMax)
 })
 
 

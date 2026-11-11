@@ -1,17 +1,5 @@
-// Copyright 2026 Sham Mohite
-// Author: Sham Mohite
-// SPDX-License-Identifier: Apache-2.0
-
-import { timingSafeEqual } from "node:crypto";
-
-const START_PIN_MAX_ATTEMPTS = 5;
-const START_PIN_ATTEMPT_WINDOW_MS = 15 * 60_000;
-const START_PIN_LOCKOUT_MS = 15 * 60_000;
-
-const startPinFailures = new Map<
-  string,
-  { attempts: number; windowStartedAt: number; lockedUntil: number }
->();
+import { pool } from "@workspace/db";
+import { verifyPinHash } from "./briefing-pin-crypto.ts";
 
 export type StartPinCheck =
   | { valid: true }
@@ -22,78 +10,80 @@ export type StartPinCheck =
       retryAfterSeconds?: number;
     };
 
-function lockSeconds(userId: string): number {
-  const now = Date.now();
-  const state = startPinFailures.get(userId);
-  if (!state) return 0;
-  if (state.lockedUntil > now) return Math.ceil((state.lockedUntil - now) / 1000);
-  if (
-    now - state.windowStartedAt >= START_PIN_ATTEMPT_WINDOW_MS ||
-    state.lockedUntil > 0
-  ) {
-    startPinFailures.delete(userId);
-  }
-  return 0;
+export async function isBriefingPinConfigured(userId: string): Promise<boolean> {
+  const result = await pool.query(
+    "SELECT 1 FROM user_ai_guardrails WHERE user_id = $1",
+    [userId],
+  );
+  return (result.rowCount ?? 0) > 0;
 }
 
-function recordFailure(userId: string): number {
-  const now = Date.now();
-  const previous = startPinFailures.get(userId);
-  const state =
-    previous && now - previous.windowStartedAt < START_PIN_ATTEMPT_WINDOW_MS
-      ? previous
-      : { attempts: 0, windowStartedAt: now, lockedUntil: 0 };
-  state.attempts += 1;
-  if (state.attempts >= START_PIN_MAX_ATTEMPTS) {
-    state.lockedUntil = now + START_PIN_LOCKOUT_MS;
-  }
-  startPinFailures.set(userId, state);
-  return state.lockedUntil > now
-    ? Math.ceil((state.lockedUntil - now) / 1000)
-    : 0;
-}
-
-export function verifyBriefingStartPin(
+export async function verifyBriefingStartPin(
   userId: string,
   suppliedValue: string,
-): StartPinCheck {
-  const expectedValue = process.env.BRIEFING_START_PIN?.trim();
-  if (!expectedValue || !/^\d{4}$/.test(expectedValue)) {
+): Promise<StartPinCheck> {
+  const result = await pool.query<{
+    passcode_salt: string;
+    passcode_hash: string;
+    failed_attempts: number;
+    locked_until: Date | null;
+  }>(
+    `SELECT passcode_salt, passcode_hash, failed_attempts, locked_until
+     FROM user_ai_guardrails
+     WHERE user_id = $1`,
+    [userId],
+  );
+  const record = result.rows[0];
+  if (!record) {
     return {
       valid: false,
       status: 503,
-      message: "The briefing start PIN is not configured in the API Server secrets.",
+      message: "Set your four-digit briefing PIN in AI controls before starting.",
     };
   }
 
-  const retryAfterSeconds = lockSeconds(userId);
-  if (retryAfterSeconds > 0) {
+  if (record.locked_until && new Date(record.locked_until).getTime() > Date.now()) {
     return {
       valid: false,
       status: 429,
       message: "Too many incorrect PIN attempts. Try again after the lockout period.",
-      retryAfterSeconds,
+      retryAfterSeconds: Math.ceil((new Date(record.locked_until).getTime() - Date.now()) / 1000),
     };
   }
 
-  const supplied = Buffer.from(suppliedValue, "utf8");
-  const expected = Buffer.from(expectedValue, "utf8");
-  if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) {
-    const lockout = recordFailure(userId);
-    return lockout > 0
-      ? {
-          valid: false,
-          status: 429,
-          message: "Too many incorrect PIN attempts. Try again after the lockout period.",
-          retryAfterSeconds: lockout,
-        }
-      : {
-          valid: false,
-          status: 403,
-          message: "The start PIN is incorrect.",
-        };
+  const valid = await verifyPinHash(
+    suppliedValue,
+    record.passcode_salt,
+    record.passcode_hash,
+  );
+  if (!valid) {
+    const updated = await pool.query<{ failed_attempts: number }>(
+      `UPDATE user_ai_guardrails
+       SET failed_attempts = failed_attempts + 1,
+           locked_until = CASE
+             WHEN failed_attempts + 1 >= 5 THEN NOW() + INTERVAL '15 minutes'
+             ELSE locked_until
+           END,
+           is_activated = false,
+           updated_at = NOW()
+       WHERE user_id = $1
+       RETURNING failed_attempts`,
+      [userId],
+    );
+    if ((updated.rows[0]?.failed_attempts ?? 0) >= 5) {
+      return {
+        valid: false,
+        status: 429,
+        message: "Too many incorrect PIN attempts. Try again after the lockout period.",
+        retryAfterSeconds: 15 * 60,
+      };
+    }
+    return { valid: false, status: 403, message: "The briefing PIN is incorrect." };
   }
 
-  startPinFailures.delete(userId);
+  await pool.query(
+    "UPDATE user_ai_guardrails SET failed_attempts = 0, locked_until = NULL, updated_at = NOW() WHERE user_id = $1",
+    [userId],
+  );
   return { valid: true };
 }

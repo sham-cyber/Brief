@@ -6,6 +6,7 @@ import { defineConfig } from 'vite';
 import runtimeErrorOverlay from '@replit/vite-plugin-runtime-error-modal';
 
 const rawPort = process.env.PORT;
+const localApiProxyTarget = process.env.LOCAL_API_PROXY_TARGET;
 
 if (!rawPort) {
   throw new Error(
@@ -69,6 +70,14 @@ export default defineConfig({
     strictPort: true,
     host: '0.0.0.0',
     allowedHosts: true,
+    proxy: localApiProxyTarget
+      ? {
+          '/api': {
+            target: localApiProxyTarget,
+            changeOrigin: true,
+          },
+        }
+      : undefined,
     fs: {
       strict: true,
     },

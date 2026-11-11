@@ -1,25 +1,43 @@
-import { randomBytes, scrypt, timingSafeEqual } from "node:crypto";
-import { promisify } from "node:util";
+import { randomBytes } from "node:crypto";
 import { getAuth } from "@clerk/express";
 import { pool } from "@workspace/db";
 import { Router, type IRouter } from "express";
 import { z } from "zod";
 import {
-  getAiCredentialStatus,
-  getUserAiConfig,
-  isAiCredentialStorageAvailable,
-} from "../lib/user-ai-credentials";
+  getAiProviderConfig,
+  getAiProviderStatusForUser,
+} from "../lib/ai-provider";
+import {
+  cancelActiveAiBriefingSummaries,
+  QWEN_BATCH_BACKUP_TIMEOUT_MS,
+  QWEN_BRIEF_WORD_LIMIT,
+  QWEN_REQUEST_LIMIT,
+  QWEN_REQUEST_WINDOW_MS,
+  QWEN_MODEL_IDLE_UNLOAD_SECONDS,
+  QWEN_REQUEST_TIMEOUT_MS,
+  getQwenRequestRateLimitState,
+} from "../lib/ai-briefing-summary";
+import {
+  deleteUserOllamaConfig,
+  saveUserOllamaConfig,
+} from "../lib/user-ollama-credentials";
+import { verifyBriefingStartPin } from "../lib/briefing-start-pin";
+import { hashBriefingPin } from "../lib/briefing-pin-crypto";
 
 const router: IRouter = Router();
-const scryptAsync = promisify(scrypt);
-const PASSCODE_MIN_LENGTH = 8;
-const PASSCODE_MAX_LENGTH = 128;
 const AI_REQUESTS_PER_TAB = 1;
 const AI_SPEECH_LIMIT_SECONDS = 120;
+const QWEN_RATE_RESERVATION_PREFIX = "qwen-rate:";
+const QWEN_REQUEST_WINDOW_SECONDS = QWEN_REQUEST_WINDOW_MS / 1000;
 const aiRequestTab = z.enum(["news", "hire", "launch", "financial", "risk"]);
 
 const passcodeBody = z.object({
-  passcode: z.string().min(PASSCODE_MIN_LENGTH).max(PASSCODE_MAX_LENGTH),
+  passcode: z.string().regex(/^\d{4}$/),
+});
+const ollamaConnectionBody = z.object({
+  baseUrl: z.string().url().max(500),
+  model: z.string().trim().min(1).max(120),
+  authToken: z.string().max(2048).optional(),
 });
 
 const briefingRequestBody = z.object({
@@ -29,14 +47,6 @@ const briefingRequestBody = z.object({
 
 function aiServerEnabled() {
   return process.env.AI_FEATURE_ENABLED === "true";
-}
-
-async function aiProviderAvailableForUser(userId: string) {
-  try {
-    return Boolean(await getUserAiConfig(userId));
-  } catch {
-    return false;
-  }
 }
 
 function authenticatedUserId(req: Parameters<typeof getAuth>[0]) {
@@ -65,44 +75,35 @@ router.use((req, res, next) => {
   next();
 });
 
-async function hashPasscode(passcode: string, salt: string) {
-  const derived = (await scryptAsync(passcode, salt, 64)) as Buffer;
-  return derived.toString("hex");
-}
-
-function validHash(candidate: string, stored: string) {
-  const candidateBuffer = Buffer.from(candidate, "hex");
-  const storedBuffer = Buffer.from(stored, "hex");
-  return (
-    candidateBuffer.length === storedBuffer.length &&
-    candidateBuffer.length > 0 &&
-    timingSafeEqual(candidateBuffer, storedBuffer)
-  );
-}
-
 export async function getAiGuardrailStatus(userId: string) {
-  const [result, credentialStatus] = await Promise.all([
+  const [result, providerStatus] = await Promise.all([
     pool.query<{ is_activated: boolean }>(
       "SELECT is_activated FROM user_ai_guardrails WHERE user_id = $1",
       [userId],
     ),
-    getAiCredentialStatus(userId),
+    getAiProviderStatusForUser(userId),
   ]);
-  const providerConnected = await aiProviderAvailableForUser(userId);
   const serverEnabled = aiServerEnabled();
   return {
+    provider: providerStatus.provider,
+    aiProviderMessage: providerStatus.message,
     serverEnabled,
     passcodeConfigured: (result.rowCount ?? 0) > 0,
     activated:
       result.rows[0]?.is_activated === true &&
       serverEnabled &&
-      providerConnected,
+      providerStatus.connected,
     requestsPerTab: AI_REQUESTS_PER_TAB,
     speechLimitSeconds: AI_SPEECH_LIMIT_SECONDS,
-    aiProviderConnected: providerConnected,
-    aiCredentialStorageReady:
-      credentialStatus.storageReady && isAiCredentialStorageAvailable(),
-    model: credentialStatus.model,
+    qwenRequestTimeoutSeconds: QWEN_REQUEST_TIMEOUT_MS / 1000,
+    qwenRequestLimit: QWEN_REQUEST_LIMIT,
+    qwenRequestWindowSeconds: QWEN_REQUEST_WINDOW_SECONDS,
+    qwenBriefWordLimit: QWEN_BRIEF_WORD_LIMIT,
+    qwenBatchBackupSeconds: QWEN_BATCH_BACKUP_TIMEOUT_MS / 1000,
+    qwenModelIdleUnloadSeconds: QWEN_MODEL_IDLE_UNLOAD_SECONDS,
+    aiProviderConnected: providerStatus.connected,
+    model: providerStatus.model,
+    providerEndpoint: providerStatus.providerEndpoint,
   };
 }
 
@@ -123,21 +124,21 @@ router.get("/ai/guardrails", async (req, res): Promise<void> => {
 router.put("/ai/guardrails/passcode", async (req, res): Promise<void> => {
   const userId = authenticatedUserId(req);
   if (!userId) {
-    res.status(401).json({ error: "Sign in before setting an AI passcode." });
+      res.status(401).json({ error: "Sign in before setting your briefing PIN." });
     return;
   }
 
   const input = passcodeBody.safeParse(req.body);
   if (!input.success) {
     res.status(400).json({
-      error: `Use a passcode with ${PASSCODE_MIN_LENGTH}–${PASSCODE_MAX_LENGTH} characters.`,
+      error: "Set a four-digit PIN. The same PIN protects crawl starts and AI activation.",
     });
     return;
   }
 
   try {
     const salt = randomBytes(16).toString("hex");
-    const passcodeHash = await hashPasscode(input.data.passcode, salt);
+    const passcodeHash = await hashBriefingPin(input.data.passcode, salt);
     await pool.query(
       `INSERT INTO user_ai_guardrails (user_id, passcode_salt, passcode_hash, is_activated, updated_at)
        VALUES ($1, $2, $3, false, NOW())
@@ -150,9 +151,55 @@ router.put("/ai/guardrails/passcode", async (req, res): Promise<void> => {
            updated_at = NOW()`,
       [userId, salt, passcodeHash],
     );
-    res.json({ passcodeConfigured: true, activated: false });
+    res.json({ passcodeConfigured: true, startPinConfigured: true, activated: false });
   } catch {
-    res.status(503).json({ error: "The AI passcode could not be saved." });
+    res.status(503).json({ error: "Your briefing PIN could not be saved." });
+  }
+});
+
+router.put("/ai/guardrails/connection", async (req, res): Promise<void> => {
+  const userId = authenticatedUserId(req);
+  if (!userId) {
+    res.status(401).json({ error: "Sign in before saving an Ollama connection." });
+    return;
+  }
+  const input = ollamaConnectionBody.safeParse(req.body);
+  if (!input.success) {
+    res.status(400).json({ error: "Enter an endpoint URL, model name, and optional bearer token." });
+    return;
+  }
+  try {
+    await saveUserOllamaConfig(userId, input.data);
+    await pool.query(
+      "UPDATE user_ai_guardrails SET is_activated = false, updated_at = NOW() WHERE user_id = $1",
+      [userId],
+    );
+    res.json({ saved: true, activated: false });
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error
+        ? error.message
+        : "The Ollama connection could not be saved.",
+    });
+  }
+});
+
+router.delete("/ai/guardrails/connection", async (req, res): Promise<void> => {
+  const userId = authenticatedUserId(req);
+  if (!userId) {
+    res.status(401).json({ error: "Sign in before removing an Ollama connection." });
+    return;
+  }
+  try {
+    await deleteUserOllamaConfig(userId);
+    await pool.query(
+      "UPDATE user_ai_guardrails SET is_activated = false, updated_at = NOW() WHERE user_id = $1",
+      [userId],
+    );
+    cancelActiveAiBriefingSummaries(userId);
+    res.json({ removed: true, activated: false });
+  } catch {
+    res.status(503).json({ error: "The saved Ollama connection could not be removed." });
   }
 });
 
@@ -166,54 +213,32 @@ router.post("/ai/guardrails/activate", async (req, res): Promise<void> => {
     res.status(503).json({ error: "AI is disabled by the server switch." });
     return;
   }
-  if (!await aiProviderAvailableForUser(userId)) {
-    res.status(503).json({ error: "AI cannot be activated until this account has a provider connection." });
-    return;
-  }
-
   const input = passcodeBody.safeParse(req.body);
   if (!input.success) {
-    res.status(400).json({ error: "Enter your AI activation passcode." });
+    res.status(400).json({ error: "Enter your four-digit account PIN." });
     return;
   }
 
   try {
-    const result = await pool.query(
-      "SELECT passcode_salt, passcode_hash, failed_attempts, locked_until FROM user_ai_guardrails WHERE user_id = $1",
+    const configuredPin = await pool.query(
+      "SELECT 1 FROM user_ai_guardrails WHERE user_id = $1",
       [userId],
     );
-    const record = result.rows[0] as
-      | {
-          passcode_salt: string;
-          passcode_hash: string;
-          failed_attempts: number;
-          locked_until: Date | null;
-        }
-      | undefined;
-    if (!record) {
-      res.status(409).json({ error: "Set your passcode before activating AI." });
-      return;
-    }
-    if (record.locked_until && new Date(record.locked_until).getTime() > Date.now()) {
-      res.status(429).json({ error: "Too many incorrect passcode attempts. Try again later." });
+    if ((configuredPin.rowCount ?? 0) === 0) {
+      res.status(409).json({ error: "Set your four-digit briefing PIN before activating AI." });
       return;
     }
 
-    const candidate = await hashPasscode(input.data.passcode, record.passcode_salt);
-    if (!validHash(candidate, record.passcode_hash)) {
-      await pool.query(
-        `UPDATE user_ai_guardrails
-         SET failed_attempts = failed_attempts + 1,
-             locked_until = CASE
-               WHEN failed_attempts + 1 >= 5 THEN NOW() + INTERVAL '15 minutes'
-               ELSE locked_until
-             END,
-             is_activated = false,
-             updated_at = NOW()
-         WHERE user_id = $1`,
-        [userId],
-      );
-      res.status(403).json({ error: "That activation passcode is not correct." });
+    const pinCheck = await verifyBriefingStartPin(userId, input.data.passcode);
+    if (!pinCheck.valid) {
+      res.status(pinCheck.status).json({ error: pinCheck.message });
+      return;
+    }
+
+    if (!(await getAiProviderStatusForUser(userId)).connected) {
+      res.status(503).json({
+        error: "AI cannot be activated until your saved Ollama connection and model are available.",
+      });
       return;
     }
 
@@ -243,11 +268,100 @@ router.post("/ai/guardrails/deactivate", async (req, res): Promise<void> => {
       "UPDATE user_ai_guardrails SET is_activated = false, updated_at = NOW() WHERE user_id = $1",
       [userId],
     );
-    res.json({ activated: false });
+    const cancelledActiveSummaries = cancelActiveAiBriefingSummaries(userId);
+    res.json({ activated: false, cancelledActiveSummaries });
   } catch {
     res.status(503).json({ error: "AI access could not be stopped." });
   }
 });
+
+export async function reserveAiBriefingBatch(
+  userId: string,
+  briefingId: string,
+  topics: z.infer<typeof aiRequestTab>[],
+): Promise<
+  | { allowed: true }
+  | { allowed: false; reason: "disabled" | "inactive" | "rate-limit"; retryAfterSeconds?: number }
+> {
+  if (!aiServerEnabled()) return { allowed: false, reason: "disabled" };
+
+  if (topics.length < 1 || topics.length > QWEN_REQUEST_LIMIT) {
+    return { allowed: false, reason: "rate-limit", retryAfterSeconds: QWEN_REQUEST_WINDOW_SECONDS };
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+      [`briefing-agent-qwen-rate-limit:${userId}`],
+    );
+    const state = await client.query<{ is_activated: boolean }>(
+      "SELECT is_activated FROM user_ai_guardrails WHERE user_id = $1 FOR UPDATE",
+      [userId],
+    );
+    if (state.rows[0]?.is_activated !== true) {
+      await client.query("COMMIT");
+      return { allowed: false, reason: "inactive" };
+    }
+
+    await client.query(
+      `DELETE FROM ai_briefing_requests
+       WHERE user_id = $1
+         AND briefing_id LIKE $2
+         AND created_at < NOW() - INTERVAL '5 minutes'`,
+      [userId, `${QWEN_RATE_RESERVATION_PREFIX}%`],
+    );
+    const usage = await client.query<{ created_at: Date | string }>(
+      `SELECT created_at FROM ai_briefing_requests
+       WHERE user_id = $1
+         AND briefing_id LIKE $2
+         AND created_at >= NOW() - INTERVAL '5 minutes'
+       ORDER BY created_at ASC`,
+      [userId, `${QWEN_RATE_RESERVATION_PREFIX}%`],
+    );
+    const now = Date.now();
+    const rate = getQwenRequestRateLimitState(
+      usage.rows.map((row) =>
+        row.created_at instanceof Date
+          ? row.created_at.getTime()
+          : new Date(row.created_at).getTime(),
+      ),
+      topics.length,
+      now,
+    );
+    if (!rate.allowed) {
+      await client.query("COMMIT");
+      return {
+        allowed: false,
+        reason: "rate-limit",
+        retryAfterSeconds: rate.retryAfterSeconds,
+      };
+    }
+
+    const reservedIds = topics.map((topic) =>
+      `${QWEN_RATE_RESERVATION_PREFIX}${briefingId}:${topic}`,
+    );
+    const reserved = await client.query(
+      `INSERT INTO ai_briefing_requests (user_id, briefing_id)
+       SELECT $1, unnest($2::text[])
+       ON CONFLICT (user_id, briefing_id) DO NOTHING
+       RETURNING briefing_id`,
+      [userId, reservedIds],
+    );
+    if (reserved.rowCount !== reservedIds.length) {
+      await client.query("ROLLBACK");
+      return { allowed: false, reason: "rate-limit", retryAfterSeconds: QWEN_REQUEST_WINDOW_SECONDS };
+    }
+    await client.query("COMMIT");
+    return { allowed: true };
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
 
 export async function reserveAiBriefingRequest(
   userId: string,
@@ -255,7 +369,7 @@ export async function reserveAiBriefingRequest(
   tab: z.infer<typeof aiRequestTab>,
 ): Promise<boolean> {
   if (!aiServerEnabled()) return false;
-  if (!await aiProviderAvailableForUser(userId)) return false;
+  if (!await getAiProviderConfig(userId)) return false;
 
   const state = await pool.query(
     "SELECT is_activated FROM user_ai_guardrails WHERE user_id = $1",

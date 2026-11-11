@@ -39,6 +39,11 @@ export interface BriefingInput {
   meetingAt?: Date;
   /** @maxLength 1500 */
   context?: string;
+  /**
+     * Optional direct question to guide the selected public searches and cited overview.
+     * @maxLength 500
+     */
+  question?: string;
   /** Explicitly opt this briefing into source-grounded AI summaries. Defaults to off. */
   useAi?: boolean;
   /** @minItems 1 */

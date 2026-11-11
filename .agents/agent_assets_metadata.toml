@@ -42,3 +42,17 @@ mtime_ms = 1794015632023
 storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:742d8fb7-8455-444c-89a0-21c32e2418fa/e39b1363-571a-4505-8cee-37043c13de05/0bfb96ba-da3b-47a8-96ac-30a6eae9b750"
 storage_version_token = "1794015753164191"
 content_type = "application/pdf"
+
+[[outputs]]
+id = "CkN_CdZ0QTIgoAhgeFiGS"
+uri = "file://pitch.pdf"
+type = "pdf"
+title = "Briefing Agent One-Page Pitch"
+description = "Single-page A4 pitch covering the problem, approach, Tavily AI retrieval, optional Ollama/Qwen summaries, and the stated hackathon evaluation criteria."
+logical_id = "39e51fac-d871-4a55-8121-5eb18e0b726b"
+content_hash = "sha256:296aca3caff4b0ebf769d2034896c7088f6488e08b7acf847660b6fb9f36a055"
+size = 64444
+mtime_ms = 1794337303825
+storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:742d8fb7-8455-444c-89a0-21c32e2418fa/39e51fac-d871-4a55-8121-5eb18e0b726b/f16bdb04-52e3-4f06-a43f-ab9e6e2d50bb"
+storage_version_token = "1794337368560408"
+content_type = "application/pdf"

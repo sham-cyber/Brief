@@ -19,6 +19,7 @@ import { Redirect, Route, Switch, useLocation, Router as WouterRouter } from 'wo
 
 const queryClient = new QueryClient();
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+const pendingQuestionStorageKey = `briefing-agent-pending-question:${basePath || '/'}`;
 const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
   import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
@@ -92,21 +93,22 @@ const AI_REQUESTS_PER_TAB = 1;
 const AI_SPEECH_LIMIT_SECONDS = 120;
 
 type AiGuardrailsStatus = {
+  provider: 'ollama';
+  aiProviderMessage: string | null;
   serverEnabled: boolean;
   passcodeConfigured: boolean;
   activated: boolean;
   requestsPerTab: number;
   speechLimitSeconds: number;
+  qwenRequestTimeoutSeconds: number;
+  qwenRequestLimit: number;
+  qwenRequestWindowSeconds: number;
+  qwenBriefWordLimit: number;
+  qwenBatchBackupSeconds: number;
+  qwenModelIdleUnloadSeconds: number;
   aiProviderConnected: boolean;
-  aiCredentialStorageReady: boolean;
   model: string | null;
-};
-
-type AiCredentialStatus = {
-  connected: boolean;
-  storageReady: boolean;
-  model: string | null;
-  updatedAt: string | null;
+  providerEndpoint: string | null;
 };
 
 type SavedPersonProfile = {
@@ -136,6 +138,68 @@ async function sendAccountRequest(path: string, method: string, body?: unknown) 
   return payload;
 }
 
+function DailyBriefingEventLimitSettings({
+  currentLimit,
+  onSaved,
+}: {
+  currentLimit: number;
+  onSaved: () => Promise<unknown> | unknown;
+}) {
+  const [dailyEventLimit, setDailyEventLimit] = useState(String(currentLimit));
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    setDailyEventLimit(String(currentLimit));
+  }, [currentLimit]);
+
+  const saveLimit = async () => {
+    setSaving(true);
+    setMessage('');
+    try {
+      await sendAccountRequest('briefings/daily-event-limit', 'PUT', {
+        dailyEventLimit: Number(dailyEventLimit),
+      });
+      await onSaved();
+      setMessage(`Daily limit saved: ${dailyEventLimit} briefing event${dailyEventLimit === '1' ? '' : 's'} per day.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'The daily limit could not be saved.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section className="mt-3 flex flex-wrap items-end gap-3 rounded-xl border border-[#ded9e2] bg-white/80 p-4" aria-label="Daily briefing event limit" data-testid="daily-event-limit-settings">
+      <div className="min-w-[12rem] flex-1">
+        <label htmlFor="daily-event-limit" className="text-sm font-semibold text-[#35364a]">Daily briefing events</label>
+        <p className="mt-1 text-xs leading-relaxed text-[#625d69]">Each signed-in account can choose 1–10 complete briefing events per calendar day (default 10). One event covers all selected topics and the resulting brief; the count resets at midnight IST.</p>
+      </div>
+      <select
+        id="daily-event-limit"
+        value={dailyEventLimit}
+        onChange={(event) => setDailyEventLimit(event.target.value)}
+        className="h-11 rounded-lg border border-[#bdb6c9] bg-white px-3 text-base font-semibold text-[#292e46]"
+        data-testid="select-daily-event-limit"
+      >
+        {Array.from({ length: 10 }, (_, index) => String(index + 1)).map((limit) => (
+          <option key={limit} value={limit}>{limit} event{limit === '1' ? '' : 's'}</option>
+        ))}
+      </select>
+      <button
+        type="button"
+        onClick={() => { void saveLimit(); }}
+        disabled={saving || dailyEventLimit === String(currentLimit)}
+        className="min-h-11 rounded-lg bg-[#292e46] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#414765] disabled:cursor-not-allowed disabled:opacity-50"
+        data-testid="button-save-daily-event-limit"
+      >
+        {saving ? 'Saving…' : 'Save daily limit'}
+      </button>
+      {message && <p className="basis-full text-sm font-medium text-[#51476e]" role="status" data-testid="daily-event-limit-message">{message}</p>}
+    </section>
+  );
+}
+
 async function sendGuardrailRequest(path: string, method: string, body?: unknown) {
   const response = await fetch(apiUrl(path), {
     method,
@@ -145,7 +209,10 @@ async function sendGuardrailRequest(path: string, method: string, body?: unknown
     headers: body ? { 'content-type': 'application/json' } : undefined,
     body: body ? JSON.stringify(body) : undefined,
   });
-  const payload = await response.json().catch(() => ({})) as { error?: string };
+  const payload = await response.json().catch(() => ({})) as {
+    error?: string;
+    cancelledActiveSummaries?: number;
+  };
   if (!response.ok) throw new Error(payload.error ?? 'The AI access request failed.');
   return payload;
 }
@@ -581,11 +648,12 @@ function AuthActions() {
 function AiGuardrailPanel({ onStatusChange }: { onStatusChange?: (status: AiGuardrailsStatus | null) => void }) {
   const { isLoaded, isSignedIn } = useUser();
   const [status, setStatus] = useState<AiGuardrailsStatus | null>(null);
-  const [credentialStatus, setCredentialStatus] = useState<AiCredentialStatus | null>(null);
   const [passcode, setPasscode] = useState('');
   const [confirmPasscode, setConfirmPasscode] = useState('');
-  const [apiKey, setApiKey] = useState('');
-  const [model, setModel] = useState('');
+  const [ollamaEndpoint, setOllamaEndpoint] = useState('http://127.0.0.1:11434');
+  const [ollamaModel, setOllamaModel] = useState('qwen3:0.6b');
+  const [ollamaToken, setOllamaToken] = useState('');
+  const connectionInitialized = useRef(false);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -594,72 +662,54 @@ function AiGuardrailPanel({ onStatusChange }: { onStatusChange?: (status: AiGuar
     const payload = await response.json().catch(() => ({})) as AiGuardrailsStatus & { error?: string };
     if (!response.ok) throw new Error(payload.error ?? 'Could not load AI guardrails.');
     setStatus(payload);
+    if (!connectionInitialized.current) {
+      setOllamaEndpoint(payload.providerEndpoint || 'http://127.0.0.1:11434');
+      setOllamaModel(payload.model || 'qwen3:0.6b');
+      connectionInitialized.current = true;
+    }
     onStatusChange?.(payload);
+    return payload;
   }, [onStatusChange]);
 
-  const refreshCredentialStatus = useCallback(async () => {
-    const payload = await sendAccountRequest('ai-credentials', 'GET') as AiCredentialStatus;
-    setCredentialStatus(payload);
-    if (payload.model) setModel(payload.model);
-  }, []);
+  const testOllamaConnection = async () => {
+    setBusy(true);
+    setMessage('');
+    try {
+      const freshStatus = await refreshStatus();
+      setMessage(
+        freshStatus.aiProviderConnected
+          ? `Connected to ${freshStatus.model ?? 'the selected model'} at ${freshStatus.providerEndpoint ?? 'the configured endpoint'}.`
+          : `${freshStatus.aiProviderMessage ?? 'Ollama is unavailable.'} Source-only briefs remain available.`,
+      );
+    } catch (error) {
+      setMessage(
+        `${error instanceof Error ? error.message : 'Ollama connection could not be tested.'} Source-only briefs remain available.`,
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn) {
       setStatus(null);
-      setCredentialStatus(null);
+      setOllamaEndpoint('http://127.0.0.1:11434');
+      setOllamaModel('qwen3:0.6b');
+      setOllamaToken('');
+      connectionInitialized.current = false;
       onStatusChange?.(null);
       return;
     }
-    void Promise.all([refreshStatus(), refreshCredentialStatus()]).catch((error: unknown) => {
+    void refreshStatus().catch((error: unknown) => {
       setMessage(error instanceof Error ? error.message : 'Could not load AI settings.');
     });
-  }, [isLoaded, isSignedIn, onStatusChange, refreshCredentialStatus, refreshStatus]);
-
-  const saveAiCredential = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setMessage('');
-    if (apiKey.trim().length < 20 || !/^[A-Za-z0-9._-]{1,100}$/.test(model.trim())) {
-      setMessage('Enter your OpenAI API key and the model ID enabled for your account.');
-      return;
-    }
-    setBusy(true);
-    try {
-      const payload = await sendAccountRequest('ai-credentials', 'PUT', {
-        apiKey: apiKey.trim(),
-        model: model.trim(),
-      }) as AiCredentialStatus;
-      setApiKey('');
-      setCredentialStatus(payload);
-      setMessage('Your key is saved encrypted for this account. AI remains off until you activate it.');
-      await refreshStatus();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'The AI key could not be saved.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const removeAiCredential = async () => {
-    setBusy(true);
-    setMessage('');
-    try {
-      const payload = await sendAccountRequest('ai-credentials', 'DELETE') as AiCredentialStatus;
-      setApiKey('');
-      setCredentialStatus(payload);
-      setMessage('The saved key was removed and AI deactivated. Revoke the key separately in your OpenAI account.');
-      await refreshStatus();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'The saved AI key could not be removed.');
-    } finally {
-      setBusy(false);
-    }
-  };
+  }, [isLoaded, isSignedIn, onStatusChange, refreshStatus]);
 
   const savePasscode = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setMessage('');
-    if (passcode.length < 8 || passcode.length > 128) {
-      setMessage('Use 8–128 characters for your activation passcode.');
+    if (!/^\d{4}$/.test(passcode)) {
+      setMessage('Use a four-digit PIN for both crawl starts and AI activation.');
       return;
     }
     if (passcode !== confirmPasscode) {
@@ -670,10 +720,45 @@ function AiGuardrailPanel({ onStatusChange }: { onStatusChange?: (status: AiGuar
     try {
       await sendGuardrailRequest('ai/guardrails/passcode', 'PUT', { passcode });
       setConfirmPasscode('');
-      setMessage('Passcode saved. The server switch still controls whether AI can be activated.');
+      setMessage('Your account PIN is saved for Tavily crawl starts and AI activation.');
       await refreshStatus();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'The passcode could not be saved.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveOllamaConnection = async () => {
+    setBusy(true);
+    setMessage('');
+    try {
+      await sendGuardrailRequest('ai/guardrails/connection', 'PUT', {
+        baseUrl: ollamaEndpoint,
+        model: ollamaModel,
+        ...(ollamaToken ? { authToken: ollamaToken } : {}),
+      });
+      setOllamaToken('');
+      setMessage('Your Ollama connection was saved securely for this account. Test it before activating AI.');
+      await refreshStatus();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'The Ollama connection could not be saved.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removeOllamaConnection = async () => {
+    if (!window.confirm('Remove this account’s saved Ollama endpoint and encrypted connection token?')) return;
+    setBusy(true);
+    setMessage('');
+    try {
+      await sendGuardrailRequest('ai/guardrails/connection', 'DELETE');
+      setOllamaToken('');
+      setMessage('The saved Ollama connection was removed from this account.');
+      await refreshStatus();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'The Ollama connection could not be removed.');
     } finally {
       setBusy(false);
     }
@@ -698,9 +783,13 @@ function AiGuardrailPanel({ onStatusChange }: { onStatusChange?: (status: AiGuar
     setBusy(true);
     setMessage('');
     try {
-      await sendGuardrailRequest('ai/guardrails/deactivate', 'POST');
+      const result = await sendGuardrailRequest('ai/guardrails/deactivate', 'POST');
       setPasscode('');
-      setMessage('AI access stopped for this account.');
+      setMessage(
+        result.cancelledActiveSummaries
+          ? 'AI access stopped; active Qwen summaries were cancelled. Ollama itself remains running.'
+          : 'AI access stopped; no Qwen summary was running.',
+      );
       await refreshStatus();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'AI access could not be stopped.');
@@ -719,81 +808,107 @@ function AiGuardrailPanel({ onStatusChange }: { onStatusChange?: (status: AiGuar
       <p className="leading-relaxed text-muted-foreground">
         AI is optional; public crawling and the source-based brief work with AI off. When enabled, the app makes at most {status?.requestsPerTab ?? AI_REQUESTS_PER_TAB} summary request per selected topic and keeps the combined speech text under a {Math.floor((status?.speechLimitSeconds ?? AI_SPEECH_LIMIT_SECONDS) / 60)}-minute limit.
       </p>
+      <p className="mt-2 leading-relaxed text-muted-foreground">
+        Qwen starts only after Tavily finishes and source checks pass. It skips topics without a stable, linked source. Each signed-in account is limited to {status?.qwenRequestLimit ?? 5} topic requests per {Math.round((status?.qwenRequestWindowSeconds ?? 300) / 60)} minutes; all summaries for one brief share a {status?.qwenBriefWordLimit ?? 400}-word maximum. Each request stops after {status?.qwenRequestTimeoutSeconds ?? 26} seconds, with a {status?.qwenBatchBackupSeconds ?? 120}-second backup stop. Ollama unloads the local model after {status?.qwenModelIdleUnloadSeconds ?? 26} seconds idle.
+      </p>
       {status ? (
         <>
-          <form className="mt-3 grid gap-2 sm:grid-cols-[1fr_1fr_auto]" onSubmit={saveAiCredential}>
-            <input
-              aria-label="Your OpenAI API key"
-              autoComplete="new-password"
-              type="password"
-              minLength={20}
-              maxLength={512}
-              value={apiKey}
-              onChange={(event) => setApiKey(event.target.value)}
-              placeholder={credentialStatus?.connected ? 'Replace your saved OpenAI key' : 'Your OpenAI API key'}
-              className="h-11 min-w-0 rounded-lg border border-[#d8d1e5] bg-white px-3 text-base text-[#292e46] outline-none focus:ring-2 focus:ring-[#887ba7]"
-              data-testid="input-ai-api-key"
-            />
-            <input
-              aria-label="OpenAI model ID"
-              autoComplete="off"
-              type="text"
-              maxLength={100}
-              value={model}
-              onChange={(event) => setModel(event.target.value)}
-              placeholder="Model ID enabled for your account"
-              className="h-11 min-w-0 rounded-lg border border-[#d8d1e5] bg-white px-3 text-base text-[#292e46] outline-none focus:ring-2 focus:ring-[#887ba7]"
-              data-testid="input-ai-model"
-            />
-            <button type="submit" disabled={busy || !status.aiCredentialStorageReady} className="h-11 rounded-lg bg-[#292e46] px-4 text-base font-semibold text-white disabled:opacity-50">
-              {busy ? 'Saving…' : 'Save AI key'}
-            </button>
-          </form>
-          <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-            <span data-testid="text-ai-key-status">
-              {credentialStatus?.connected ? `OpenAI key saved · model ${credentialStatus.model}` : 'No personal OpenAI key saved'}
-            </span>
-            {credentialStatus?.connected && (
-              <button type="button" onClick={() => void removeAiCredential()} disabled={busy} className="font-semibold text-[#98453e] underline underline-offset-2 disabled:opacity-50" data-testid="button-remove-ai-key">
-                Remove saved key
-              </button>
+          <div className={`mt-3 rounded-lg border px-4 py-3 text-sm leading-relaxed ${status.aiProviderConnected ? 'border-[#c7dfd2] bg-[#edf6f0] text-[#32634a]' : 'border-[#e5c5c0] bg-[#fbefed] text-[#7f413b]'}`} data-testid="ollama-provider-settings">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="font-semibold" role="status" data-testid="ollama-provider-status">
+                {status.aiProviderConnected
+                  ? `Ollama connected · ${status.model ?? 'model ready'}`
+                  : 'Ollama is offline or the model is missing'}
+              </p>
+              <span className="rounded-full border border-current/20 bg-white/70 px-2.5 py-1 text-xs font-bold uppercase tracking-wide">
+                Local model
+              </span>
+            </div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <label className="grid gap-1 text-xs font-semibold uppercase tracking-wide">
+                Ollama endpoint
+                <input
+                  aria-label="Ollama endpoint"
+                  value={ollamaEndpoint}
+                  onChange={(event) => setOllamaEndpoint(event.target.value)}
+                  placeholder="http://127.0.0.1:11434"
+                  className="h-10 w-full rounded-lg border border-[#c8d7d1] bg-white px-3 text-sm font-normal normal-case tracking-normal text-[#292e46]"
+                  data-testid="input-ollama-host"
+                />
+              </label>
+              <label className="grid gap-1 text-xs font-semibold uppercase tracking-wide">
+                Model name
+                <input
+                  aria-label="Ollama model"
+                  value={ollamaModel}
+                  onChange={(event) => setOllamaModel(event.target.value)}
+                  placeholder="qwen3:0.6b"
+                  className="h-10 w-full rounded-lg border border-[#c8d7d1] bg-white px-3 text-sm font-normal normal-case tracking-normal text-[#292e46]"
+                  data-testid="input-ollama-model"
+                />
+              </label>
+              <label className="grid gap-1 text-xs font-semibold uppercase tracking-wide sm:col-span-2">
+                Remote endpoint bearer token (required for remote endpoints)
+                <input
+                  aria-label="Ollama bearer token"
+                  type="password"
+                  autoComplete="new-password"
+                  value={ollamaToken}
+                  onChange={(event) => setOllamaToken(event.target.value)}
+                  placeholder="Enter token; it is never shown again"
+                  className="h-10 w-full rounded-lg border border-[#c8d7d1] bg-white px-3 text-sm font-normal normal-case tracking-normal text-[#292e46]"
+                  data-testid="input-ollama-token"
+                />
+              </label>
+            </div>
+            <p className="mt-2 text-sm text-[#32634a]">
+              Each account has its own encrypted connection. A local clone can use <code>http://127.0.0.1:11434</code>; remote endpoints must use HTTPS and a bearer token. Do not use an endpoint you do not control.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button type="button" onClick={() => void saveOllamaConnection()} disabled={busy || !ollamaEndpoint.trim() || !ollamaModel.trim()} className="h-10 rounded-lg bg-[#292e46] px-4 text-sm font-semibold text-white disabled:opacity-50" data-testid="button-save-ollama">Save my connection</button>
+              <button type="button" onClick={() => void testOllamaConnection()} disabled={busy || !status.providerEndpoint} className="h-10 rounded-lg bg-[#2d7555] px-4 text-sm font-semibold text-white disabled:opacity-50" data-testid="button-test-ollama">{busy ? 'Testing…' : 'Test saved connection'}</button>
+              <button type="button" onClick={() => void removeOllamaConnection()} disabled={busy || !status.providerEndpoint} className="h-10 rounded-lg border border-[#d7b3ae] bg-[#fbefed] px-4 text-sm font-semibold text-[#98453e] disabled:opacity-50" data-testid="button-remove-ollama">Remove connection</button>
+            </div>
+            {!status.aiProviderConnected && status.aiProviderMessage && (
+              <p className="mt-2 font-medium" role="status">{status.aiProviderMessage}</p>
             )}
+            <p className="mt-1">Only the subject, selected topic, and accepted public-source titles and snippets are sent to Ollama. SAP and private records are not sent.</p>
           </div>
-          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            The API key is encrypted at rest on the server and never returned to this page. This is not end-to-end encryption: an operator with access to both the database and encryption secret could decrypt it. OpenAI receives the subject name, topic, and accepted public-source titles and snippets—not SAP records. Provider charges go to the OpenAI account that owns this key. Removing it here does not revoke it at OpenAI.
-          </p>
           <p className="mt-1 text-sm leading-relaxed text-muted-foreground">AI may misstate evidence; check each linked source before relying on a summary.</p>
           <form className="mt-3 grid gap-2 sm:grid-cols-[1fr_1fr_auto]" onSubmit={savePasscode}>
             <input
-              aria-label="AI activation passcode"
-              autoComplete="new-password"
+              aria-label="Four-digit account PIN"
+              autoComplete="off"
               type="password"
-              minLength={8}
-              maxLength={128}
+              inputMode="numeric"
+              pattern="[0-9]{4}"
+              maxLength={4}
               value={passcode}
-              onChange={(event) => setPasscode(event.target.value)}
-              placeholder="New activation passcode"
+              onChange={(event) => setPasscode(event.target.value.replace(/\D/g, '').slice(0, 4))}
+              placeholder="Four-digit PIN"
               className="h-11 min-w-0 rounded-lg border border-[#d8d1e5] bg-white px-3 text-base text-[#292e46] outline-none focus:ring-2 focus:ring-[#887ba7]"
             />
             <input
-              aria-label="Confirm AI activation passcode"
-              autoComplete="new-password"
+              aria-label="Confirm four-digit account PIN"
+              autoComplete="off"
               type="password"
-              minLength={8}
-              maxLength={128}
+              inputMode="numeric"
+              pattern="[0-9]{4}"
+              maxLength={4}
               value={confirmPasscode}
-              onChange={(event) => setConfirmPasscode(event.target.value)}
-              placeholder="Confirm passcode"
+              onChange={(event) => setConfirmPasscode(event.target.value.replace(/\D/g, '').slice(0, 4))}
+              placeholder="Confirm PIN"
               className="h-11 min-w-0 rounded-lg border border-[#d8d1e5] bg-white px-3 text-base text-[#292e46] outline-none focus:ring-2 focus:ring-[#887ba7]"
             />
-            <button type="submit" disabled={busy} className="h-11 rounded-lg bg-[#292e46] px-4 text-base font-semibold text-white disabled:opacity-50">Save passcode</button>
+            <button type="submit" disabled={busy || passcode.length !== 4 || confirmPasscode.length !== 4} className="h-11 rounded-lg bg-[#292e46] px-4 text-base font-semibold text-white disabled:opacity-50">Save PIN</button>
           </form>
           <div className="mt-2 flex flex-wrap gap-2">
             <button type="button" onClick={() => void activate()} disabled={busy || !status.serverEnabled || !status.passcodeConfigured || !status.aiProviderConnected || !passcode} className="h-11 rounded-lg border border-[#d7b3ae] bg-[#fbefed] px-4 text-base font-semibold text-[#98453e] disabled:cursor-not-allowed disabled:opacity-50">Activate AI</button>
             <button type="button" onClick={() => void deactivate()} disabled={busy || !status.activated} className="h-11 rounded-lg border border-[#d8d1e5] bg-white px-4 text-base font-semibold text-[#443a66] disabled:cursor-not-allowed disabled:opacity-50">Stop AI</button>
           </div>
+          <p className="mt-2 text-sm text-muted-foreground">Stop AI blocks future summaries and cancels any Qwen summaries already running for this account. The Ollama service remains running.</p>
           {!status.serverEnabled && <p className="mt-2 text-[#98453e]">The server switch is off. No AI request can run.</p>}
-          {!status.aiProviderConnected && <p className="mt-1 text-muted-foreground">Save your own OpenAI key, set an activation passcode, and enable the server switch before AI can be activated.</p>}
+          {!status.aiProviderConnected && <p className="mt-1 text-muted-foreground">Start Ollama on this computer and install the selected model before activating AI. Your factual, source-linked brief still works without it.</p>}
         </>
       ) : (
         <p className="mt-2 text-[#98453e]" role="status">{message || 'AI access settings are unavailable.'}</p>
@@ -1122,7 +1237,7 @@ function TopicBlock({
         <section className="mt-4 rounded-xl border border-[#d8d2df] bg-[#f8f6fb] px-4 py-4" aria-label="Open job searches" data-testid="open-role-searches">
           <h4 className="font-semibold text-[#292d43]">Open roles on LinkedIn</h4>
           <p className="mt-1 text-xs leading-relaxed text-[#65616d]">
-            Current job postings are not imported automatically; these links open LinkedIn searches.
+            These are search shortcuts, not job listings collected by this app. Open a link to see LinkedIn’s current results; this app has not fetched or verified those postings.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <a href={linkedinJobsSearchUrl(openRoleSearchSubject, 'sales')} target="_blank" rel="noreferrer" className="rounded-lg border border-[#d8d2df] bg-white px-3 py-2 text-xs font-semibold text-[#463b69] underline underline-offset-2" data-testid="link-linkedin-sales-openings">
@@ -1269,7 +1384,7 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
       ...visibleHighlights.flatMap((item) => [`${item.category.toUpperCase()}: ${item.title}`, `${item.summary}${item.sourceIds.length ? ` [${item.sourceIds.join(', ')}]` : ''}`, '']),
       ...(openRoleSearchSubject && result.topics.includes('hire') && (activeTopic === 'all' || activeTopic === 'hire')
         ? [
-            'OPEN ROLES — LinkedIn searches; listings are not automatically crawled',
+            'OPEN ROLE SEARCHES — links only; this app has not fetched or verified job listings',
             `Sales: ${linkedinJobsSearchUrl(openRoleSearchSubject, 'sales')}`,
             `Maintenance: ${linkedinJobsSearchUrl(openRoleSearchSubject, 'maintenance')}`,
             '',
@@ -1427,6 +1542,17 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
           {visibleOverview.text}
           <References sourceIds={visibleOverview.sourceIds} sources={result.sources} />
         </p>
+        {result.sources.length === 0 && result.searchResultsReturned !== null && (
+          <p
+            className="mt-5 rounded-xl border border-[#d9d2e3] bg-[#f4f1f8] px-4 py-3 text-base leading-relaxed text-[#3e3852]"
+            role="status"
+            data-testid="briefing-empty-state"
+          >
+            {result.searchResultsReturned === 0
+              ? `Tavily returned no results across ${result.sourceSearchesCompleted} selected-topic searches in this 30-day window.`
+              : `Tavily returned ${result.searchResultsReturned} results, but none passed the date, source-link, company-name, and selected-topic checks. The source panel explains this check.`}
+          </p>
+        )}
         {result.sourceMode !== 'sap' && (
           <div className="mt-4 grid gap-2 md:grid-cols-2" aria-label="Top positive and negative signals">
             <p className="rounded-lg border border-[#cfe2d3] bg-[#f0f7f1] px-3 py-2 text-sm leading-relaxed text-[#315d43]">
@@ -1479,6 +1605,15 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
       {result.aiSummaryNotice && (
         <p className="mt-4 rounded-lg border border-[#e7c49c] bg-[#fff7e9] px-4 py-3 text-sm leading-relaxed text-[#714d21]" role="status" data-testid="ai-summary-notice">
           {result.aiSummaryNotice}
+        </p>
+      )}
+
+      {result.aiSummaries.some((summary) => visibleTopics.includes(summary.category)) && (
+        <p className="no-print mt-3 text-sm font-semibold text-[#51476e]" data-testid="ai-summary-word-count">
+          Qwen summary text: {result.aiSummaries
+            .filter((summary) => visibleTopics.includes(summary.category))
+            .reduce((total, summary) => total + summary.summary.trim().split(/\s+/).filter(Boolean).length, 0)} / 400 words
+          {activeTopic === 'all' ? ' across the selected topics' : ` in ${TOPICS.find((topic) => topic.value === activeTopic)?.label}`}
         </p>
       )}
 
@@ -1561,7 +1696,7 @@ function PrintOnePageBrief({ result, activeTopic }: { result: BriefingResult; ac
   const printHighlights = printTopics.flatMap((topic) =>
     result.highlights
       .filter((item) => item.category === topic)
-      .slice(0, 1),
+      .slice(0, 2),
   );
   const printSapData = result.sapAreas.flatMap((area) =>
     result.sapData.filter((item) => item.area === area).slice(0, 1),
@@ -1695,7 +1830,7 @@ function PrintOnePageBrief({ result, activeTopic }: { result: BriefingResult; ac
                       <a href={linkedinJobsSearchUrl(openRoleSearchSubject, 'sales')}>Sales</a>
                       {' · '}
                       <a href={linkedinJobsSearchUrl(openRoleSearchSubject, 'maintenance')}>Maintenance</a>
-                      {' on LinkedIn; listings are not crawled automatically.'}
+                      {' on LinkedIn. These links open searches; this app has not fetched or verified the postings.'}
                     </p>
                   )}
                   {question && <p><strong>Open question:</strong> {questionText} <PrintReferences sourceIds={question.sourceIds} sources={result.sources} /></p>}
@@ -1742,7 +1877,7 @@ function PrintOnePageBrief({ result, activeTopic }: { result: BriefingResult; ac
                   <a href={linkedinJobsSearchUrl(openRoleSearchSubject, 'sales')} data-testid="link-print-sales-openings">Sales</a>
                   {' · '}
                   <a href={linkedinJobsSearchUrl(openRoleSearchSubject, 'maintenance')} data-testid="link-print-maintenance-openings">Maintenance</a>
-                  {' on LinkedIn; listings are not crawled automatically.'}
+                  {' on LinkedIn. These links open searches; this app has not fetched or verified the postings.'}
                 </p>
               )}
               {question && <p className="print-question"><strong>Open question:</strong> {questionText} <PrintReferences sourceIds={question.sourceIds} sources={result.sources} /></p>}
@@ -1798,6 +1933,7 @@ function Home() {
     if (accountLoaded) void sourceStatusQuery.refetch();
   }, [accountLoaded, isSignedIn, sourceStatusQuery.refetch]);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const briefingOutputRef = useRef<HTMLElement | null>(null);
   const mutation = useCreateBriefing({ request: { get signal() { return abortControllerRef.current?.signal; } } });
   const [subject, setSubject] = useState('');
   const [subjectType, setSubjectType] = useState<'company' | 'person'>('company');
@@ -1814,17 +1950,20 @@ function Home() {
   const [topics, setTopics] = useState<Topic[]>(TOPICS.map((topic) => topic.value));
   const [meetingAt, setMeetingAt] = useState('');
   const [context, setContext] = useState('');
+  const [question, setQuestion] = useState('');
+  const [landingAskMessage, setLandingAskMessage] = useState('');
   const [aiStatus, setAiStatus] = useState<AiGuardrailsStatus | null>(null);
   const [useAi, setUseAi] = useState(false);
   const [resultKey, setResultKey] = useState('');
   const [failedKey, setFailedKey] = useState('');
   const [timedOutKey, setTimedOutKey] = useState('');
+  const [cancelledKey, setCancelledKey] = useState('');
   const [pinPromptOpen, setPinPromptOpen] = useState(false);
   const [startPin, setStartPin] = useState('');
   const [pinDialogError, setPinDialogError] = useState('');
   const activeRequestKey = useRef('');
   const timeoutRef = useRef<number | undefined>(undefined);
-  const requestKey = JSON.stringify([subject.trim(), subjectType, personRole, publicRoleTitle.trim(), companyName.trim(), sourceMode, sourceMode === 'sap' ? sapAreas : [], meetingAt, topics, context.trim(), useAi]);
+  const requestKey = JSON.stringify([subject.trim(), subjectType, personRole, publicRoleTitle.trim(), companyName.trim(), sourceMode, sourceMode === 'sap' ? sapAreas : [], meetingAt, topics, context.trim(), question.trim(), useAi]);
   const meetingTimeIsValid = !meetingAt || !Number.isNaN(new Date(meetingAt).getTime());
   const hasValidSubject = subject.trim().length >= 2;
   const hasValidRoleSelection = subjectType !== 'person' || Boolean(personRole);
@@ -1843,7 +1982,6 @@ function Home() {
   const canStart = sourceStatusQuery.data?.canStart === true;
   const keySource = sourceStatusQuery.data?.keySource;
   const startPinConfigured = sourceStatusQuery.data?.startPinConfigured === true;
-  const ownerAccountConfigured = sourceStatusQuery.data?.ownerAccountConfigured === true;
   const dailyCrawlStartsLimit = sourceStatusQuery.data?.dailyCrawlStartsLimit ?? null;
   const dailyCrawlStartsUsed = sourceStatusQuery.data?.dailyCrawlStartsUsed ?? null;
   const dailyCrawlStartsRemaining = sourceStatusQuery.data?.dailyCrawlStartsRemaining ?? null;
@@ -1875,18 +2013,46 @@ function Home() {
   const hasRequiredSelections = hasTopics && (sourceMode !== 'sap' || sapAreas.length > 0);
   const hasCurrentResult = Boolean(mutation.data && resultKey === requestKey);
   const result = hasCurrentResult ? mutation.data : undefined;
+  useEffect(() => {
+    if (!result) return;
+    const frame = window.requestAnimationFrame(() => {
+      briefingOutputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [result?.briefingId]);
   const currentRequestIsPending = mutation.isPending && activeRequestKey.current === requestKey;
-  const currentRequestFailed = (mutation.isError && failedKey === requestKey) || timedOutKey === requestKey;
+  const currentRequestCancelled = cancelledKey === requestKey;
+  const currentRequestFailed = !currentRequestCancelled && ((mutation.isError && failedKey === requestKey) || timedOutKey === requestKey);
+  useEffect(() => {
+    const stopRequestOnPageExit = () => {
+      abortControllerRef.current?.abort();
+    };
+    window.addEventListener('pagehide', stopRequestOnPageExit);
+    return () => window.removeEventListener('pagehide', stopRequestOnPageExit);
+  }, []);
   const selectedSavedProfile = savedPersonProfiles.find((profile) => profile.id === selectedSavedProfileId);
   const selectedProfileMatchesForm = Boolean(
     selectedSavedProfile &&
     selectedSavedProfile.personName.trim().toLocaleLowerCase() === subject.trim().toLocaleLowerCase() &&
     selectedSavedProfile.personRole === personRole,
   );
+  useEffect(() => {
+    if (!accountLoaded || !isSignedIn) return;
+    try {
+      const pendingQuestion = window.sessionStorage.getItem(pendingQuestionStorageKey);
+      if (pendingQuestion) {
+        setQuestion(pendingQuestion.slice(0, 500));
+        window.sessionStorage.removeItem(pendingQuestionStorageKey);
+      }
+    } catch {
+      // The user can still enter the question again after signing in.
+    }
+  }, [accountLoaded, isSignedIn]);
   const handleAiStatusChange = useCallback((nextStatus: AiGuardrailsStatus | null) => {
     setAiStatus(nextStatus);
     if (!nextStatus?.activated) setUseAi(false);
-  }, []);
+    void sourceStatusQuery.refetch();
+  }, [sourceStatusQuery.refetch]);
 
   const handleSourceModeChange = (nextSource: SourceMode) => {
     setSourceModeAlert('');
@@ -2044,10 +2210,11 @@ function Home() {
       (sourceMode === 'sap' &&
         sapSourceReady &&
         hasSapOrganization);
-    if (!/^\d{4}$/.test(pin) || !isSignedIn || !selectedSourceReady || !startPinConfigured || !ownerAccountConfigured || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || (useAi && !aiStatus?.activated) || mutation.isPending) return;
+    if (!/^\d{4}$/.test(pin) || !isSignedIn || !selectedSourceReady || !startPinConfigured || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || (useAi && !aiStatus?.activated) || mutation.isPending) return;
     activeRequestKey.current = key;
     setFailedKey('');
     setTimedOutKey('');
+    setCancelledKey('');
     setPinDialogError('');
     if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
     abortControllerRef.current = new AbortController();
@@ -2057,7 +2224,7 @@ function Home() {
         activeRequestKey.current = `timed-out:${key}`;
         abortControllerRef.current?.abort();
       }
-    }, 180_000);
+    }, 120_000);
     mutation.mutate(
       {
         data: {
@@ -2072,6 +2239,7 @@ function Home() {
           meetingAt: meetingAt ? new Date(meetingAt).toISOString() : undefined,
           topics,
           useAi,
+          ...(question.trim() ? { question: question.trim() } : {}),
           ...(context.trim() ? { context: context.trim() } : {}),
         },
       },
@@ -2105,7 +2273,21 @@ function Home() {
         },
       },
     );
-  }, [aiStatus?.activated, companyName, context, crawlAlreadyActive, dailyCrawlStartLimitReached, dailySearchQuotaInsufficient, hasSapOrganization, hasTopics, hasValidRole, hasValidSubject, isSignedIn, meetingAt, meetingTimeIsValid, mutation.isPending, mutation.mutate, ownerAccountConfigured, personRole, publicRoleTitle, sapAreas, sapAreasUnavailable.length, sapAvailableAreas, sapConfigured, sapSourceReady, sourceMode, sourceStatusQuery.refetch, startPinConfigured, subject, subjectType, tavilyConfigured, topics, useAi]);
+  }, [aiStatus?.activated, companyName, context, crawlAlreadyActive, dailyCrawlStartLimitReached, dailySearchQuotaInsufficient, hasSapOrganization, hasTopics, hasValidRole, hasValidSubject, isSignedIn, meetingAt, meetingTimeIsValid, mutation.isPending, mutation.mutate, personRole, publicRoleTitle, question, sapAreas, sapAreasUnavailable.length, sapAvailableAreas, sapConfigured, sapSourceReady, sourceMode, sourceStatusQuery.refetch, startPinConfigured, subject, subjectType, tavilyConfigured, topics, useAi]);
+
+  const handleGenerateBriefing = () => {
+    const pendingQuestion = question.trim();
+    if (!pendingQuestion) {
+      setLandingAskMessage('Enter a question to continue.');
+      return;
+    }
+    try {
+      window.sessionStorage.setItem(pendingQuestionStorageKey, pendingQuestion.slice(0, 500));
+      window.location.assign(`${basePath}/sign-in`);
+    } catch {
+      setLandingAskMessage('Your browser could not save the question. Sign in, then enter it again.');
+    }
+  };
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -2129,6 +2311,8 @@ function Home() {
   const errorMessage = apiError?.data?.error ?? apiError?.message ?? 'The briefing could not be generated. Check your connection and try again.';
   const readinessState = !isSignedIn
     ? 'not-ready'
+    : currentRequestCancelled
+      ? 'error'
     : currentRequestFailed
       ? 'error'
       : currentRequestIsPending
@@ -2148,9 +2332,7 @@ function Home() {
       ? 'Not ready — the server could not confirm source status. Check the API Server workflow.'
       : sourceStatusQuery.isLoading
         ? 'Checking source setup…'
-        : !ownerAccountConfigured
-          ? 'Not ready — configure the approved account in API Server Secrets.'
-          : !canStart
+        : !canStart
             ? 'Not ready — only the configured owner account can start crawls.'
             : !startPinConfigured
               ? 'Not ready — configure the briefing start PIN in API Server Secrets.'
@@ -2188,7 +2370,7 @@ function Home() {
                                         ? `Not ready — only ${dailySearchRequestsRemaining ?? 0} daily Tavily topic searches remain; reduce selected topics or try after the IST reset.`
                                         : readinessState === 'error'
                                           ? timedOutKey === requestKey
-                                            ? 'Not ready — the three-minute backup stop ended this crawl.'
+                                            ? 'Not ready — the two-minute stop ended this briefing.'
                                             : 'Not ready — source collection failed. Try again.'
                                           : readinessState === 'crawling'
                                             ? sourceMode === 'sap'
@@ -2211,6 +2393,18 @@ function Home() {
             <span className="flex items-center gap-2 font-mono text-[9px] uppercase tracking-[.14em] text-[#736d7d] sm:text-[10px]">
               <span className="h-1.5 w-1.5 rounded-full bg-[#5b9b7e]" aria-hidden="true" /> Research, with receipts
             </span>
+            {isSignedIn && aiStatus && (
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[9px] font-bold uppercase tracking-wide sm:text-[10px] ${aiStatus.aiProviderConnected ? 'border-[#c7dfd2] bg-[#edf6f0] text-[#32634a]' : 'border-[#e5c5c0] bg-[#fbefed] text-[#7f413b]'}`}
+                role="status"
+                aria-label={`AI provider status: ${aiStatus.provider}, ${aiStatus.aiProviderConnected ? 'connected' : 'not connected'}`}
+                title="Local Ollama model configured for this app"
+                data-testid="ai-provider-badge"
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
+                {`${aiStatus.aiProviderConnected ? 'Ollama' : 'Ollama offline'}${aiStatus.model ? ` · ${aiStatus.model}` : ''}`}
+              </span>
+            )}
             <AuthActions />
           </div>
         </nav>
@@ -2228,8 +2422,47 @@ function Home() {
             ) : (
               <div className="mb-5 rounded-2xl border border-[#d8d2df] bg-[#f4f1f8] px-5 py-6 sm:px-8 sm:py-8">
                 <p className="font-mono text-xs uppercase tracking-[.14em] text-[#655487]">Briefing Agent · source-first research</p>
-                <h1 id="create-heading" className="mt-2 max-w-3xl font-serif text-4xl leading-tight tracking-[-.025em] text-[#282d43] sm:text-5xl">A short brief for the meeting ahead.</h1>
-                <p className="mt-4 max-w-2xl text-lg leading-relaxed text-[#514e5c]">Review a company or person’s latest 30 days with factual links to the reporting. AI summaries are optional and stay off unless you enable them in your signed-in settings.</p>
+                <h1 id="create-heading" className="mt-2 max-w-3xl font-serif text-4xl leading-tight tracking-[-.025em] text-[#282d43] sm:text-5xl">Your AI Briefing Assistant</h1>
+                <p className="mt-4 max-w-2xl text-lg leading-relaxed text-[#514e5c]">Tavily Search finds cited public reports from the last 30 days. Optional Qwen summaries use each account’s saved Ollama connection when enabled.</p>
+                <form
+                  className="mt-6 max-w-4xl rounded-xl border border-[#d8d2df] bg-[#fffefa] p-4 sm:p-5"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    handleGenerateBriefing();
+                  }}
+                  aria-label="Ask a public briefing question"
+                  data-testid="landing-ask-form"
+                >
+                  <label htmlFor="landing-question" className="mb-2 block text-base font-semibold text-[#35364a]">Ask an open question</label>
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <input
+                      id="landing-question"
+                      type="text"
+                      value={question}
+                      onChange={(event) => {
+                        setQuestion(event.target.value);
+                        setLandingAskMessage('');
+                      }}
+                      maxLength={500}
+                      required
+                      placeholder="Ask about a company or person (for example, latest Finolex Cables launches)"
+                      className="h-12 min-w-0 flex-1 rounded-lg border border-[#d9d4df] bg-white px-3 text-base text-foreground placeholder:text-[#777280] focus:border-[#8c7dae] focus:outline-none"
+                      data-testid="input-landing-question"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!question.trim()}
+                      className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-lg bg-[#292e46] px-5 text-base font-semibold text-white transition hover:bg-[#3c4160] disabled:cursor-not-allowed disabled:opacity-45"
+                      data-testid="button-landing-generate-briefing"
+                    >
+                      Generate Briefing <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </div>
+                  <p className="mt-3 text-sm leading-relaxed text-[#625d69]">
+                    The question is sent to Tavily with the selected company or person and topics after you sign in, complete the brief, and enter your account PIN. No search starts before that. Don’t include private information.
+                  </p>
+                  {landingAskMessage && <p role="alert" className="mt-2 text-sm font-semibold text-[#8f4039]">{landingAskMessage}</p>}
+                </form>
               </div>
             )}
             <form onSubmit={submit} className="rounded-2xl border border-[#d8d2df] bg-[#fbfaf6] p-5 shadow-[0_12px_35px_rgba(38,37,55,.06)] sm:p-6" aria-describedby={isSignedIn ? 'form-note' : undefined}>
@@ -2610,6 +2843,24 @@ function Home() {
               </fieldset>
               </div>
 
+              <div className="mb-1.5 mt-5 flex items-center justify-between">
+                <label htmlFor="briefing-question" className="text-base font-semibold text-[#35364a]">Open question (optional)</label>
+                <span className="text-sm text-[#625d69]">{question.length} / 500</span>
+              </div>
+              <input
+                id="briefing-question"
+                type="text"
+                value={question}
+                onChange={(event) => setQuestion(event.target.value)}
+                maxLength={500}
+                placeholder="Ask about the selected company or person"
+                className="h-12 w-full rounded-lg border border-[#d9d4df] bg-[#fffefa] px-3 text-base text-foreground placeholder:text-[#777280] focus:border-[#8c7dae] focus:outline-none"
+                data-testid="input-briefing-question"
+              />
+              <p className="mt-1.5 text-sm leading-relaxed text-[#625d69]">
+                This question guides the selected 30-day Tavily searches without adding requests. If you opt into AI, it is also sent with public evidence to your configured Ollama server.
+              </p>
+
               <label htmlFor="meetingAt" className="mb-1.5 mt-5 block text-base font-semibold text-[#35364a]">Meeting time (optional)</label>
               <input
                 id="meetingAt"
@@ -2654,7 +2905,7 @@ function Home() {
                 <span>
                   <span className="block text-base font-semibold text-[#35364a]">Add AI summaries for selected topics</span>
             <span className="mt-1 block text-sm leading-relaxed text-[#625d69]">
-                    Off by default. When enabled, one request is allowed per selected topic. The subject name and accepted public-source titles and snippets are sent to OpenAI; SAP records remain separate.
+                    Off by default. When enabled, one request is allowed per selected topic. The subject, open question, and accepted public-source titles and snippets are sent only to the configured Ollama server; SAP and private records remain separate.
                     {!canStart
                       ? ' Add an active Tavily key first; AI can only summarize results Tavily returns.'
                       : !aiStatus?.activated
@@ -2682,7 +2933,7 @@ function Home() {
                 <button
                   type="button"
                   onClick={() => { setPinDialogError(''); setStartPin(''); setPinPromptOpen(true); }}
-                  disabled={mutation.isPending || !canStart || !sourceReady || !startPinConfigured || !ownerAccountConfigured || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasRequiredSelections}
+                  disabled={mutation.isPending || !canStart || !sourceReady || !startPinConfigured || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasRequiredSelections}
                   className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#292e46] px-8 text-lg font-bold text-white transition hover:bg-[#3c4160] disabled:cursor-not-allowed disabled:opacity-45"
                   data-testid="button-generate-briefing"
                 >
@@ -2706,13 +2957,19 @@ function Home() {
                         : 'Private sources are not connected. No private data is read.'}
                 </p>
                 {(sourceMode === 'public' || sourceMode === 'sap') && canStart && dailyCrawlStartsUsed !== null && dailyCrawlStartsLimit !== null && (
-                  <p className="rounded-lg border border-[#d7cde9] bg-[#f5f1fb] px-4 py-3 font-semibold text-[#40345f]" data-testid="text-daily-briefing-events">
-                    Today’s Tavily briefing events: {dailyCrawlStartsUsed}/{dailyCrawlStartsLimit} used · {dailyCrawlStartsRemaining ?? 0} remaining (resets at midnight IST).{dailySearchRequestsLimit !== null && dailySearchRequestsRemaining !== null ? ` Topic searches remaining: ${dailySearchRequestsRemaining}/${dailySearchRequestsLimit}.` : ''} All selected tabs and the resulting print/copy belong to one event.
-                  </p>
+                  <>
+                    <p className="rounded-lg border border-[#d7cde9] bg-[#f5f1fb] px-4 py-3 font-semibold text-[#40345f]" data-testid="text-daily-briefing-events">
+                      Today’s briefing events: {dailyCrawlStartsUsed}/{dailyCrawlStartsLimit} used · {dailyCrawlStartsRemaining ?? 0} remaining (resets at midnight IST).{dailySearchRequestsLimit !== null && dailySearchRequestsRemaining !== null ? ` Topic searches remaining: ${dailySearchRequestsRemaining}/${dailySearchRequestsLimit}.` : ''} All selected tabs and the resulting brief belong to one event.
+                    </p>
+                    <DailyBriefingEventLimitSettings
+                      currentLimit={dailyCrawlStartsLimit}
+                      onSaved={() => sourceStatusQuery.refetch()}
+                    />
+                  </>
                 )}
                 {sourceMode === 'public' && (
                   <p>
-                    Each event can search up to five selected topic tabs, one Tavily request per tab. A crawl can run for up to two minutes; the three-minute backup stop remains. The app-wide rate limit stays at 10 Tavily requests per five minutes. Briefing starts only when you press Brief and verify the PIN.
+                    Each event can search up to five selected topic tabs, one Tavily request per tab. A crawl can run for up to two minutes; the three-minute backup stop remains. The app-wide rate limit is five Tavily requests per rolling five minutes. Briefing starts only when you press Brief and verify the PIN.
                   </p>
                 )}
                 {sourceMode === 'sap' && (
@@ -2798,9 +3055,30 @@ function Home() {
             )}
 
             {mutation.isPending && (
-              <div className="mt-4 flex items-start gap-3 rounded-xl border border-[#ddd6e8] bg-[#f4f1f8] px-4 py-3" role="status" aria-live="polite" data-testid="status-generating">
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#ddd6e8] bg-[#f4f1f8] px-4 py-3" role="status" aria-live="polite" data-testid="status-generating">
                 <span className="mt-1 flex h-4 w-4 shrink-0 items-center justify-center"><span className="h-2 w-2 animate-pulse rounded-full bg-[#796a9d]" /></span>
-                <div><p className="text-xs font-semibold text-[#49405e]">Reading the latest coverage</p><p className="mt-1 text-[11px] leading-relaxed text-[#777082]">Finding useful signals and checking every reference.</p></div>
+                <div className="min-w-0 flex-1"><p className="text-xs font-semibold text-[#49405e]">Reading the latest coverage</p><p className="mt-1 text-[11px] leading-relaxed text-[#777082]">Tavily searches first; optional Qwen follows. The whole request stops after two minutes.</p></div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCancelledKey(requestKey);
+                    activeRequestKey.current = `cancelled:${requestKey}`;
+                    if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
+                    timeoutRef.current = undefined;
+                    abortControllerRef.current?.abort(new DOMException('Briefing stopped by user.', 'AbortError'));
+                    abortControllerRef.current = null;
+                    setStartPin('');
+                  }}
+                  className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#e4b7b2] bg-[#fbefed] px-4 text-sm font-semibold text-[#98453e]"
+                  data-testid="button-stop-briefing"
+                >
+                  <Square className="h-4 w-4 fill-current" aria-hidden="true" /> Stop Tavily + Qwen
+                </button>
+              </div>
+            )}
+            {currentRequestCancelled && !mutation.isPending && (
+              <div className="mt-4 rounded-xl border border-[#e4c9c3] bg-[#fbf0ed] p-4" role="status" data-testid="status-briefing-cancelled">
+                Tavily search and any follow-up Qwen request were stopped.
               </div>
             )}
             {currentRequestFailed && !pinPromptOpen && (
@@ -2813,7 +3091,7 @@ function Home() {
 
           </section>
 
-          <section className="min-w-0" aria-live="polite" aria-label="Briefing">
+          <section ref={briefingOutputRef} className="min-w-0 scroll-mt-6" aria-live="polite" aria-label="Briefing" tabIndex={-1}>
             {currentRequestIsPending && !result ? (
               <LoadingBrief />
             ) : result ? (

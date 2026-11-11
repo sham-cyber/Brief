@@ -98,6 +98,11 @@ export interface BriefingInput {
   meetingAt?: string;
   /** @maxLength 1500 */
   context?: string;
+  /**
+     * Optional direct question to guide the selected public searches and cited overview.
+     * @maxLength 500
+     */
+  question?: string;
   /** Explicitly opt this briefing into source-grounded AI summaries. Defaults to off. */
   useAi?: boolean;
   /** @minItems 1 */
@@ -220,6 +225,23 @@ export interface BriefSource {
   images?: BriefSourceImagesItem[];
 }
 
+export interface DailyBriefingEventLimitInput {
+  /**
+     * Maximum number of complete briefing events for the signed-in user per Asia/Kolkata calendar day.
+     * @minimum 1
+     * @maximum 10
+     */
+  dailyEventLimit: number;
+}
+
+export interface DailyBriefingEventLimitResponse {
+  /**
+     * @minimum 1
+     * @maximum 10
+     */
+  dailyEventLimit: number;
+}
+
 export type BriefingSourceStatusProvider = typeof BriefingSourceStatusProvider[keyof typeof BriefingSourceStatusProvider];
 
 
@@ -250,7 +272,7 @@ export interface BriefingSourceStatus {
   provider: BriefingSourceStatusProvider;
   /** Whether this signed-in account has an effective Tavily key. */
   configured: boolean;
-  /** Whether this signed-in account is the configured owner allowed to start crawls. */
+  /** Whether an authenticated account may start a crawl; an effective Tavily key and that account's PIN are still required. */
   canStart: boolean;
   /** Effective key source for this account; the project key is owner-only. */
   keySource: BriefingSourceStatusKeySource;
@@ -272,7 +294,8 @@ export interface BriefingSourceStatus {
   /** @nullable */
   dailyCrawlResetsAt: string | null;
   /**
-     * @minimum 0
+     * The signed-in user's configured daily event limit; defaults to ten and resets at midnight IST.
+     * @minimum 1
      * @maximum 10
      * @nullable
      */
@@ -288,7 +311,7 @@ export interface BriefingSourceStatus {
      */
   dailyCrawlStartsRemaining: number | null;
   /**
-     * Informational maximum of five topic searches across each of ten daily briefing events; not a separate daily start limit.
+     * The configured daily event limit multiplied by five selected-topic searches per event.
      * @minimum 0
      * @maximum 50
      * @nullable
@@ -331,28 +354,12 @@ export interface TavilyCredentialInput {
   apiKey: string;
 }
 
-export interface AiCredentialStatus {
-  connected: boolean;
-  storageReady: boolean;
-  /** @nullable */
-  model: string | null;
-  /** @nullable */
-  updatedAt: string | null;
-}
+export type AiGuardrailStatusProvider = typeof AiGuardrailStatusProvider[keyof typeof AiGuardrailStatusProvider];
 
-export interface AiCredentialInput {
-  /**
-     * @minLength 20
-     * @maxLength 512
-     */
-  apiKey: string;
-  /**
-     * @minLength 1
-     * @maxLength 100
-     * @pattern ^[A-Za-z0-9._-]+$
-     */
-  model: string;
-}
+
+export const AiGuardrailStatusProvider = {
+  ollama: 'ollama',
+} as const;
 
 export type AiGuardrailStatusRequestsPerTab = typeof AiGuardrailStatusRequestsPerTab[keyof typeof AiGuardrailStatusRequestsPerTab];
 
@@ -369,15 +376,19 @@ export const AiGuardrailStatusSpeechLimitSeconds = {
 } as const;
 
 export interface AiGuardrailStatus {
+  provider: AiGuardrailStatusProvider;
+  /** @nullable */
+  aiProviderMessage: string | null;
   serverEnabled: boolean;
   passcodeConfigured: boolean;
   activated: boolean;
   requestsPerTab: AiGuardrailStatusRequestsPerTab;
   speechLimitSeconds: AiGuardrailStatusSpeechLimitSeconds;
   aiProviderConnected: boolean;
-  aiCredentialStorageReady: boolean;
   /** @nullable */
   model: string | null;
+  /** @nullable */
+  providerEndpoint: string | null;
 }
 
 export interface AiPasscodeInput {

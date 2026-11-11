@@ -1,20 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { verifyBriefingStartPin } from "./briefing-start-pin.ts";
+import {
+  hashBriefingPin,
+  verifyPinHash,
+} from "./briefing-pin-crypto.ts";
 
-test("Telegram and crawl actions use the same four-digit PIN check", () => {
-  const previous = process.env.BRIEFING_START_PIN;
-  process.env.BRIEFING_START_PIN = "8274";
-  try {
-    const userId = `telegram-pin-test-${Date.now()}`;
-    assert.deepEqual(verifyBriefingStartPin(userId, "0000"), {
-      valid: false,
-      status: 403,
-      message: "The start PIN is incorrect.",
-    });
-    assert.deepEqual(verifyBriefingStartPin(userId, "8274"), { valid: true });
-  } finally {
-    if (previous === undefined) delete process.env.BRIEFING_START_PIN;
-    else process.env.BRIEFING_START_PIN = previous;
-  }
+test("account PIN hashes verify only the correct value", async () => {
+  const salt = "0123456789abcdef";
+  const hash = await hashBriefingPin("8274", salt);
+  assert.equal(await verifyPinHash("8274", salt, hash), true);
+  assert.equal(await verifyPinHash("0000", salt, hash), false);
 });

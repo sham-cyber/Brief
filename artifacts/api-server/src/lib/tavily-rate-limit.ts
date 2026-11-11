@@ -1,6 +1,6 @@
 import { pool } from "@workspace/db";
 
-export const TAVILY_REQUEST_LIMIT = 10;
+export const TAVILY_REQUEST_LIMIT = 5;
 export const TAVILY_REQUEST_WINDOW_MS = 5 * 60_000;
 
 type RequestUsageRow = {

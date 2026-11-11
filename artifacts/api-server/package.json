@@ -8,7 +8,8 @@
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "test:sap": "node --experimental-strip-types --test src/lib/sap-s4hana.test.mjs src/lib/user-sap-connection.test.mjs",
-    "test:ai": "node --experimental-strip-types --test src/lib/ai-briefing-summary.test.mjs src/lib/user-ai-credentials.test.mjs",
+    "test:ai": "node --experimental-strip-types --test src/lib/ai-briefing-summary.test.mjs src/lib/ai-provider.test.mjs src/lib/briefing-start-pin.test.mjs src/lib/user-ollama-credentials.test.mjs",
+    "test:briefing": "node --experimental-strip-types --test src/lib/briefing-question.test.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
@@ -21,7 +22,6 @@
     "drizzle-orm": "catalog:",
     "express": "^5.3.0",
     "http-proxy-middleware": "^4.2.1",
-    "openai": "^7.53.0",
     "pino": "^9.14.0",
     "pino-http": "^10.5.0",
     "zod": "catalog:"

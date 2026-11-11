@@ -58,3 +58,6 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Generated pitch PDFs stay in the workspace, not in Git
+/pitch.pdf

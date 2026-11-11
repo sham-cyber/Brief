@@ -5,17 +5,22 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AiGuardrailStatusProvider } from './aiGuardrailStatusProvider';
 import type { AiGuardrailStatusRequestsPerTab } from './aiGuardrailStatusRequestsPerTab';
 import type { AiGuardrailStatusSpeechLimitSeconds } from './aiGuardrailStatusSpeechLimitSeconds';
 
 export interface AiGuardrailStatus {
+  provider: AiGuardrailStatusProvider;
+  /** @nullable */
+  aiProviderMessage: string | null;
   serverEnabled: boolean;
   passcodeConfigured: boolean;
   activated: boolean;
   requestsPerTab: AiGuardrailStatusRequestsPerTab;
   speechLimitSeconds: AiGuardrailStatusSpeechLimitSeconds;
   aiProviderConnected: boolean;
-  aiCredentialStorageReady: boolean;
   /** @nullable */
   model: string | null;
+  /** @nullable */
+  providerEndpoint: string | null;
 }
