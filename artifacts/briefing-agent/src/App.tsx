@@ -92,6 +92,10 @@ const SPEECH_WORD_LIMIT = 280;
 const PRINT_WORD_LIMIT = 400;
 const AI_REQUESTS_PER_TAB = 1;
 const AI_SPEECH_LIMIT_SECONDS = 120;
+type PwaInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
+};
 
 type AiGuardrailsStatus = {
   provider: 'ollama';
@@ -2082,6 +2086,12 @@ function PrintReferences({ sourceIds, sources }: { sourceIds: string[]; sources:
 
 function Home() {
   const { isLoaded: accountLoaded, isSignedIn } = useUser();
+  const [installPrompt, setInstallPrompt] = useState<PwaInstallPromptEvent | null>(null);
+  const [installHelpOpen, setInstallHelpOpen] = useState(false);
+  const [appInstalled, setAppInstalled] = useState(() =>
+    window.matchMedia('(display-mode: standalone)').matches ||
+    Boolean((navigator as Navigator & { standalone?: boolean }).standalone),
+  );
   const [settingsTheme, setSettingsTheme] = useState<'light' | 'dark'>(() => {
     try {
       return window.localStorage.getItem(settingsThemeStorageKey) === 'dark' ? 'dark' : 'light';
@@ -2107,6 +2117,23 @@ function Home() {
       // Keep the current-page theme even if browser storage is unavailable.
     }
   }, [settingsTheme]);
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as PwaInstallPromptEvent);
+    };
+    const handleAppInstalled = () => {
+      setAppInstalled(true);
+      setInstallPrompt(null);
+      setInstallHelpOpen(false);
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleAppInstalled);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
+  }, []);
   const abortControllerRef = useRef<AbortController | null>(null);
   const briefingOutputRef = useRef<HTMLElement | null>(null);
   const mutation = useCreateBriefing({ request: { get signal() { return abortControllerRef.current?.signal; } } });
@@ -2534,6 +2561,21 @@ function Home() {
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
   };
+  const handleAppDownload = async () => {
+    if (appInstalled) return;
+    if (!installPrompt) {
+      setInstallHelpOpen(true);
+      return;
+    }
+    try {
+      await installPrompt.prompt();
+      const choice = await installPrompt.userChoice;
+      setInstallPrompt(null);
+      if (choice.outcome === 'accepted') setAppInstalled(true);
+    } catch {
+      setInstallHelpOpen(true);
+    }
+  };
   const submitStartPin = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!/^\d{4}$/.test(startPin)) {
@@ -2668,6 +2710,17 @@ function Home() {
               </button>
             )}
             <AuthActions />
+            <button
+              type="button"
+              onClick={() => void handleAppDownload()}
+              disabled={appInstalled}
+              className="pwa-download-button"
+              aria-label={appInstalled ? 'Briefing Agent is installed' : 'Download or install Briefing Agent'}
+              title={appInstalled ? 'Briefing Agent is installed on this device' : 'Install Briefing Agent on this device'}
+              data-testid="button-pwa-download"
+            >
+              {appInstalled ? 'Installed' : 'Download'}
+            </button>
           </div>
         </nav>
 
@@ -3410,6 +3463,50 @@ function Home() {
                       </button>
                     </div>
                   </form>
+                </section>
+              </div>
+            )}
+
+            {installHelpOpen && (
+              <div
+                className="no-print fixed inset-0 z-[100] flex items-center justify-center bg-[#171827]/35 p-4 backdrop-blur-[1px]"
+                role="presentation"
+                onClick={(event) => {
+                  if (event.target === event.currentTarget) setInstallHelpOpen(false);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') setInstallHelpOpen(false);
+                }}
+              >
+                <section
+                  className="w-full max-w-md rounded-2xl border border-[#cbd5e1] bg-white p-6 text-[#172033] shadow-[0_24px_80px_rgba(22,22,36,.3)]"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="pwa-install-title"
+                  data-testid="dialog-pwa-install"
+                >
+                  <p className="font-mono text-xs font-semibold uppercase tracking-[.12em] text-[#16813f]">Install Briefing Agent</p>
+                  <h2 id="pwa-install-title" className="mt-2 text-2xl font-bold text-[#172033]">Add it to your device</h2>
+                  <ol className="mt-4 list-decimal space-y-2 pl-5 text-base leading-relaxed text-[#34445e]">
+                    <li>On Android or desktop Chrome, open the browser menu and choose <strong>Install app</strong> or <strong>Add to Home screen</strong>.</li>
+                    <li>On iPhone or iPad Safari, tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>.</li>
+                  </ol>
+                  <p className="mt-4 text-sm leading-relaxed text-[#4b5870]">
+                    The app shell can reopen offline after it has loaded once. Sign-in, searches, and source data still require an internet connection.
+                  </p>
+                  <p className="mt-2 text-sm leading-relaxed text-[#4b5870]">
+                    If your browser does not list Install app in its menu, use a production build over HTTPS or localhost; the development Preview may not offer native installation.
+                  </p>
+                  <div className="mt-5 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setInstallHelpOpen(false)}
+                      className="rounded-lg bg-[#16813f] px-5 py-2.5 text-base font-bold text-white"
+                      data-testid="button-close-pwa-install"
+                    >
+                      Close
+                    </button>
+                  </div>
                 </section>
               </div>
             )}
