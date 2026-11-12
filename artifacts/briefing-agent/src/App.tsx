@@ -12,6 +12,7 @@ import { shadcn } from '@clerk/themes';
 import { ArrowDown, ArrowUpRight, Check, Clipboard, Clock3, FileText, Link2, LoaderCircle, LockKeyhole, Printer, Radio, Search, Send, Square, Volume2 } from 'lucide-react';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { SapConnectionSettings } from '@/components/sap-connection-settings';
+import { INDIA_CITIES_BY_STATE, INDIA_STATES, type IndiaState } from '@/lib/india-locations';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
@@ -93,6 +94,7 @@ const SPEECH_WORD_LIMIT = 280;
 const PRINT_WORD_LIMIT = 400;
 const AI_REQUESTS_PER_TAB = 1;
 const AI_SPEECH_LIMIT_SECONDS = 120;
+const CUSTOMER_SEARCH_CUSTOM_CITY = '__custom_city__';
 type PwaInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
@@ -2169,6 +2171,7 @@ function Home() {
   const [customerSearchSelected, setCustomerSearchSelected] = useState(false);
   const [customerProductOrCategory, setCustomerProductOrCategory] = useState('');
   const [customerCity, setCustomerCity] = useState('');
+  const [customerCityCustom, setCustomerCityCustom] = useState(false);
   const [customerState, setCustomerState] = useState('');
   const [meetingAt, setMeetingAt] = useState('');
   const [context, setContext] = useState('');
@@ -2202,6 +2205,9 @@ function Home() {
   const hasCustomerSearchFields = customerProductOrCategory.trim().length >= 2 &&
     customerCity.trim().length >= 2 &&
     customerState.trim().length >= 2;
+  const customerCityOptions = customerState in INDIA_CITIES_BY_STATE
+    ? INDIA_CITIES_BY_STATE[customerState as IndiaState]
+    : [];
   const customerSearchAvailable = subjectType === 'person' && sourceMode === 'public';
   const customerSearchReady = customerSearchSelected &&
     customerSearchAvailable &&
@@ -3226,30 +3232,63 @@ function Home() {
                             />
                           </label>
                           <label className="block text-sm font-semibold text-[#35364a]">
-                            City
-                            <input
-                              value={customerCity}
-                              onChange={(event) => setCustomerCity(event.target.value)}
+                            State
+                            <select
+                              value={customerState}
+                              onChange={(event) => {
+                                setCustomerState(event.target.value);
+                                setCustomerCity('');
+                                setCustomerCityCustom(false);
+                              }}
                               required
-                              minLength={2}
-                              maxLength={100}
-                              placeholder="Pune"
-                              className="mt-1.5 h-11 w-full rounded-lg border border-[#d9d4df] bg-white px-3 text-base font-normal text-[#292e46] placeholder:text-[#777280]"
-                              data-testid="input-customer-city"
-                            />
+                              className="mt-1.5 h-11 w-full rounded-lg border border-[#d9d4df] bg-white px-3 text-base font-normal text-[#292e46]"
+                              data-testid="select-customer-state"
+                            >
+                              <option value="" disabled>Select a state or UT</option>
+                              {INDIA_STATES.map((state) => (
+                                <option key={state} value={state}>{state}</option>
+                              ))}
+                            </select>
                           </label>
                           <label className="block text-sm font-semibold text-[#35364a]">
-                            State
-                            <input
-                              value={customerState}
-                              onChange={(event) => setCustomerState(event.target.value)}
-                              required
-                              minLength={2}
-                              maxLength={100}
-                              placeholder="Maharashtra"
-                              className="mt-1.5 h-11 w-full rounded-lg border border-[#d9d4df] bg-white px-3 text-base font-normal text-[#292e46] placeholder:text-[#777280]"
-                              data-testid="input-customer-state"
-                            />
+                            City
+                            <select
+                              value={customerCityCustom ? CUSTOMER_SEARCH_CUSTOM_CITY : customerCity}
+                              onChange={(event) => {
+                                if (event.target.value === CUSTOMER_SEARCH_CUSTOM_CITY) {
+                                  setCustomerCity('');
+                                  setCustomerCityCustom(true);
+                                  return;
+                                }
+                                setCustomerCity(event.target.value);
+                                setCustomerCityCustom(false);
+                              }}
+                              required={!customerCityCustom}
+                              disabled={!customerState}
+                              className="mt-1.5 h-11 w-full rounded-lg border border-[#d9d4df] bg-white px-3 text-base font-normal text-[#292e46] disabled:cursor-not-allowed disabled:bg-[#f0eef3] disabled:text-[#777280]"
+                              data-testid="select-customer-city"
+                            >
+                              <option value="" disabled>
+                                {customerState ? 'Select a city' : 'Choose a state first'}
+                              </option>
+                              {customerCityOptions.map((city) => (
+                                <option key={city} value={city}>{city}</option>
+                              ))}
+                              {customerState && <option value={CUSTOMER_SEARCH_CUSTOM_CITY}>City not listed — enter manually</option>}
+                            </select>
+                            {customerCityCustom && (
+                              <input
+                                value={customerCity}
+                                onChange={(event) => setCustomerCity(event.target.value)}
+                                required
+                                minLength={2}
+                                maxLength={100}
+                                autoComplete="address-level2"
+                                placeholder="Type city or town"
+                                className="mt-2 h-11 w-full rounded-lg border border-[#d9d4df] bg-white px-3 text-base font-normal text-[#292e46] placeholder:text-[#777280]"
+                                data-testid="input-customer-city-custom"
+                              />
+                            )}
                           </label>
                         </div>
                         <p className="mt-3 text-sm leading-relaxed text-[#486d6b]">
