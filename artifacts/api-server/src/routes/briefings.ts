@@ -503,6 +503,9 @@ const NEGATIVE_SIGNAL_PATTERNS = [
 ];
 
 router.get("/briefings", async (req, res): Promise<void> => {
+  res.setHeader("Cache-Control", "private, no-store");
+  delete req.headers["if-none-match"];
+  delete req.headers["if-modified-since"];
   const userId = getAuth(req).userId ?? null;
   const ownerEmail = process.env.BRIEFING_OWNER_EMAIL?.trim().toLowerCase();
   let isOwner = false;

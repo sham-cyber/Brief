@@ -814,7 +814,7 @@ function AiGuardrailPanel({ onStatusChange }: { onStatusChange?: (status: AiGuar
   const [busy, setBusy] = useState(false);
 
   const refreshStatus = useCallback(async () => {
-    const response = await fetch(apiUrl('ai/guardrails'), { credentials: 'include' });
+    const response = await fetch(apiUrl('ai/guardrails'), { credentials: 'include', cache: 'no-store' });
     const payload = await response.json().catch(() => ({})) as AiGuardrailsStatus & { error?: string };
     if (!response.ok) throw new Error(payload.error ?? 'Could not load AI guardrails.');
     setStatus(payload);
@@ -956,9 +956,9 @@ function AiGuardrailPanel({ onStatusChange }: { onStatusChange?: (status: AiGuar
 
   if (!isLoaded || !isSignedIn) return null;
   return (
-    <details open className="no-print mt-4 rounded-xl border border-[#ded9e2] bg-[#f8f6fb] px-4 py-3" aria-label="AI activation guardrails" data-testid="ai-guardrails">
+    <details id="qwen-ai-settings" open className="no-print mt-4 rounded-xl border border-[#ded9e2] bg-[#f8f6fb] px-4 py-3" aria-label="Qwen summary settings" data-testid="ai-guardrails">
       <summary className="cursor-pointer text-base font-semibold text-[#35364a]" data-testid="summary-ai-guardrails">
-        AI control <span className={`ml-2 rounded-full border px-3 py-1 text-sm font-bold text-white ${status?.activated ? 'border-[#218752] bg-[#218752]' : 'border-[#e4b7b2] bg-[#bb5048]'}`}>{status?.activated ? 'ACTIVE · OPT-IN' : 'STOPPED · AI OFF'}</span>
+        Qwen summary settings <span className={`ml-2 rounded-full border px-3 py-1 text-sm font-bold text-white ${status?.activated ? 'border-[#218752] bg-[#218752]' : status ? 'border-[#e4b7b2] bg-[#bb5048]' : 'border-[#766a93] bg-[#766a93]'}`}>{status ? status.activated ? 'ACTIVE · OPT-IN' : 'STOPPED · AI OFF' : 'STATUS UNKNOWN'}</span>
       </summary>
       <div className="pt-3 text-base">
       <p className="leading-relaxed text-muted-foreground">
@@ -2273,6 +2273,7 @@ function Home() {
       refetchOnWindowFocus: true,
       retry: false,
     },
+    request: { cache: 'no-store' },
   });
   useEffect(() => {
     if (accountLoaded) void sourceStatusQuery.refetch();
@@ -2880,6 +2881,16 @@ function Home() {
                 <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
                 {`${aiStatus.aiProviderConnected ? 'Ollama' : 'Ollama offline'}${aiStatus.model ? ` · ${aiStatus.model}` : ''}`}
               </span>
+            )}
+            {isSignedIn && (
+              <a
+                href="#qwen-ai-settings"
+                className="rounded-lg border border-[#d8d1e5] bg-white px-3 py-2 text-sm font-semibold text-[#443a66] underline-offset-4 hover:underline"
+                title="Open Qwen summary settings"
+                data-testid="link-qwen-settings"
+              >
+                Qwen settings
+              </a>
             )}
             {isSignedIn && (
               <button
