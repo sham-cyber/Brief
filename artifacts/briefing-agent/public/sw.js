@@ -22,64 +22,6 @@ self.addEventListener('activate', (event) => {
   })());
 });
 
-self.addEventListener('sync', (event) => {
-  if (event.tag !== 'briefing-agent-shell-refresh') return;
-  event.waitUntil(refreshAppShell());
-});
-
-self.addEventListener('periodicsync', (event) => {
-  if (event.tag !== 'briefing-agent-shell-refresh') return;
-  event.waitUntil(refreshAppShell());
-});
-
-self.addEventListener('push', (event) => {
-  event.waitUntil((async () => {
-    let qwenRequested = false;
-    let qwenSummaryReady = false;
-    try {
-      const payload = event.data?.json();
-      qwenRequested = payload?.qwenRequested === true;
-      qwenSummaryReady = payload?.qwenSummaryReady === true;
-    } catch {
-      // Push payloads contain only optional status flags; generic alert still works.
-    }
-    const status = qwenSummaryReady
-      ? 'The Qwen summary finished; Qwen processing has ended.'
-      : qwenRequested
-        ? 'Qwen did not complete a summary; processing has ended.'
-        : 'Qwen was not used for this briefing.';
-
-    await self.registration.showNotification('Brief ready · AI OFF', {
-      body: `Tavily source brief is ready. ${status}`,
-      icon: new URL('./app-icon-192.png', self.registration.scope).href,
-      badge: new URL('./app-icon-192.png', self.registration.scope).href,
-      tag: `briefing-ready-${Date.now()}`,
-      data: { url: new URL('./user-portal', self.registration.scope).href },
-    });
-  })());
-});
-
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
-  event.waitUntil((async () => {
-    const destination = new URL('./user-portal', self.registration.scope).href;
-    const openWindows = await self.clients.matchAll({
-      type: 'window',
-      includeUncontrolled: true,
-    });
-    const existing = openWindows.find((client) => client.url.startsWith(self.registration.scope));
-    if (existing) {
-      await existing.focus();
-      return;
-    }
-    await self.clients.openWindow(destination);
-  })());
-});
-
-self.addEventListener('notificationclose', () => {
-  // No user data is stored when a notification is dismissed.
-});
-
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
@@ -120,11 +62,3 @@ self.addEventListener('fetch', (event) => {
     }
   })());
 });
-
-async function refreshAppShell() {
-  const appShell = new URL('./', self.registration.scope).href;
-  const response = await fetch(appShell, { cache: 'no-store' });
-  if (!response.ok) throw new Error('The app shell could not be refreshed.');
-  const cache = await caches.open(CACHE_NAME);
-  await cache.put(appShell, response);
-}

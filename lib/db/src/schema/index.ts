@@ -27,4 +27,3 @@ export * from "./telegram-user-credentials";
 export * from "./telegram-pdf-deliveries";
 export * from "./ollama-user-connections";
 export * from "./user-briefing-preferences";
-export * from "./web-push-subscriptions";

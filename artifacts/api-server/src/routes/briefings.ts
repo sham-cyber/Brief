@@ -65,7 +65,6 @@ import {
   SAP_BRIEFING_HARD_STOP_MS,
   SAP_BRIEFING_LIMIT_MS,
 } from "../lib/sap-s4hana";
-import { sendManualBriefReadyNotification } from "../lib/web-push";
 
 const router: IRouter = Router();
 let sapBriefingActive = false;
@@ -503,9 +502,6 @@ const NEGATIVE_SIGNAL_PATTERNS = [
 ];
 
 router.get("/briefings", async (req, res): Promise<void> => {
-  res.setHeader("Cache-Control", "private, no-store");
-  delete req.headers["if-none-match"];
-  delete req.headers["if-modified-since"];
   const userId = getAuth(req).userId ?? null;
   const ownerEmail = process.env.BRIEFING_OWNER_EMAIL?.trim().toLowerCase();
   let isOwner = false;
@@ -1237,12 +1233,6 @@ router.post("/briefings", async (req, res): Promise<void> => {
         sources: combinedSources,
         sapData: sapResult.sapData,
       });
-      void sendManualBriefReadyNotification(userId, {
-        requested: input.data.useAi === true,
-        summaryReady: result.aiSummaries.length > 0,
-      }).catch(() => {
-        req.log.warn({}, "Manual briefing push notification could not be sent");
-      });
       res.json(result);
     } catch (error) {
       crawlController.abort(error);
@@ -1491,12 +1481,6 @@ router.post("/briefings", async (req, res): Promise<void> => {
       ...aiSummaryFields,
       sources,
       sapData: [],
-    });
-    void sendManualBriefReadyNotification(userId, {
-      requested: input.data.useAi === true,
-      summaryReady: result.aiSummaries.length > 0,
-    }).catch(() => {
-      req.log.warn({}, "Manual briefing push notification could not be sent");
     });
     res.json(result);
   } catch (error) {

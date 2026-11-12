@@ -108,9 +108,6 @@ export async function getAiGuardrailStatus(userId: string) {
 }
 
 router.get("/ai/guardrails", async (req, res): Promise<void> => {
-  res.setHeader("Cache-Control", "private, no-store");
-  delete req.headers["if-none-match"];
-  delete req.headers["if-modified-since"];
   const userId = authenticatedUserId(req);
   if (!userId) {
     res.status(401).json({ error: "Sign in to view AI access settings." });

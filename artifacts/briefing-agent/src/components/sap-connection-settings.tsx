@@ -348,7 +348,7 @@ export function SapConnectionSettings({
                 <li><strong>2. Get SAP administrator details.</strong> Request the approved OData service URL, OAuth token URL, client ID and secret, Fiori link base, permitted company/plant scope, and allowed business areas.</li>
                 <li><strong>3. Open SAP settings.</strong> Use the gear beside the SAP source. Add the endpoints, scope, and mappings for Store, Production, Maintenance, Inventory, Sales, HR, Power/Electrical/Solar, Purchase, Scrap, Order, and Delivery as authorized.</li>
                 <li><strong>4. Save and test.</strong> OAuth credentials are encrypted by the app server. Test checks the connection and metadata; the app requests operational records only when you press <strong>Brief</strong>.</li>
-                <li><strong>5. Select and brief.</strong> Choose a company, meeting time, topics, and mapped SAP areas. SAP records and Tavily public research are shown in separate sections; each uses its own connection and usage limits.</li>
+                <li><strong>5. Select and brief.</strong> Choose a company, meeting time, topics, and mapped SAP areas. SAP records and Tavily public research are shown in separate sections; each uses its own credentials and billing.</li>
               </ol>
               <div className="mt-5 rounded-xl border border-[#e2c88e] bg-[#fff8e9] p-4 text-sm leading-relaxed text-[#654d22]">
                 <strong>Important:</strong> If SAP setup or the separate Tavily key is incomplete, SAP mode returns to Public and shows an alert. This setup does not enable direct HANA database SQL access or install the app in SAP. Do not paste credentials into GitHub, chat, or this help window.
