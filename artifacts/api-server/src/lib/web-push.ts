@@ -3,7 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from "node:crypto";
-import webpush, { type PushSubscription } from "web-push";
+import {
+  sendNotification,
+  setVapidDetails,
+  type PushSubscription,
+} from "web-push";
 import { pool } from "@workspace/db";
 
 const ENCRYPTION_KEY_NAME = "USER_CREDENTIALS_ENCRYPTION_KEY";
@@ -61,7 +65,7 @@ function configureWebPush(): boolean {
   if (!config) return false;
   const fingerprint = `${config.publicKey}:${config.privateKey}:${config.subject}`;
   if (configuredVapidKey !== fingerprint) {
-    webpush.setVapidDetails(config.subject, config.publicKey, config.privateKey);
+    setVapidDetails(config.subject, config.publicKey, config.privateKey);
     configuredVapidKey = fingerprint;
   }
   return true;
@@ -155,7 +159,10 @@ export async function hasWebPushSubscriptions(userId: string): Promise<boolean> 
   return result.rowCount === 1;
 }
 
-export async function sendManualBriefReadyNotification(userId: string): Promise<void> {
+export async function sendManualBriefReadyNotification(
+  userId: string,
+  qwenStatus: { requested: boolean; summaryReady: boolean },
+): Promise<void> {
   if (!configureWebPush()) return;
   const key = encryptionKey();
   if (!key) return;
@@ -172,9 +179,13 @@ export async function sendManualBriefReadyNotification(userId: string): Promise<
   await Promise.all(result.rows.map(async (record) => {
     const subscription = decryptSubscription(userId, record);
     try {
-      await webpush.sendNotification(
+      await sendNotification(
         subscription,
-        JSON.stringify({ url: "/" }),
+        JSON.stringify({
+          url: "/",
+          qwenRequested: qwenStatus.requested,
+          qwenSummaryReady: qwenStatus.summaryReady,
+        }),
         { TTL: 60, urgency: "low" },
       );
     } catch (error) {

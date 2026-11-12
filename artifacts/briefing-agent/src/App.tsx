@@ -147,15 +147,16 @@ async function sendAccountRequest(path: string, method: string, body?: unknown) 
   return payload;
 }
 
-function base64UrlToBytes(value: string): Uint8Array {
+function base64UrlToArrayBuffer(value: string): ArrayBuffer {
   const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
   const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
   const decoded = atob(padded);
-  const bytes = new Uint8Array(new ArrayBuffer(decoded.length));
+  const buffer = new ArrayBuffer(decoded.length);
+  const bytes = new DataView(buffer);
   for (let index = 0; index < decoded.length; index += 1) {
-    bytes[index] = decoded.charCodeAt(index);
+    bytes.setUint8(index, decoded.charCodeAt(index));
   }
-  return bytes;
+  return buffer;
 }
 
 function PushNotificationSettings() {
@@ -213,7 +214,7 @@ function PushNotificationSettings() {
       const subscription = await registration.pushManager.getSubscription() ??
         await registration.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: base64UrlToBytes(publicKey),
+          applicationServerKey: base64UrlToArrayBuffer(publicKey),
         });
       await sendAccountRequest('push-notifications/subscriptions', 'POST', subscription.toJSON());
       setThisDeviceSubscribed(true);
@@ -470,7 +471,7 @@ function TavilyKeySettings({ onChanged, projectKeyActive }: { onChanged: () => v
     <section className="mb-5 rounded-xl border border-[#ded9e2] bg-[#f8f6fb] p-5 sm:p-6" aria-label="Tavily account key" data-testid="tavily-key-settings">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h3 className="text-base font-semibold text-[#292e46]">Tavily key and billing</h3>
+          <h3 className="text-base font-semibold text-[#292e46]">Tavily key and usage</h3>
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[#625d69]">
             A personal key is sent to this app’s server and encrypted before it is saved to your account. The app does not persist it in browser storage or return it to the page, and the entry field clears after saving. Your Tavily account pays for searches using this key.
           </p>
@@ -3589,7 +3590,6 @@ function Home() {
                       currentLimit={dailyCrawlStartsLimit}
                       onSaved={() => sourceStatusQuery.refetch()}
                     />
-                    {isSignedIn && <PushNotificationSettings />}
                   </>
                 )}
                 {sourceMode === 'public' && (
@@ -3609,6 +3609,7 @@ function Home() {
               )}
             </form>
             {isSignedIn && <AiGuardrailPanel onStatusChange={handleAiStatusChange} />}
+            {isSignedIn && <PushNotificationSettings />}
 
             {pinPromptOpen && (
               <div

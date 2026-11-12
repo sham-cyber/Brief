@@ -34,16 +34,23 @@ self.addEventListener('periodicsync', (event) => {
 
 self.addEventListener('push', (event) => {
   event.waitUntil((async () => {
-    const openWindows = await self.clients.matchAll({
-      type: 'window',
-      includeUncontrolled: true,
-    });
-    if (openWindows.some((client) => client.focused && client.visibilityState === 'visible')) {
-      return;
+    let qwenRequested = false;
+    let qwenSummaryReady = false;
+    try {
+      const payload = event.data?.json();
+      qwenRequested = payload?.qwenRequested === true;
+      qwenSummaryReady = payload?.qwenSummaryReady === true;
+    } catch {
+      // Push payloads contain only optional status flags; generic alert still works.
     }
+    const status = qwenSummaryReady
+      ? 'The Qwen summary finished; Qwen processing has ended.'
+      : qwenRequested
+        ? 'Qwen did not complete a summary; processing has ended.'
+        : 'Qwen was not used for this briefing.';
 
-    await self.registration.showNotification('Brief ready', {
-      body: 'A manually started briefing is ready in Briefing Agent.',
+    await self.registration.showNotification('Brief ready · AI OFF', {
+      body: `Tavily source brief is ready. ${status}`,
       icon: new URL('./app-icon-192.png', self.registration.scope).href,
       badge: new URL('./app-icon-192.png', self.registration.scope).href,
       tag: `briefing-ready-${Date.now()}`,

@@ -10,6 +10,22 @@
     "tabbed",
     "standalone"
   ],
+  "screenshots": [
+    {
+      "src": "./pwa-desktop.jpg",
+      "sizes": "1280x800",
+      "type": "image/jpeg",
+      "form_factor": "wide",
+      "label": "Briefing Agent on desktop"
+    },
+    {
+      "src": "./pwa-mobile.jpg",
+      "sizes": "402x874",
+      "type": "image/jpeg",
+      "form_factor": "narrow",
+      "label": "Briefing Agent on mobile"
+    }
+  ],
   "tab_strip": {
     "new_tab_button": {
       "url": "/"

@@ -195,6 +195,20 @@ The Clerk account must exist in the same development or production Clerk environ
 
 Each member clones the public repository, configures their own database and Clerk environment, then signs in and adds their own Tavily key, PIN, and optional Ollama connection. For local use, run the app and Ollama on the same computer. Do not point a remotely hosted API server at `localhost` expecting it to reach a member's computer.
 
+### Optional brief-ready push alerts
+
+There is no paid plan, checkout, or billing gate in this hackathon app. Push alerts are optional, free browser notifications; each signed-in user may opt in on a device or leave them off without affecting briefing access. The API stores each device subscription encrypted with `USER_CREDENTIALS_ENCRYPTION_KEY`. A notification is sent only after a manually started meeting briefing has finished; it never starts or repeats a Tavily search. The alert contains no company name, person name, source, or briefing content. Customer Search does not send a ready alert.
+
+For a local clone, generate a VAPID key pair with:
+
+```sh
+pnpm --filter @workspace/api-server run web-push:keys
+```
+
+Put both generated values in the server's secret manager as `WEB_PUSH_VAPID_PUBLIC_KEY` and `WEB_PUSH_VAPID_PRIVATE_KEY`. Set `WEB_PUSH_VAPID_SUBJECT` to a valid `mailto:` address or HTTPS contact URL. Never commit the private key. In the signed-in app, choose **Enable on this device** and grant browser notification permission. To revoke a device, choose **Turn off on this device**; browser permission can also be revoked in site settings.
+
+The notification title says **AI OFF** to indicate that no Qwen generation remains active. Its message clarifies whether Qwen was not requested, completed a summary, or ended without producing one. The alert is sent only after the briefing response has finished Qwen processing or reached its existing timeout; it does not cancel Qwen early.
+
 ## Connect a clone to an SAP system
 
 The repository contains application code only. Each clone must be configured for its own SAP system by an authorized administrator.
@@ -223,6 +237,9 @@ Set values in Replit Secrets or your hosting provider's secret manager. This tab
 | `BRIEFING_OWNER_EMAIL` | Clerk email allowed to start crawls and manage the SAP connection |
 | `TAVILY_API_KEY` | Optional project Tavily key; only the account matching `BRIEFING_OWNER_EMAIL` can use it. Other accounts add their own key in Settings. |
 | `USER_CREDENTIALS_ENCRYPTION_KEY` | Needed to save account Tavily keys, Ollama tokens, or SAP OAuth credentials; use a unique 64-character hexadecimal value. |
+| `WEB_PUSH_VAPID_PUBLIC_KEY` | Public VAPID key used by the browser when a signed-in user opts in to alerts. |
+| `WEB_PUSH_VAPID_PRIVATE_KEY` | Secret server-side VAPID key used to send push alerts; never commit it. |
+| `WEB_PUSH_VAPID_SUBJECT` | Optional `mailto:` or HTTPS contact for VAPID; defaults to the configured briefing owner email when available. |
 | `AI_FEATURE_ENABLED` | Optional server switch for AI summaries; leave unset or set to `false` to keep AI off. |
 | `LOCAL_API_PROXY_TARGET` | Optional local Vite proxy target, usually `http://127.0.0.1:8080`. |
 

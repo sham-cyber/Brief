@@ -1234,7 +1234,10 @@ router.post("/briefings", async (req, res): Promise<void> => {
         sources: combinedSources,
         sapData: sapResult.sapData,
       });
-      void sendManualBriefReadyNotification(userId).catch(() => {
+      void sendManualBriefReadyNotification(userId, {
+        requested: input.data.useAi === true,
+        summaryReady: result.aiSummaries.length > 0,
+      }).catch(() => {
         req.log.warn({}, "Manual briefing push notification could not be sent");
       });
       res.json(result);
@@ -1486,7 +1489,10 @@ router.post("/briefings", async (req, res): Promise<void> => {
       sources,
       sapData: [],
     });
-    void sendManualBriefReadyNotification(userId).catch(() => {
+    void sendManualBriefReadyNotification(userId, {
+      requested: input.data.useAi === true,
+      summaryReady: result.aiSummaries.length > 0,
+    }).catch(() => {
       req.log.warn({}, "Manual briefing push notification could not be sent");
     });
     res.json(result);
