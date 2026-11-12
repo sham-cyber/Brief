@@ -348,7 +348,7 @@ export function SapConnectionSettings({
               <ol className="mt-5 space-y-3 text-base leading-relaxed text-[#334e4c]">
                 <li><strong>1. Clone and run the app.</strong> Each GitHub clone or deployment is configured separately for its own SAP tenant.</li>
                 <li><strong>2. Get SAP administrator details.</strong> Request the approved OData service URL, OAuth token URL, client ID and secret, Fiori link base, permitted company/plant scope, and allowed business areas.</li>
-                <li><strong>3. Open SAP settings.</strong> Use the gear beside the SAP source. Add the endpoints, scope, and mappings for Store, Production, Maintenance, Inventory, Sales, HR, Power/Electrical/Solar, Purchase, Scrap, Order, and Delivery as authorized.</li>
+                <li><strong>3. Open SAP settings.</strong> After signing in, choose the labeled SAP connection settings button in the Settings row near the top of the page. Add the endpoints, scope, and mappings for Store, Production, Maintenance, Inventory, Sales, HR, Power/Electrical/Solar, Purchase, Scrap, Order, and Delivery as authorized.</li>
                 <li><strong>4. Save and test.</strong> OAuth credentials are encrypted by the app server. Test checks the connection and metadata; the app requests operational records only when you press <strong>Brief</strong>.</li>
                 <li><strong>5. Select and brief.</strong> Choose a company, meeting time, topics, and mapped SAP areas. SAP records and Tavily public research are shown in separate sections; each uses its own credentials and billing.</li>
               </ol>

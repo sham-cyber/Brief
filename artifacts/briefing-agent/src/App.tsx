@@ -68,6 +68,7 @@ const TOPICS = [
   { value: 'risk', label: 'Risks & Open Questions' },
 ] as const;
 type Topic = typeof TOPICS[number]['value'];
+type CopyAction = () => Promise<void>;
 const SAP_AREAS: { value: SapDataArea; label: string }[] = [
   { value: 'store', label: 'Store' },
   { value: 'production', label: 'Production' },
@@ -1303,7 +1304,13 @@ function SapDataSection({
   );
 }
 
-function BriefingDocument({ result }: { result: BriefingResult }) {
+function BriefingDocument({
+  result,
+  onRegisterCopy,
+}: {
+  result: BriefingResult;
+  onRegisterCopy: (action: CopyAction | null) => void;
+}) {
   const [copied, setCopied] = useState(false);
   const [activeTopic, setActiveTopic] = useState<'all' | Topic>('all');
   const [telegramStatus, setTelegramStatus] = useState<TelegramCredentialStatus | null>(null);
@@ -1409,6 +1416,10 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
       setCopied(false);
     }
   };
+  useEffect(() => {
+    onRegisterCopy(copyBrief);
+    return () => onRegisterCopy(null);
+  }, [copyBrief, onRegisterCopy]);
 
   const sendPdfToTelegram = async () => {
     if (!telegramStatus?.connected || !telegramStatus.chatId) {
@@ -1684,7 +1695,13 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
   );
 }
 
-function CustomerSearchDocument({ result }: { result: CustomerSearchResponse }) {
+function CustomerSearchDocument({
+  result,
+  onRegisterCopy,
+}: {
+  result: CustomerSearchResponse;
+  onRegisterCopy: (action: CopyAction | null) => void;
+}) {
   const [copied, setCopied] = useState(false);
   const printSources = result.sources.slice(0, 5);
   const copyCustomerSearch = async () => {
@@ -1713,6 +1730,10 @@ function CustomerSearchDocument({ result }: { result: CustomerSearchResponse }) 
       setCopied(false);
     }
   };
+  useEffect(() => {
+    onRegisterCopy(copyCustomerSearch);
+    return () => onRegisterCopy(null);
+  }, [copyCustomerSearch, onRegisterCopy]);
 
   return (
     <article
@@ -2138,6 +2159,7 @@ function Home() {
   const briefingOutputRef = useRef<HTMLElement | null>(null);
   const sourceKeySettingsRef = useRef<HTMLDetailsElement | null>(null);
   const telegramSettingsRef = useRef<HTMLDetailsElement | null>(null);
+  const copyOutputActionRef = useRef<CopyAction | null>(null);
   const mutation = useCreateBriefing({ request: { get signal() { return abortControllerRef.current?.signal; } } });
   const customerSearchMutation = useCreateCustomerSearch({ request: { get signal() { return abortControllerRef.current?.signal; } } });
   const isAnySearchPending = mutation.isPending || customerSearchMutation.isPending;
@@ -2169,6 +2191,7 @@ function Home() {
   const [failedKey, setFailedKey] = useState('');
   const [timedOutKey, setTimedOutKey] = useState('');
   const [cancelledKey, setCancelledKey] = useState('');
+  const [copyActionReady, setCopyActionReady] = useState(false);
   const [pinPromptOpen, setPinPromptOpen] = useState(false);
   const [startPin, setStartPin] = useState('');
   const [pinDialogError, setPinDialogError] = useState('');
@@ -2241,6 +2264,20 @@ function Home() {
   const customerSearchResult = hasCurrentCustomerSearchResult
     ? customerSearchMutation.data
     : undefined;
+  const hasPrintableOutput = Boolean(result || customerSearchResult);
+  const startActionDisabled = !isSignedIn ||
+    isAnySearchPending ||
+    !canStart ||
+    !sourceReady ||
+    !startPinConfigured ||
+    !hasValidSubject ||
+    !hasValidRole ||
+    (!customerSearchSelected && !meetingTimeIsValid) ||
+    !hasRequiredSelections;
+  const registerCopyOutputAction = useCallback((action: CopyAction | null) => {
+    copyOutputActionRef.current = action;
+    setCopyActionReady(Boolean(action));
+  }, []);
   useEffect(() => {
     if (!result && !customerSearchResult) return;
     const frame = window.requestAnimationFrame(() => {
@@ -2757,17 +2794,11 @@ function Home() {
             >
               Telegram
             </button>
-            {sourceStatusQuery.isLoading ? (
-              <span className="px-2 text-sm">Checking SAP access…</span>
-            ) : canStart ? (
-              <SapConnectionSettings
-                basePath={basePath}
-                onChanged={() => { void sourceStatusQuery.refetch(); }}
-                buttonLabel="SAP connection settings"
-              />
-            ) : (
-              <span className="px-2 text-sm">SAP connection setup is restricted to the app owner.</span>
-            )}
+            <SapConnectionSettings
+              basePath={basePath}
+              onChanged={() => { void sourceStatusQuery.refetch(); }}
+              buttonLabel="SAP connection settings"
+            />
           </div>
         )}
 
@@ -2845,6 +2876,72 @@ function Home() {
               <div className="mb-4 flex items-center justify-between border-b border-[#e5e0e7] pb-3">
                  <span className="text-base font-semibold text-[#292e46]">{customerSearchSelected ? 'Customer Search details' : 'Briefing details'}</span>
                  <span className="rounded-full bg-[#eeeaf4] px-3 py-1 font-mono text-xs font-semibold text-[#594b87]">{customerSearchSelected ? 'CURRENT' : '30 DAYS'}</span>
+              </div>
+              <div
+                className="brief-action-row sticky top-2 z-30 mb-5 flex flex-col gap-3 rounded-xl border border-[#d8d2df] bg-[#fffefa]/95 p-3 shadow-md backdrop-blur sm:p-4"
+                data-state={readinessState}
+                data-testid="brief-action-row"
+                aria-label="Brief, copy, and print actions"
+              >
+                <div
+                  className={`flex min-h-12 items-center gap-3 rounded-xl border px-4 py-3 text-base font-semibold ${readinessStyles}`}
+                  id="meeting-readiness"
+                  role="status"
+                  aria-live="polite"
+                  data-testid="status-meeting-readiness"
+                  data-state={readinessState}
+                >
+                  <span
+                    className={`h-3 w-3 shrink-0 rounded-full ${readinessState === 'ready' ? 'bg-[#4c966f]' : readinessState === 'not-ready' || readinessState === 'error' ? 'bg-[#c45b50]' : 'animate-pulse bg-[#796a9d]'}`}
+                    aria-hidden="true"
+                  />
+                  <span>{readinessMessage}</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { void copyOutputActionRef.current?.(); }}
+                    disabled={!hasPrintableOutput || !copyActionReady}
+                    title={hasPrintableOutput ? 'Copy the current result and its source links' : 'Copy becomes available when a result is ready'}
+                    className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[#cbd5e1] bg-white px-4 text-base font-semibold text-[#292e46] disabled:cursor-not-allowed disabled:opacity-50"
+                    data-testid="button-copy-result"
+                  >
+                    <Clipboard className="h-4 w-4" aria-hidden="true" />
+                    {customerSearchSelected ? 'Copy results' : 'Copy brief'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    disabled={!hasPrintableOutput}
+                    title={hasPrintableOutput ? 'Print the current one-page result' : 'Print becomes available when a result is ready'}
+                    className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[#cbd5e1] bg-white px-4 text-base font-semibold text-[#292e46] disabled:cursor-not-allowed disabled:opacity-50"
+                    data-testid="button-print-result"
+                  >
+                    <Printer className="h-4 w-4" aria-hidden="true" />
+                    Print one page
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPinDialogError('');
+                      setStartPin('');
+                      setPinPromptOpen(true);
+                    }}
+                    disabled={startActionDisabled}
+                    aria-describedby="meeting-readiness"
+                    className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border px-5 text-base font-bold text-white transition disabled:cursor-not-allowed disabled:opacity-45 ${readinessState === 'ready' ? 'border-[#28bd67] bg-[#21894b] hover:bg-[#1c7740]' : 'border-[#bb4650] bg-[#8f2936] hover:bg-[#7e2430]'}`}
+                    data-testid="button-generate-briefing"
+                  >
+                    {isAnySearchPending
+                      ? <><LoaderCircle className="h-5 w-5 animate-spin" aria-hidden="true" />Working…</>
+                      : customerSearchSelected
+                        ? <><Search className="h-5 w-5" aria-hidden="true" />Enter PIN & Search</>
+                        : <><FileText className="h-5 w-5" aria-hidden="true" />Enter PIN & Brief</>}
+                  </button>
+                </div>
+                <p className="text-sm leading-relaxed text-[#625d69]">
+                  Copy and Print unlock when results are ready. Enter PIN opens PIN entry; the next button confirms and starts {customerSearchSelected ? 'the customer search' : 'the briefing'}.
+                </p>
               </div>
               <fieldset className="mt-4">
                     <legend className="mb-2 text-base font-semibold text-[#35364a]">Briefing subject</legend>
@@ -3358,36 +3455,6 @@ function Home() {
                 </>
               )}
 
-              <div className="mt-5 flex flex-col gap-3 border-t border-[#e5e0e7] pt-4 sm:flex-row sm:items-center" data-testid="brief-action-row">
-                <div
-                  className={`flex min-h-12 flex-1 items-center gap-3 rounded-xl border px-4 py-3 text-base font-semibold ${readinessStyles}`}
-                  id="meeting-readiness"
-                  role="status"
-                  aria-live="polite"
-                  data-testid="status-meeting-readiness"
-                  data-state={readinessState}
-                >
-                  <span
-                    className={`h-3 w-3 shrink-0 rounded-full ${readinessState === 'ready' ? 'bg-[#4c966f]' : readinessState === 'not-ready' || readinessState === 'error' ? 'bg-[#c45b50]' : 'animate-pulse bg-[#796a9d]'}`}
-                    aria-hidden="true"
-                  />
-                  <span>{readinessMessage}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => { setPinDialogError(''); setStartPin(''); setPinPromptOpen(true); }}
-                  disabled={!isSignedIn || isAnySearchPending || !canStart || !sourceReady || !startPinConfigured || !hasValidSubject || !hasValidRole || (!customerSearchSelected && !meetingTimeIsValid) || !hasRequiredSelections}
-                  aria-describedby="meeting-readiness"
-                  className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#292e46] px-8 text-lg font-bold text-white transition hover:bg-[#3c4160] disabled:cursor-not-allowed disabled:opacity-45"
-                  data-testid="button-generate-briefing"
-                >
-                  {isAnySearchPending
-                    ? <><LoaderCircle className="h-5 w-5 animate-spin" aria-hidden="true" />{customerSearchSelected ? 'Searching customers…' : 'Preparing brief…'}</>
-                    : customerSearchSelected
-                      ? <><Search className="h-5 w-5" aria-hidden="true" />Search customers<ArrowDown className="h-4 w-4" aria-hidden="true" /></>
-                      : <><FileText className="h-5 w-5" aria-hidden="true" />Brief<ArrowDown className="h-4 w-4" aria-hidden="true" /></>}
-                </button>
-              </div>
               <div id="form-note" className="mt-3 space-y-2 text-sm leading-relaxed text-[#625d69]" data-testid="text-source-setup">
                 <p>
                   {sourceStatusQuery.isLoading
@@ -3498,7 +3565,7 @@ function Home() {
                       >
                         {isAnySearchPending
                           ? customerSearchSelected ? 'Searching public businesses…' : 'Starting crawl…'
-                          : customerSearchSelected ? 'Verify PIN & search' : 'Verify PIN & start'}
+                          : customerSearchSelected ? 'Confirm PIN & search customers' : 'Confirm PIN & start briefing'}
                       </button>
                     </div>
                   </form>
@@ -3593,9 +3660,9 @@ function Home() {
             {currentRequestIsPending && !result && !customerSearchResult ? (
               <LoadingBrief customerSearch={customerSearchSelected} />
             ) : customerSearchResult ? (
-              <CustomerSearchDocument result={customerSearchResult} />
+              <CustomerSearchDocument result={customerSearchResult} onRegisterCopy={registerCopyOutputAction} />
             ) : result ? (
-              <BriefingDocument result={result} />
+              <BriefingDocument result={result} onRegisterCopy={registerCopyOutputAction} />
             ) : null}
           </section>
         </div>

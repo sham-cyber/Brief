@@ -283,21 +283,32 @@
   background: rgba(143, 40, 49, .25) !important;
   color: #ffc1c4 !important;
 }
-.settings-neon #meeting-readiness + button[data-testid="button-generate-briefing"] {
+.settings-neon .brief-action-row [data-testid="button-generate-briefing"] {
   border: 1px solid #bb4650;
   background: #8f2936 !important;
   color: #fff !important;
   box-shadow: 0 0 0 3px rgba(214, 65, 80, .12), 0 0 20px rgba(214, 65, 80, .2);
 }
-.settings-neon #meeting-readiness[data-state="ready"] + button[data-testid="button-generate-briefing"] {
+.settings-neon .brief-action-row[data-state="ready"] [data-testid="button-generate-briefing"] {
   border-color: #28bd67;
   background: #21894b !important;
   box-shadow: 0 0 0 4px rgba(60, 225, 124, .2), 0 0 24px rgba(60, 225, 124, .48);
 }
-.settings-neon #meeting-readiness[data-state="crawling"] + button[data-testid="button-generate-briefing"] {
+.settings-neon .brief-action-row[data-state="crawling"] [data-testid="button-generate-briefing"] {
   border-color: #8e79ed;
   background: #5744b2 !important;
   box-shadow: 0 0 16px rgba(142, 121, 237, .3);
+}
+.settings-light .brief-action-row[data-state="ready"] [data-testid="button-generate-briefing"] {
+  border-color: #198846;
+  background: #21894b;
+  color: #fff;
+}
+.settings-light .brief-action-row[data-state="not-ready"] [data-testid="button-generate-briefing"],
+.settings-light .brief-action-row[data-state="error"] [data-testid="button-generate-briefing"] {
+  border-color: #a63842;
+  background: #8f2936;
+  color: #fff;
 }
 .settings-neon button:not(:disabled):hover { filter: brightness(1.12); }
 .settings-neon button:focus-visible,
