@@ -74,7 +74,6 @@ self.addEventListener('notificationclose', () => {
 });
 
 self.addEventListener('fetch', (event) => {
-self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
 

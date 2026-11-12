@@ -150,7 +150,12 @@ async function sendAccountRequest(path: string, method: string, body?: unknown) 
 function base64UrlToBytes(value: string): Uint8Array {
   const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
   const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
-  return Uint8Array.from(atob(padded), (character) => character.charCodeAt(0));
+  const decoded = atob(padded);
+  const bytes = new Uint8Array(new ArrayBuffer(decoded.length));
+  for (let index = 0; index < decoded.length; index += 1) {
+    bytes[index] = decoded.charCodeAt(index);
+  }
+  return bytes;
 }
 
 function PushNotificationSettings() {
