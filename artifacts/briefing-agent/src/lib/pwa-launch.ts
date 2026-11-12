@@ -17,11 +17,44 @@ function protocolQuestion(value: string): string {
   }
 }
 
+function sharedQuestion(params: URLSearchParams): string {
+  const title = (params.get('title') ?? '').trim().slice(0, 100);
+  const text = (params.get('text') ?? '').trim().slice(0, 220);
+  const rawUrl = (params.get('url') ?? '').trim();
+  let sourceUrl = '';
+
+  if (rawUrl) {
+    try {
+      const parsed = new URL(rawUrl);
+      if (
+        (parsed.protocol === 'https:' || parsed.protocol === 'http:') &&
+        !parsed.username &&
+        !parsed.password &&
+        parsed.href.length <= 250
+      ) {
+        sourceUrl = parsed.href;
+      }
+    } catch {
+      // Ignore malformed or non-web share URLs.
+    }
+  }
+
+  const fields = [
+    title ? `Title: ${title}` : '',
+    sourceUrl ? `Source URL: ${sourceUrl}` : '',
+    text ? `Shared text: ${text}` : '',
+  ].filter(Boolean);
+  if (fields.length === 0) return '';
+
+  return `Review this shared content for a meeting brief:\n${fields.join('\n')}`.slice(0, 500);
+}
+
 export function capturePwaLaunchIntent(): void {
   if (typeof window === 'undefined') return;
   const currentUrl = new URL(window.location.href);
   const shortcut = currentUrl.searchParams.get('shortcut');
   const protocol = currentUrl.searchParams.get('protocol');
+  const isShareTarget = currentUrl.searchParams.get('share') === '1';
   const intent: PwaLaunchIntent = {};
 
   if (shortcut === 'customer-search') intent.action = 'customer-search';
@@ -30,12 +63,20 @@ export function capturePwaLaunchIntent(): void {
     const question = protocolQuestion(protocol);
     if (question) intent.question = question;
   }
+  if (isShareTarget) {
+    const question = sharedQuestion(currentUrl.searchParams);
+    if (question) intent.question = question;
+  }
   if (!intent.action && !intent.question) return;
 
   try {
     window.sessionStorage.setItem(intentStorageKey, JSON.stringify(intent));
     currentUrl.searchParams.delete('shortcut');
     currentUrl.searchParams.delete('protocol');
+    currentUrl.searchParams.delete('share');
+    currentUrl.searchParams.delete('title');
+    currentUrl.searchParams.delete('text');
+    currentUrl.searchParams.delete('url');
     const remainingQuery = currentUrl.searchParams.toString();
     window.history.replaceState(
       window.history.state,

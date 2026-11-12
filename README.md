@@ -199,6 +199,8 @@ Each member clones the public repository, configures their own database and Cler
 
 There is no paid plan, checkout, or billing gate in this hackathon app. Push alerts are optional, free browser notifications; each signed-in user may opt in on a device or leave them off without affecting briefing access. The API stores each device subscription encrypted with `USER_CREDENTIALS_ENCRYPTION_KEY`. A notification is sent only after a manually started meeting briefing has finished; it never starts or repeats a Tavily search. The alert contains no company name, person name, source, or briefing content. Customer Search does not send a ready alert.
 
+The installed PWA can also receive shared titles, text, and HTTP(S) links from other apps. It places the shared content in the briefing question for review after sign-in; it does not start a search automatically. Shared content is kept in the current browser session until the user signs in and chooses what to do with it.
+
 For a local clone, generate a VAPID key pair with:
 
 ```sh

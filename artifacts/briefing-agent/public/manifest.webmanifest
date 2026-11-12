@@ -99,6 +99,16 @@
       "url": "/?protocol=%s"
     }
   ],
+  "share_target": {
+    "action": "./?share=1",
+    "method": "GET",
+    "enctype": "application/x-www-form-urlencoded",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
   "note_taking": {
     "new_note_url": "/new-note"
   },
