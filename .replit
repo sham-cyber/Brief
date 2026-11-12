@@ -46,6 +46,7 @@ packages = ["ollama"]
 [userenv]
 
 [userenv.shared]
+AI_FEATURE_ENABLED = "true"
 
 [userenv.development]
 OLLAMA_HOST = "http://127.0.0.1:11434"
