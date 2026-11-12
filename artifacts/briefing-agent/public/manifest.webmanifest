@@ -2,6 +2,7 @@
   "name": "Briefing Agent",
   "short_name": "Briefing",
   "description": "Source-linked company and person briefings for your meetings.",
+  "lang": "en",
   "id": "/",
   "start_url": "./",
   "scope": "./",
