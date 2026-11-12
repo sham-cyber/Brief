@@ -13,7 +13,7 @@
 - Vite production build completed.
 - API health endpoint returned HTTP 200.
 - The production `requestOllamaSummary` helper sent a test prompt to Workspace Ollama using Qwen3 0.6B. It returned a valid JSON summary citing the supplied test source in about 6.6 seconds.
-- Two user-supplied, one-page Letter briefs were generated for Tavily.com for the 30-day window 12 Oct–11 Nov 2026. The 19:40 IST run shows 7 sourced records; the 19:55 IST run shows 8. Both PDFs include a Sources section with URLs.
+- Two user-supplied, one-page Letter briefs were generated for Tavily.com for the 30-day window 12 Oct–11 Nov 2026. The 19:40 IST run shows 7 sourced records; the 19:55 IST run shows 8. Both PDFs include a Sources section with URLs and are included in this repository: [19:40 IST brief](evidence/tavily-brief-2026-11-11-1940-IST.pdf) and [19:55 IST brief](evidence/tavily-brief-2026-11-11-1955-IST.pdf).
 - The API log records successful `POST /api/briefings` responses: HTTP 200 at 14:10:22.433 with a 19,323 ms response time and at 14:25:38.001 with a 5,808 ms response time. These UTC log times align with the two PDF crawl times.
 - The route code calls Tavily search for public topics. An earlier unauthenticated request returned HTTP 401 before these successful runs; it is a separate request.
 - OpenAI code, dependency, route, and credential schema are absent from the current source tree.

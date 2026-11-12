@@ -56,3 +56,31 @@ mtime_ms = 1794337303825
 storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:742d8fb7-8455-444c-89a0-21c32e2418fa/39e51fac-d871-4a55-8121-5eb18e0b726b/f16bdb04-52e3-4f06-a43f-ab9e6e2d50bb"
 storage_version_token = "1794337368560408"
 content_type = "application/pdf"
+
+[[outputs]]
+id = "a6iBXar3ujcZhWXET_EgW"
+uri = "file://docs/evidence/tavily-brief-2026-11-11-1940-IST.pdf"
+type = "pdf"
+title = "Tavily test brief — 19:40 IST"
+description = "One-page Tavily.com brief from 11 Nov 2026, with 7 sourced records and source links. Added under docs/evidence; not committed or pushed."
+logical_id = "8852ac03-35ed-4680-8309-f8f00b1d105b"
+content_hash = "sha256:d610f389882907da3077a067d10d1ff3691b5f5ed5cab062409f1d228b922908"
+size = 58765
+mtime_ms = 1794473527343
+storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:742d8fb7-8455-444c-89a0-21c32e2418fa/8852ac03-35ed-4680-8309-f8f00b1d105b/992cd7bb-3ff5-4bd7-9566-57cf18ab7033"
+storage_version_token = "1794473581263400"
+content_type = "application/pdf"
+
+[[outputs]]
+id = "WMcDKGKqvr1obKlC05GyL"
+uri = "file://docs/evidence/tavily-brief-2026-11-11-1955-IST.pdf"
+type = "pdf"
+title = "Tavily test brief — 19:55 IST"
+description = "One-page Tavily.com brief from 11 Nov 2026, with 8 sourced records and source links. Added under docs/evidence; not committed or pushed."
+logical_id = "53ad52d8-75d4-4c33-86e5-594e3198d1af"
+content_hash = "sha256:7d4950e785382e48a8f883c87817da481d7f5bb21e538f50cef5520441399f9d"
+size = 61522
+mtime_ms = 1794473527355
+storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:742d8fb7-8455-444c-89a0-21c32e2418fa/53ad52d8-75d4-4c33-86e5-594e3198d1af/c30093cb-279a-4fa4-8e91-10d3f0137704"
+storage_version_token = "1794473582544780"
+content_type = "application/pdf"
