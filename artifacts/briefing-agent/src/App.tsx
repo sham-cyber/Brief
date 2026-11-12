@@ -9,10 +9,11 @@ import type { BriefingResult, BriefSource, CustomerSearchResponse, SapDataArea }
 import { ClerkProvider, SignIn, SignUp, Show, useClerk, useUser } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
-import { ArrowDown, ArrowUpRight, Check, Clipboard, Clock3, FileText, Link2, LoaderCircle, LockKeyhole, Printer, Radio, Search, Send, Square, Volume2 } from 'lucide-react';
+import { ArrowDown, ArrowUpRight, Bell, BellOff, Check, Clipboard, Clock3, FileText, Link2, LoaderCircle, LockKeyhole, Printer, Radio, Search, Send, Square, Volume2 } from 'lucide-react';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { SapConnectionSettings } from '@/components/sap-connection-settings';
 import { INDIA_CITIES_BY_STATE, INDIA_STATES, type IndiaState } from '@/lib/india-locations';
+import { clearPwaLaunchIntent, readPwaLaunchIntent } from '@/lib/pwa-launch';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
@@ -144,6 +145,147 @@ async function sendAccountRequest(path: string, method: string, body?: unknown) 
   const payload = await response.json().catch(() => ({})) as { error?: string };
   if (!response.ok) throw new Error(payload.error ?? 'The account request failed.');
   return payload;
+}
+
+function base64UrlToBytes(value: string): Uint8Array {
+  const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+  return Uint8Array.from(atob(padded), (character) => character.charCodeAt(0));
+}
+
+function PushNotificationSettings() {
+  const [configured, setConfigured] = useState(false);
+  const [publicKey, setPublicKey] = useState<string | null>(null);
+  const [hasAccountSubscription, setHasAccountSubscription] = useState(false);
+  const [thisDeviceSubscribed, setThisDeviceSubscribed] = useState(false);
+  const [supported, setSupported] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+
+  const refresh = useCallback(async () => {
+    try {
+      const status = await sendAccountRequest('push-notifications/status', 'GET') as {
+        configured?: boolean;
+        publicKey?: string | null;
+        subscribed?: boolean;
+      };
+      setConfigured(status.configured === true);
+      setPublicKey(status.publicKey ?? null);
+      setHasAccountSubscription(status.subscribed === true);
+      const browserSupportsPush = 'serviceWorker' in navigator &&
+        'PushManager' in window &&
+        'Notification' in window;
+      setSupported(browserSupportsPush);
+      if (browserSupportsPush) {
+        const registration = await navigator.serviceWorker.ready;
+        setThisDeviceSubscribed(Boolean(await registration.pushManager.getSubscription()));
+      } else {
+        setThisDeviceSubscribed(false);
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Push notification settings could not be loaded.');
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const enable = async () => {
+    setBusy(true);
+    setMessage('');
+    try {
+      if (!supported || !publicKey || !configured) {
+        throw new Error('Push alerts are not configured or supported on this device.');
+      }
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        throw new Error(permission === 'denied'
+          ? 'Notifications are blocked in this browser’s site settings.'
+          : 'Notification permission was not granted.');
+      }
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription() ??
+        await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: base64UrlToBytes(publicKey),
+        });
+      await sendAccountRequest('push-notifications/subscriptions', 'POST', subscription.toJSON());
+      setThisDeviceSubscribed(true);
+      setHasAccountSubscription(true);
+      setMessage('Brief-ready alerts are on for this device. They never start or repeat a search.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Push alerts could not be enabled.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const disable = async () => {
+    setBusy(true);
+    setMessage('');
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+      if (subscription) {
+        await sendAccountRequest('push-notifications/subscriptions', 'DELETE', {
+          endpoint: subscription.endpoint,
+        });
+        await subscription.unsubscribe();
+      }
+      setThisDeviceSubscribed(false);
+      setHasAccountSubscription(false);
+      setMessage('Brief-ready alerts are off for this device.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Push alerts could not be disabled.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section
+      className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-[#ded9e2] bg-white/80 p-4"
+      aria-label="Brief-ready push notifications"
+      data-testid="push-notification-settings"
+    >
+      <div className="min-w-[14rem] flex-1">
+        <p className="text-sm font-semibold text-[#35364a]">Brief-ready notifications</p>
+        <p className="mt-1 text-xs leading-relaxed text-[#625d69]">
+          Optional, per-device alert after a manually started briefing finishes. The notification does not include the company or person name and never starts a search.
+        </p>
+        {!configured && <p className="mt-2 text-sm font-semibold text-[#8e3f39]">Server push keys are not configured yet.</p>}
+        {!supported && <p className="mt-2 text-sm font-semibold text-[#8e3f39]">This browser does not support web push.</p>}
+        {hasAccountSubscription && !thisDeviceSubscribed && (
+          <p className="mt-2 text-xs text-[#625d69]">A different device is subscribed to this account.</p>
+        )}
+      </div>
+      {thisDeviceSubscribed ? (
+        <button
+          type="button"
+          onClick={() => void disable()}
+          disabled={busy}
+          className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[#c98e87] bg-white px-4 py-2 text-sm font-semibold text-[#8e3f39] disabled:opacity-50"
+          data-testid="button-disable-push-notifications"
+        >
+          <BellOff className="h-4 w-4" aria-hidden="true" />
+          {busy ? 'Updating…' : 'Turn off on this device'}
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => void enable()}
+          disabled={busy || !supported || !configured}
+          className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-[#292e46] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+          data-testid="button-enable-push-notifications"
+        >
+          <Bell className="h-4 w-4" aria-hidden="true" />
+          {busy ? 'Updating…' : 'Enable on this device'}
+        </button>
+      )}
+      {message && <p className="basis-full text-sm font-medium text-[#51476e]" role="status" aria-live="polite">{message}</p>}
+    </section>
+  );
 }
 
 function DailyBriefingEventLimitSettings({
@@ -2089,6 +2231,7 @@ function PrintReferences({ sourceIds, sources }: { sourceIds: string[]; sources:
 
 function Home() {
   const { isLoaded: accountLoaded, isSignedIn } = useUser();
+  const [pwaLaunchIntent] = useState(() => readPwaLaunchIntent());
   const [installPrompt, setInstallPrompt] = useState<PwaInstallPromptEvent | null>(null);
   const [installHelpOpen, setInstallHelpOpen] = useState(false);
   const [appInstalled, setAppInstalled] = useState(() => {
@@ -2156,7 +2299,8 @@ function Home() {
   const customerSearchMutation = useCreateCustomerSearch({ request: { get signal() { return abortControllerRef.current?.signal; } } });
   const isAnySearchPending = mutation.isPending || customerSearchMutation.isPending;
   const [subject, setSubject] = useState('');
-  const [subjectType, setSubjectType] = useState<'company' | 'person'>('company');
+  const [subjectType, setSubjectType] = useState<'company' | 'person'>(() =>
+    pwaLaunchIntent?.action === 'customer-search' ? 'person' : 'company');
   const [personRole, setPersonRole] = useState<PersonRole | null>(null);
   const [publicRoleTitle, setPublicRoleTitle] = useState('');
   const [companyName, setCompanyName] = useState('');
@@ -2168,14 +2312,16 @@ function Home() {
   const [sourceModeAlert, setSourceModeAlert] = useState('');
   const [sapAreas, setSapAreas] = useState<SapDataArea[]>([]);
   const [topics, setTopics] = useState<Topic[]>(TOPICS.map((topic) => topic.value));
-  const [customerSearchSelected, setCustomerSearchSelected] = useState(false);
+  const [customerSearchSelected, setCustomerSearchSelected] = useState(
+    pwaLaunchIntent?.action === 'customer-search',
+  );
   const [customerProductOrCategory, setCustomerProductOrCategory] = useState('');
   const [customerCity, setCustomerCity] = useState('');
   const [customerCityCustom, setCustomerCityCustom] = useState(false);
   const [customerState, setCustomerState] = useState('');
   const [meetingAt, setMeetingAt] = useState('');
   const [context, setContext] = useState('');
-  const [question, setQuestion] = useState('');
+  const [question, setQuestion] = useState(pwaLaunchIntent?.question ?? '');
   const [landingAskMessage, setLandingAskMessage] = useState('');
   const [aiStatus, setAiStatus] = useState<AiGuardrailsStatus | null>(null);
   const [useAi, setUseAi] = useState(false);
@@ -2284,6 +2430,14 @@ function Home() {
   );
   useEffect(() => {
     if (!accountLoaded || !isSignedIn) return;
+    const launchIntent = readPwaLaunchIntent();
+    if (launchIntent?.action === 'customer-search') {
+      setSubjectType('person');
+      setSourceMode('public');
+      setCustomerSearchSelected(true);
+    }
+    if (launchIntent?.question) setQuestion(launchIntent.question.slice(0, 500));
+    if (launchIntent) clearPwaLaunchIntent();
     try {
       const pendingQuestion = window.sessionStorage.getItem(pendingQuestionStorageKey);
       if (pendingQuestion) {
@@ -3430,6 +3584,7 @@ function Home() {
                       currentLimit={dailyCrawlStartsLimit}
                       onSaved={() => sourceStatusQuery.refetch()}
                     />
+                    {isSignedIn && <PushNotificationSettings />}
                   </>
                 )}
                 {sourceMode === 'public' && (
@@ -3666,10 +3821,131 @@ function LoadingBrief({ customerSearch = false }: { customerSearch?: boolean }) 
   );
 }
 
+type LocalNoteFileHandle = { getFile: () => Promise<File> };
+type PwaFileLaunchQueue = {
+  setConsumer: (consumer: (launch: { files?: LocalNoteFileHandle[] }) => void) => void;
+};
+
+function QuickNotePage() {
+  const [note, setNote] = useState('');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const loadTextFile = useCallback(async (file: File) => {
+    setMessage('');
+    if (!/\.(txt|md)$/i.test(file.name)) {
+      setMessage('Only .txt and .md files can be opened here.');
+      return;
+    }
+    if (file.size > 1024 * 1024) {
+      setMessage('This local note is limited to 1 MB.');
+      return;
+    }
+    try {
+      setNote(await file.text());
+      setMessage(`${file.name} opened locally. It was not uploaded or saved.`);
+    } catch {
+      setMessage('This file could not be read as text.');
+    }
+  }, []);
+
+  useEffect(() => {
+    const launchQueue = (window as Window & { launchQueue?: PwaFileLaunchQueue }).launchQueue;
+    launchQueue?.setConsumer((launch) => {
+      const firstFile = launch.files?.[0];
+      if (!firstFile) return;
+      void firstFile.getFile().then(loadTextFile).catch(() => {
+        setMessage('The selected local file could not be opened.');
+      });
+    });
+  }, [loadTextFile]);
+
+  const copyNote = async () => {
+    if (!note.trim()) {
+      setMessage('Write or open a note before copying it.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await navigator.clipboard.writeText(note);
+      setMessage('Copied. The note remains only in this page.');
+    } catch {
+      setMessage('Copy was blocked by the browser. Select the text and copy it manually.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <main className="min-h-[100dvh] bg-[#f3f6fb] px-4 py-8 text-[#292e46] sm:px-8">
+      <section className="mx-auto max-w-3xl rounded-2xl border border-[#d6deeb] bg-white p-5 shadow-sm sm:p-8">
+        <p className="font-mono text-xs font-semibold uppercase tracking-[.14em] text-[#655487]">Local note</p>
+        <h1 className="mt-2 font-serif text-3xl font-bold">Quick note</h1>
+        <p className="mt-3 rounded-xl border border-[#cdddcf] bg-[#f3fbf4] p-4 text-base leading-relaxed text-[#294532]">
+          This note stays in this page. It is not uploaded, sent to Tavily, or saved to the server. Copy it before leaving if you want to keep it.
+        </p>
+        <label htmlFor="pwa-local-note" className="mt-5 block text-sm font-semibold">Note text</label>
+        <textarea
+          id="pwa-local-note"
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+          rows={12}
+          maxLength={20_000}
+          className="mt-2 w-full resize-y rounded-xl border border-[#b8c3d4] bg-white p-4 text-base leading-relaxed text-[#20263a] outline-none focus:border-[#594b87] focus:ring-2 focus:ring-[#594b87]/20"
+          placeholder="Write a note, or open a plain text or Markdown file."
+          data-testid="textarea-local-note"
+        />
+        <label className="mt-4 block text-sm font-semibold" htmlFor="pwa-local-note-file">Open a local text file</label>
+        <input
+          id="pwa-local-note-file"
+          type="file"
+          accept=".txt,.md,text/plain,text/markdown"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) void loadTextFile(file);
+            event.currentTarget.value = '';
+          }}
+          className="mt-2 block w-full rounded-lg border border-[#d6deeb] bg-[#f8f9fc] p-3 text-base text-[#292e46]"
+          data-testid="input-local-note-file"
+        />
+        <div className="mt-5 flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={() => void copyNote()}
+            disabled={busy || !note}
+            className="min-h-11 rounded-lg bg-[#292e46] px-5 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            data-testid="button-copy-local-note"
+          >
+            {busy ? 'Copying…' : 'Copy note'}
+          </button>
+          <button
+            type="button"
+            onClick={() => { setNote(''); setMessage('Note cleared from this page.'); }}
+            disabled={!note}
+            className="min-h-11 rounded-lg border border-[#b8c3d4] bg-white px-5 py-2 text-sm font-semibold text-[#292e46] disabled:opacity-50"
+            data-testid="button-clear-local-note"
+          >
+            Clear note
+          </button>
+          <a
+            href={`${basePath}/`}
+            className="inline-flex min-h-11 items-center rounded-lg border border-[#b8c3d4] bg-white px-5 py-2 text-sm font-semibold text-[#292e46]"
+            data-testid="link-return-to-briefing"
+          >
+            Return to Briefing Agent
+          </a>
+        </div>
+        {message && <p className="mt-4 text-sm font-semibold text-[#51476e]" role="status" aria-live="polite">{message}</p>}
+      </section>
+    </main>
+  );
+}
+
 function Router() {
   return (
     <RoutedErrorBoundary>
       <Switch>
+        <Route path="/new-note" component={QuickNotePage} />
         <Route path="/sign-in/*?" component={SignInPage} />
         <Route path="/sign-up/*?" component={SignUpPage} />
         <Route path="/" component={HomeRedirect} />

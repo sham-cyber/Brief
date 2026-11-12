@@ -6,6 +6,7 @@ import personProfilesRouter from "./person-profiles";
 import tavilyCredentialsRouter from "./tavily-credentials";
 import sapConnectionRouter from "./sap-connection";
 import telegramRouter from "./telegram";
+import pushNotificationsRouter from "./push-notifications";
 
 const router: IRouter = Router();
 
@@ -16,5 +17,6 @@ router.use(personProfilesRouter);
 router.use(tavilyCredentialsRouter);
 router.use(sapConnectionRouter);
 router.use(telegramRouter);
+router.use(pushNotificationsRouter);
 
 export default router;

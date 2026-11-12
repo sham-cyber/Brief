@@ -2,12 +2,114 @@
   "name": "Briefing Agent",
   "short_name": "Briefing",
   "description": "Source-linked company and person briefings for your meetings.",
+  "id": "/",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
+  "display_override": [
+    "tabbed",
+    "standalone"
+  ],
+  "tab_strip": {
+    "new_tab_button": {
+      "url": "/"
+    }
+  },
   "background_color": "#f3f6fb",
   "theme_color": "#159447",
   "orientation": "any",
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  },
+  "shortcuts": [
+    {
+      "name": "New briefing",
+      "short_name": "Brief",
+      "description": "Open Briefing Agent to prepare a meeting brief.",
+      "url": "/",
+      "icons": [
+        {
+          "src": "./app-icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Customer Search",
+      "short_name": "Customers",
+      "description": "Find public business contacts by product and location.",
+      "url": "/?shortcut=customer-search",
+      "icons": [
+        {
+          "src": "./app-icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Take a local note",
+      "short_name": "Note",
+      "description": "Write a note that stays on this device.",
+      "url": "/new-note",
+      "icons": [
+        {
+          "src": "./app-icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+  "file_handlers": [
+    {
+      "action": "/new-note",
+      "accept": {
+        "text/plain": [
+          ".txt"
+        ],
+        "text/markdown": [
+          ".md"
+        ]
+      },
+      "launch_type": "single-client"
+    }
+  ],
+  "protocol_handlers": [
+    {
+      "protocol": "web+briefing",
+      "url": "/?protocol=%s"
+    }
+  ],
+  "note_taking": {
+    "new_note_url": "/new-note"
+  },
+  "edge_side_panel": {
+    "preferred_width": 480
+  },
+  "widgets": [
+    {
+      "name": "Briefing Agent",
+      "short_name": "Briefing",
+      "description": "A quick reminder to prepare a source-linked meeting brief.",
+      "tag": "briefing-agent-quick-start",
+      "template": "briefing-agent-quick-start",
+      "ms_ac_template": "./widgets/quick-brief-template.json",
+      "data": "./widgets/quick-brief-data.json",
+      "type": "application/json",
+      "auth": false,
+      "multiple": false,
+      "screenshots": [
+        {
+          "src": "./widgets/quick-brief-preview.png",
+          "sizes": "600x400",
+          "label": "Briefing Agent quick-start widget",
+          "platform": "Windows"
+        }
+      ]
+    }
+  ],
   "icons": [
     {
       "src": "./app-icon-192.png",

@@ -65,6 +65,7 @@ import {
   SAP_BRIEFING_HARD_STOP_MS,
   SAP_BRIEFING_LIMIT_MS,
 } from "../lib/sap-s4hana";
+import { sendManualBriefReadyNotification } from "../lib/web-push";
 
 const router: IRouter = Router();
 let sapBriefingActive = false;
@@ -1233,6 +1234,9 @@ router.post("/briefings", async (req, res): Promise<void> => {
         sources: combinedSources,
         sapData: sapResult.sapData,
       });
+      void sendManualBriefReadyNotification(userId).catch(() => {
+        req.log.warn({}, "Manual briefing push notification could not be sent");
+      });
       res.json(result);
     } catch (error) {
       crawlController.abort(error);
@@ -1481,6 +1485,9 @@ router.post("/briefings", async (req, res): Promise<void> => {
       ...aiSummaryFields,
       sources,
       sapData: [],
+    });
+    void sendManualBriefReadyNotification(userId).catch(() => {
+      req.log.warn({}, "Manual briefing push notification could not be sent");
     });
     res.json(result);
   } catch (error) {
