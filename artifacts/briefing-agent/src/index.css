@@ -450,6 +450,33 @@
   background: #fff !important;
   color: #235b3a !important;
 }
+.settings-shortcuts { border-color: #d4dde8; background: #fff; }
+.settings-shortcuts > a,
+.settings-shortcuts > button {
+  border-color: #b8c5d5;
+  background: #f3f7fa;
+  color: #1d4b36;
+}
+.settings-neon .settings-shortcuts {
+  border-color: #354968;
+  background: #101a31;
+}
+.settings-neon .settings-shortcuts > a,
+.settings-neon .settings-shortcuts > button {
+  border-color: #496348;
+  background: #172a29;
+  color: #8af5a7 !important;
+}
+.settings-light .settings-shortcuts {
+  border-color: #d4dde8;
+  background: #fff;
+}
+.settings-light .settings-shortcuts > a,
+.settings-light .settings-shortcuts > button {
+  border-color: #b8c5d5;
+  background: #f3f7fa;
+  color: #1d4b36 !important;
+}
 
 .pwa-download-button {
   box-sizing: border-box;

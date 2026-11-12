@@ -805,7 +805,7 @@ function AiGuardrailPanel({ onStatusChange }: { onStatusChange?: (status: AiGuar
 
   if (!isLoaded || !isSignedIn) return null;
   return (
-    <details open className="no-print mt-4 rounded-xl border border-[#ded9e2] bg-[#f8f6fb] px-4 py-3" aria-label="AI activation guardrails" data-testid="ai-guardrails">
+    <details id="ai-guardrails" open className="no-print mt-4 scroll-mt-6 rounded-xl border border-[#ded9e2] bg-[#f8f6fb] px-4 py-3" aria-label="AI activation guardrails" data-testid="ai-guardrails">
       <summary className="cursor-pointer text-base font-semibold text-[#35364a]" data-testid="summary-ai-guardrails">
         AI control <span className={`ml-2 rounded-full border px-3 py-1 text-sm font-bold text-white ${status?.activated ? 'border-[#218752] bg-[#218752]' : 'border-[#e4b7b2] bg-[#bb5048]'}`}>{status?.activated ? 'ACTIVE · OPT-IN' : 'STOPPED · AI OFF'}</span>
       </summary>
@@ -2136,6 +2136,8 @@ function Home() {
   }, []);
   const abortControllerRef = useRef<AbortController | null>(null);
   const briefingOutputRef = useRef<HTMLElement | null>(null);
+  const sourceKeySettingsRef = useRef<HTMLDetailsElement | null>(null);
+  const telegramSettingsRef = useRef<HTMLDetailsElement | null>(null);
   const mutation = useCreateBriefing({ request: { get signal() { return abortControllerRef.current?.signal; } } });
   const customerSearchMutation = useCreateCustomerSearch({ request: { get signal() { return abortControllerRef.current?.signal; } } });
   const isAnySearchPending = mutation.isPending || customerSearchMutation.isPending;
@@ -2557,6 +2559,13 @@ function Home() {
       setLandingAskMessage('Your browser could not save the question. Sign in, then enter it again.');
     }
   };
+  const openTelegramSettings = () => {
+    if (sourceKeySettingsRef.current) sourceKeySettingsRef.current.open = true;
+    if (telegramSettingsRef.current) telegramSettingsRef.current.open = true;
+    window.requestAnimationFrame(() => {
+      telegramSettingsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  };
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -2723,6 +2732,44 @@ function Home() {
             </button>
           </div>
         </nav>
+
+        {isSignedIn && (
+          <div
+            className="settings-shortcuts mt-4 flex flex-wrap items-center gap-2 rounded-xl border px-3 py-3 sm:px-4"
+            role="group"
+            aria-label="Quick links to account settings"
+            data-testid="settings-shortcuts"
+          >
+            <span className="mr-1 text-sm font-semibold">Settings:</span>
+            <a
+              href="#ai-guardrails"
+              className="rounded-lg border px-3 py-2 text-sm font-semibold no-underline"
+              data-testid="link-qwen-settings"
+            >
+              Qwen / Ollama
+            </a>
+            <button
+              type="button"
+              onClick={openTelegramSettings}
+              className="rounded-lg border px-3 py-2 text-sm font-semibold"
+              aria-controls="telegram-settings"
+              data-testid="button-open-telegram-settings"
+            >
+              Telegram
+            </button>
+            {sourceStatusQuery.isLoading ? (
+              <span className="px-2 text-sm">Checking SAP access…</span>
+            ) : canStart ? (
+              <SapConnectionSettings
+                basePath={basePath}
+                onChanged={() => { void sourceStatusQuery.refetch(); }}
+                buttonLabel="SAP connection settings"
+              />
+            ) : (
+              <span className="px-2 text-sm">SAP connection setup is restricted to the app owner.</span>
+            )}
+          </div>
+        )}
 
         <div className="mt-5 space-y-6 lg:mt-8">
           <section className="no-print fade-up" aria-labelledby="create-heading">
@@ -3002,14 +3049,6 @@ function Home() {
                           {label}
                           {value === 'private' && <span className="text-sm font-normal">(Person only)</span>}
                         </label>
-                        {value === 'sap' && canStart && (
-                          <div className="absolute right-1 top-1/2 z-10 -translate-y-1/2">
-                            <SapConnectionSettings
-                              basePath={basePath}
-                              onChanged={() => { void sourceStatusQuery.refetch(); }}
-                            />
-                          </div>
-                        )}
                       </div>
                     );
                   })}
@@ -3020,7 +3059,7 @@ function Home() {
                   {sourceModeAlert}
                 </div>
               )}
-              <details className="mt-3 rounded-xl border border-[#ded9e2] bg-white/70 px-4 py-3" data-testid="details-source-key-settings">
+              <details ref={sourceKeySettingsRef} id="source-key-settings" className="mt-3 rounded-xl border border-[#ded9e2] bg-white/70 px-4 py-3" data-testid="details-source-key-settings">
                 <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 text-base font-semibold text-[#35364a]">
                   <span className="inline-flex items-center gap-2">
                     <LockKeyhole aria-hidden="true" className="h-4 w-4 text-[#594b87]" />
@@ -3037,7 +3076,7 @@ function Home() {
                     projectKeyActive={keySource === 'project-owner'}
                   />
                 </div>
-                <details className="mt-3 rounded-lg border border-[#d9d5e1] bg-white px-4 py-3" data-testid="details-telegram-settings">
+                <details ref={telegramSettingsRef} id="telegram-settings" className="mt-3 rounded-lg border border-[#d9d5e1] bg-white px-4 py-3" data-testid="details-telegram-settings">
                   <summary className="cursor-pointer text-base font-semibold text-[#35364a]">
                     Telegram PDF delivery · encrypted bot setup
                   </summary>

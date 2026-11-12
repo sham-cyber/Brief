@@ -109,9 +109,11 @@ function fieldClass() {
 export function SapConnectionSettings({
   basePath,
   onChanged,
+  buttonLabel,
 }: {
   basePath: string;
   onChanged: () => void;
+  buttonLabel?: string;
 }) {
   const [settings, setSettings] = useState<SapSettings | null>(null);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
@@ -556,12 +558,13 @@ export function SapConnectionSettings({
         <button
           type="button"
           onClick={() => dialogRef.current?.showModal()}
-          aria-label="Open SAP connection settings"
+          aria-label={buttonLabel ?? "Open SAP connection settings"}
           title="SAP connection settings"
-          className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[#82b3ae] bg-white text-[#245d5b] shadow-sm transition hover:bg-[#e8f5f3] focus:outline-none focus:ring-2 focus:ring-[#277b77]/30"
+          className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-[#82b3ae] bg-white text-[#245d5b] shadow-sm transition hover:bg-[#e8f5f3] focus:outline-none focus:ring-2 focus:ring-[#277b77]/30 ${buttonLabel ? "px-3" : "h-10 w-10"}`}
           data-testid="button-open-sap-settings"
         >
           <Settings2 aria-hidden="true" className="h-5 w-5" />
+          {buttonLabel && <span className="text-sm font-semibold">{buttonLabel}</span>}
         </button>
       </div>
     </>
