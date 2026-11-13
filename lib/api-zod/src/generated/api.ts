@@ -593,6 +593,75 @@ export const CreateBriefingResponse = zod.object({
 
 
 /**
+ * @summary Find cited public business prospects for a person
+ */
+export const createCustomerSearchBodyStartPinMin = 4;
+export const createCustomerSearchBodyStartPinMax = 4;
+
+
+export const createCustomerSearchBodyStartPinRegExp = new RegExp('^[0-9]{4}$');
+export const createCustomerSearchBodyPersonNameMin = 2;
+export const createCustomerSearchBodyPersonNameMax = 200;
+
+export const createCustomerSearchBodyCompanyNameMax = 200;
+
+export const createCustomerSearchBodyPublicRoleTitleMax = 80;
+
+export const createCustomerSearchBodyProductOrCategoryMin = 2;
+export const createCustomerSearchBodyProductOrCategoryMax = 120;
+
+export const createCustomerSearchBodyCityMin = 2;
+export const createCustomerSearchBodyCityMax = 100;
+
+export const createCustomerSearchBodyStateMin = 2;
+export const createCustomerSearchBodyStateMax = 100;
+
+
+
+export const CreateCustomerSearchBody = zod.object({
+  "startPin": zod.string().min(createCustomerSearchBodyStartPinMin).max(createCustomerSearchBodyStartPinMax).regex(createCustomerSearchBodyStartPinRegExp),
+  "personName": zod.string().min(createCustomerSearchBodyPersonNameMin).max(createCustomerSearchBodyPersonNameMax),
+  "personRole": zod.enum(['business_owner', 'mp', 'corporate']),
+  "companyName": zod.string().max(createCustomerSearchBodyCompanyNameMax).optional(),
+  "publicRoleTitle": zod.string().max(createCustomerSearchBodyPublicRoleTitleMax).optional(),
+  "productOrCategory": zod.string().min(createCustomerSearchBodyProductOrCategoryMin).max(createCustomerSearchBodyProductOrCategoryMax),
+  "city": zod.string().min(createCustomerSearchBodyCityMin).max(createCustomerSearchBodyCityMax),
+  "state": zod.string().min(createCustomerSearchBodyStateMin).max(createCustomerSearchBodyStateMax)
+})
+
+export const createCustomerSearchResponseSearchCreditsUsedMin = 0;
+
+export const createCustomerSearchResponseSearchResultsReturnedMin = 0;
+
+export const createCustomerSearchResponseSourcesItemExcerptMax = 700;
+
+
+
+export const CreateCustomerSearchResponse = zod.object({
+  "personName": zod.string(),
+  "personRole": zod.enum(['business_owner', 'mp', 'corporate']),
+  "companyName": zod.string().nullable(),
+  "productOrCategory": zod.string(),
+  "city": zod.string(),
+  "state": zod.string(),
+  "generatedAt": zod.coerce.date(),
+  "searchCreditsUsed": zod.number().int().min(createCustomerSearchResponseSearchCreditsUsedMin).nullable(),
+  "searchResultsReturned": zod.number().int().min(createCustomerSearchResponseSearchResultsReturnedMin),
+  "sources": zod.array(zod.object({
+  "id": zod.string(),
+  "businessName": zod.string(),
+  "sourceUrl": zod.string().url(),
+  "publisher": zod.string(),
+  "excerpt": zod.string().max(createCustomerSearchResponseSourcesItemExcerptMax),
+  "phone": zod.string().nullable(),
+  "email": zod.string().nullable(),
+  "publishedAt": zod.coerce.date().nullable()
+})),
+  "dataSourceNotice": zod.string()
+})
+
+
+/**
  * @summary Set the signed-in user's daily briefing event limit
  */
 export const setDailyBriefingEventLimitBodyDailyEventLimitMax = 10;

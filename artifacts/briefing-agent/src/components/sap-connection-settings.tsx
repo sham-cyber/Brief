@@ -109,9 +109,11 @@ function fieldClass() {
 export function SapConnectionSettings({
   basePath,
   onChanged,
+  buttonLabel,
 }: {
   basePath: string;
   onChanged: () => void;
+  buttonLabel?: string;
 }) {
   const [settings, setSettings] = useState<SapSettings | null>(null);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
@@ -346,7 +348,7 @@ export function SapConnectionSettings({
               <ol className="mt-5 space-y-3 text-base leading-relaxed text-[#334e4c]">
                 <li><strong>1. Clone and run the app.</strong> Each GitHub clone or deployment is configured separately for its own SAP tenant.</li>
                 <li><strong>2. Get SAP administrator details.</strong> Request the approved OData service URL, OAuth token URL, client ID and secret, Fiori link base, permitted company/plant scope, and allowed business areas.</li>
-                <li><strong>3. Open SAP settings.</strong> Use the gear beside the SAP source. Add the endpoints, scope, and mappings for Store, Production, Maintenance, Inventory, Sales, HR, Power/Electrical/Solar, Purchase, Scrap, Order, and Delivery as authorized.</li>
+                <li><strong>3. Open SAP settings.</strong> After signing in, choose the labeled SAP connection settings button in the Settings row near the top of the page. Add the endpoints, scope, and mappings for Store, Production, Maintenance, Inventory, Sales, HR, Power/Electrical/Solar, Purchase, Scrap, Order, and Delivery as authorized.</li>
                 <li><strong>4. Save and test.</strong> OAuth credentials are encrypted by the app server. Test checks the connection and metadata; the app requests operational records only when you press <strong>Brief</strong>.</li>
                 <li><strong>5. Select and brief.</strong> Choose a company, meeting time, topics, and mapped SAP areas. SAP records and Tavily public research are shown in separate sections; each uses its own credentials and billing.</li>
               </ol>
@@ -556,12 +558,13 @@ export function SapConnectionSettings({
         <button
           type="button"
           onClick={() => dialogRef.current?.showModal()}
-          aria-label="Open SAP connection settings"
+          aria-label={buttonLabel ?? "Open SAP connection settings"}
           title="SAP connection settings"
-          className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[#82b3ae] bg-white text-[#245d5b] shadow-sm transition hover:bg-[#e8f5f3] focus:outline-none focus:ring-2 focus:ring-[#277b77]/30"
+          className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-[#82b3ae] bg-white text-[#245d5b] shadow-sm transition hover:bg-[#e8f5f3] focus:outline-none focus:ring-2 focus:ring-[#277b77]/30 ${buttonLabel ? "px-3" : "h-10 w-10"}`}
           data-testid="button-open-sap-settings"
         >
           <Settings2 aria-hidden="true" className="h-5 w-5" />
+          {buttonLabel && <span className="text-sm font-semibold">{buttonLabel}</span>}
         </button>
       </div>
     </>

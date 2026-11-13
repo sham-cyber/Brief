@@ -32,11 +32,13 @@ Briefing Agent gathers public reporting from the 30 days ending when the user st
 - Supports Company and Person briefs, with role context for Chairman / CEO, MP / public office, and Corporate person.
 - Searches up to five selectable blocks: News, Hires, Launches, Financial Facts, and Risks & Open Questions.
 - Uses Tavily for one basic search per selected topic, up to eight results per topic; validates dates, links, subject match, and topic relevance before including results.
+- Offers a separate Person-only Customer Search for a product or category and city/state, using one current-web Tavily request and returning cited pages with any listed business contacts; it does not use Qwen.
 - Accepts an optional open question about the selected company or person, guides the existing topic searches, and returns a cited source-based answer without adding Tavily requests.
 - Shows source links and, when Tavily returns them for an accepted source, a photo or supported video preview.
 - Provides a concise brief and a one-page print with up to 400 words of briefing text, plus its cited source list, and browser read-aloud.
 - Reads a selected text-based PDF aloud in the browser using the device's speech voice; PDF text is extracted locally, with no Tavily or Qwen request.
 - SAP briefs combine Tavily public research with approved, read-only SAP S/4HANA records; public links and internal records remain in separate sections.
+- Can be installed as a Progressive Web App (PWA) with app icons and a cached app shell; live sign-in, search, and data still require a network connection.
 
 The app includes Qwen summaries through Ollama. After Tavily results pass the source checks, a summary can run when the server switch, account PIN and activation, and per-brief opt-in are all satisfied. The example configuration keeps the server switch false until the operator enables it. SAP records and private sources are not sent to the model.
 
@@ -51,6 +53,7 @@ The app includes Qwen summaries through Ollama. After Tavily results pass the so
 - **Validation and API contracts:** Zod and an OpenAPI specification, with generated TypeScript API clients.
 - **PDF and project tooling:** `pdf-lib`, pnpm workspaces, and TypeScript type checks.
 - **PDF read-aloud:** PDF.js for local text extraction and the browser Web Speech API for device-voice playback.
+- **Installable app:** Web App Manifest and a service worker that caches the app shell and same-origin static assets.
 
 ## Sign-in, account PIN, and crawl procedure
 

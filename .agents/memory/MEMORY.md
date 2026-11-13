@@ -1,2 +1,3 @@
 - [Existing briefing app](briefing-agent-target.md) — extend this app; members run clones with local Ollama and AI off by default.
 - [GitHub and Preview safety](git-preview-safety.md) — preserve local work and never push or reset without explicit permission.
+- [Customer search source limits](customer-search-sources.md) — use cited public search only; do not scrape restricted business directories without permission.

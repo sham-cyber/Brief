@@ -11,6 +11,13 @@ export type TavilySearchResponse = {
   usage?: { credits?: unknown } | null;
 };
 
+export type TavilySearchOptions = {
+  topic?: "news" | "general";
+  dateFilter?: boolean;
+  excludeDomains?: string[];
+  includeImages?: boolean;
+};
+
 export class TavilySearchError extends Error {
   constructor(readonly status: number) {
     super(`Tavily search failed with status ${status}.`);
@@ -24,10 +31,13 @@ export async function searchTavily(
   endDate: string,
   apiKey: string,
   signal?: AbortSignal,
+  options: TavilySearchOptions = {},
 ): Promise<{ results: TavilyResult[]; creditsUsed: number | null }> {
   const requestSignal = signal
     ? AbortSignal.any([signal, AbortSignal.timeout(25_000)])
     : AbortSignal.timeout(25_000);
+  const includeImages = options.includeImages ?? true;
+  const dateFilter = options.dateFilter ?? true;
   const response = await fetch("https://api.tavily.com/search", {
     method: "POST",
     headers: {
@@ -37,18 +47,25 @@ export async function searchTavily(
     body: JSON.stringify({
       query,
       search_depth: "basic",
-      topic: "news",
+      topic: options.topic ?? "news",
       max_results: 8,
-      start_date: startDate,
-      end_date: endDate,
-      include_published_date: true,
-      filter_by_published_date: true,
+      ...(dateFilter
+        ? {
+            start_date: startDate,
+            end_date: endDate,
+            include_published_date: true,
+            filter_by_published_date: true,
+          }
+        : {}),
       include_answer: false,
       include_raw_content: false,
-      include_images: true,
-      include_image_descriptions: true,
+      include_images: includeImages,
+      include_image_descriptions: includeImages,
       include_usage: true,
       language: "en",
+      ...(options.excludeDomains?.length
+        ? { exclude_domains: options.excludeDomains }
+        : {}),
     }),
     signal: requestSignal,
   });

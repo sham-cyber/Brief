@@ -9,7 +9,7 @@
     "start": "node --enable-source-maps ./dist/index.mjs",
     "test:sap": "node --experimental-strip-types --test src/lib/sap-s4hana.test.mjs src/lib/user-sap-connection.test.mjs",
     "test:ai": "node --experimental-strip-types --test src/lib/ai-briefing-summary.test.mjs src/lib/ai-provider.test.mjs src/lib/briefing-start-pin.test.mjs src/lib/user-ollama-credentials.test.mjs",
-    "test:briefing": "node --experimental-strip-types --test src/lib/briefing-question.test.mjs",
+    "test:briefing": "node --experimental-strip-types --test src/lib/briefing-question.test.mjs src/lib/customer-search.test.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

@@ -113,6 +113,93 @@ export interface BriefingInput {
   topics: BriefingInputTopicsItem[];
 }
 
+export type CustomerSearchInputPersonRole = typeof CustomerSearchInputPersonRole[keyof typeof CustomerSearchInputPersonRole];
+
+
+export const CustomerSearchInputPersonRole = {
+  business_owner: 'business_owner',
+  mp: 'mp',
+  corporate: 'corporate',
+} as const;
+
+export interface CustomerSearchInput {
+  /**
+     * @minLength 4
+     * @maxLength 4
+     * @pattern ^[0-9]{4}$
+     */
+  startPin: string;
+  /**
+     * @minLength 2
+     * @maxLength 200
+     */
+  personName: string;
+  personRole: CustomerSearchInputPersonRole;
+  /** @maxLength 200 */
+  companyName?: string;
+  /** @maxLength 80 */
+  publicRoleTitle?: string;
+  /**
+     * @minLength 2
+     * @maxLength 120
+     */
+  productOrCategory: string;
+  /**
+     * @minLength 2
+     * @maxLength 100
+     */
+  city: string;
+  /**
+     * @minLength 2
+     * @maxLength 100
+     */
+  state: string;
+}
+
+export interface CustomerSearchSource {
+  id: string;
+  businessName: string;
+  sourceUrl: string;
+  publisher: string;
+  /** @maxLength 700 */
+  excerpt: string;
+  /** @nullable */
+  phone: string | null;
+  /** @nullable */
+  email: string | null;
+  /** @nullable */
+  publishedAt: string | null;
+}
+
+export type CustomerSearchResponsePersonRole = typeof CustomerSearchResponsePersonRole[keyof typeof CustomerSearchResponsePersonRole];
+
+
+export const CustomerSearchResponsePersonRole = {
+  business_owner: 'business_owner',
+  mp: 'mp',
+  corporate: 'corporate',
+} as const;
+
+export interface CustomerSearchResponse {
+  personName: string;
+  personRole: CustomerSearchResponsePersonRole;
+  /** @nullable */
+  companyName: string | null;
+  productOrCategory: string;
+  city: string;
+  state: string;
+  generatedAt: string;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  searchCreditsUsed: number | null;
+  /** @minimum 0 */
+  searchResultsReturned: number;
+  sources: CustomerSearchSource[];
+  dataSourceNotice: string;
+}
+
 export type SapConnectionAreaMappingTopic = typeof SapConnectionAreaMappingTopic[keyof typeof SapConnectionAreaMappingTopic];
 
 
