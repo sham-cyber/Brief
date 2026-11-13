@@ -242,11 +242,53 @@ export interface DailyBriefingEventLimitResponse {
   dailyEventLimit: number;
 }
 
+export interface BriefingAccessWindowInput {
+  /**
+     * Inclusive first date when this account may use Tavily and Qwen.
+     * @nullable
+     */
+  accessWindowFrom: string | null;
+  /**
+     * Inclusive final date; the window may span at most one calendar month.
+     * @nullable
+     */
+  accessWindowThrough: string | null;
+}
+
+export type BriefingAccessWindowResponseAccessWindowState = typeof BriefingAccessWindowResponseAccessWindowState[keyof typeof BriefingAccessWindowResponseAccessWindowState];
+
+
+export const BriefingAccessWindowResponseAccessWindowState = {
+  'not-configured': 'not-configured',
+  scheduled: 'scheduled',
+  active: 'active',
+  expired: 'expired',
+} as const;
+
+export interface BriefingAccessWindowResponse {
+  /** @nullable */
+  accessWindowFrom: string | null;
+  /** @nullable */
+  accessWindowThrough: string | null;
+  accessWindowState: BriefingAccessWindowResponseAccessWindowState;
+  accessWindowActive: boolean;
+}
+
 export type BriefingSourceStatusProvider = typeof BriefingSourceStatusProvider[keyof typeof BriefingSourceStatusProvider];
 
 
 export const BriefingSourceStatusProvider = {
   tavily: 'tavily',
+} as const;
+
+export type BriefingSourceStatusAccessWindowState = typeof BriefingSourceStatusAccessWindowState[keyof typeof BriefingSourceStatusAccessWindowState];
+
+
+export const BriefingSourceStatusAccessWindowState = {
+  'not-configured': 'not-configured',
+  scheduled: 'scheduled',
+  active: 'active',
+  expired: 'expired',
 } as const;
 
 /**
@@ -272,8 +314,15 @@ export interface BriefingSourceStatus {
   provider: BriefingSourceStatusProvider;
   /** Whether this signed-in account has an effective Tavily key. */
   configured: boolean;
-  /** Whether an authenticated account may start a crawl; an effective Tavily key and that account's PIN are still required. */
+  /** Whether the request is authenticated; an active date window, effective Tavily key, and account PIN are reported and enforced separately. */
   canStart: boolean;
+  /** @nullable */
+  accessWindowFrom: string | null;
+  /** @nullable */
+  accessWindowThrough: string | null;
+  accessWindowState: BriefingSourceStatusAccessWindowState;
+  /** Whether the signed-in user's inclusive Tavily and Qwen access window includes today's Asia/Kolkata date. */
+  accessWindowActive: boolean;
   /** Effective key source for this account; the project key is owner-only. */
   keySource: BriefingSourceStatusKeySource;
   startPinConfigured: boolean;

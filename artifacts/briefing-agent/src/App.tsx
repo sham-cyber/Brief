@@ -92,6 +92,28 @@ const PRINT_WORD_LIMIT = 400;
 const AI_REQUESTS_PER_TAB = 1;
 const AI_SPEECH_LIMIT_SECONDS = 120;
 
+function maxAccessWindowEnd(from: string): string | undefined {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from)) return undefined;
+  const [year, month, day] = from.split('-').map(Number);
+  const start = new Date(Date.UTC(year, month - 1, day));
+  if (
+    start.getUTCFullYear() !== year ||
+    start.getUTCMonth() !== month - 1 ||
+    start.getUTCDate() !== day
+  ) return undefined;
+  const nextMonthLastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(year, month, Math.min(day, nextMonthLastDay)))
+    .toISOString()
+    .slice(0, 10);
+}
+
+function isValidAccessWindow(from: string, through: string): boolean {
+  if (!from && !through) return true;
+  if (!from || !through) return false;
+  const maxThrough = maxAccessWindowEnd(from);
+  return Boolean(maxThrough && through >= from && through <= maxThrough);
+}
+
 type AiGuardrailsStatus = {
   provider: 'ollama';
   aiProviderMessage: string | null;
@@ -1949,6 +1971,10 @@ function Home() {
   const [sapAreas, setSapAreas] = useState<SapDataArea[]>([]);
   const [topics, setTopics] = useState<Topic[]>(TOPICS.map((topic) => topic.value));
   const [meetingAt, setMeetingAt] = useState('');
+  const [accessWindowFrom, setAccessWindowFrom] = useState('');
+  const [accessWindowThrough, setAccessWindowThrough] = useState('');
+  const [accessWindowSaving, setAccessWindowSaving] = useState(false);
+  const [accessWindowMessage, setAccessWindowMessage] = useState('');
   const [context, setContext] = useState('');
   const [question, setQuestion] = useState('');
   const [landingAskMessage, setLandingAskMessage] = useState('');
@@ -1963,7 +1989,7 @@ function Home() {
   const [pinDialogError, setPinDialogError] = useState('');
   const activeRequestKey = useRef('');
   const timeoutRef = useRef<number | undefined>(undefined);
-  const requestKey = JSON.stringify([subject.trim(), subjectType, personRole, publicRoleTitle.trim(), companyName.trim(), sourceMode, sourceMode === 'sap' ? sapAreas : [], meetingAt, topics, context.trim(), question.trim(), useAi]);
+  const requestKey = JSON.stringify([subject.trim(), subjectType, personRole, publicRoleTitle.trim(), companyName.trim(), sourceMode, sourceMode === 'sap' ? sapAreas : [], meetingAt, accessWindowFrom, accessWindowThrough, topics, context.trim(), question.trim(), useAi]);
   const meetingTimeIsValid = !meetingAt || !Number.isNaN(new Date(meetingAt).getTime());
   const hasValidSubject = subject.trim().length >= 2;
   const hasValidRoleSelection = subjectType !== 'person' || Boolean(personRole);
@@ -1980,6 +2006,26 @@ function Home() {
   const sapConfigured = sourceStatusQuery.data?.sapConfigured === true;
   const sapAvailableAreas = sourceStatusQuery.data?.sapAvailableAreas ?? [];
   const canStart = sourceStatusQuery.data?.canStart === true;
+  const accessWindowActive = sourceStatusQuery.data?.accessWindowActive === true;
+  const accessWindowState = sourceStatusQuery.data?.accessWindowState ?? 'not-configured';
+  const savedAccessWindowFrom = sourceStatusQuery.data?.accessWindowFrom ?? '';
+  const savedAccessWindowThrough = sourceStatusQuery.data?.accessWindowThrough ?? '';
+  const accessWindowFormValid = isValidAccessWindow(accessWindowFrom, accessWindowThrough);
+  const accessWindowDirty =
+    accessWindowFrom !== savedAccessWindowFrom ||
+    accessWindowThrough !== savedAccessWindowThrough;
+  const accessWindowReady = accessWindowActive && !accessWindowDirty;
+  useEffect(() => {
+    if (!accountLoaded) return;
+    if (!isSignedIn) {
+      setAccessWindowFrom('');
+      setAccessWindowThrough('');
+      setAccessWindowMessage('');
+      return;
+    }
+    setAccessWindowFrom(savedAccessWindowFrom);
+    setAccessWindowThrough(savedAccessWindowThrough);
+  }, [accountLoaded, isSignedIn, savedAccessWindowFrom, savedAccessWindowThrough]);
   const keySource = sourceStatusQuery.data?.keySource;
   const startPinConfigured = sourceStatusQuery.data?.startPinConfigured === true;
   const dailyCrawlStartsLimit = sourceStatusQuery.data?.dailyCrawlStartsLimit ?? null;
@@ -1996,6 +2042,7 @@ function Home() {
   const sapAreasUnavailable = sapAreas.filter((area) => !sapAvailableAreas.includes(area));
   const sapSetupComplete = canStart && sapConfigured && sapAvailableAreas.length > 0;
   const sapSourceReady = sapSetupComplete &&
+    accessWindowReady &&
     tavilyConfigured &&
     !dailyCrawlStartLimitReached &&
     !dailySearchQuotaInsufficient &&
@@ -2006,7 +2053,7 @@ function Home() {
     ? subject.trim().length >= 2
     : personRole === 'business_owner' && companyName.trim().length >= 2;
   const sourceReady = sourceMode === 'public'
-    ? tavilyConfigured && !dailyCrawlStartLimitReached && !dailySearchQuotaInsufficient && !crawlAlreadyActive
+    ? accessWindowReady && tavilyConfigured && !dailyCrawlStartLimitReached && !dailySearchQuotaInsufficient && !crawlAlreadyActive
     : sourceMode === 'sap'
       ? sapSourceReady && hasSapOrganization
       : false;
@@ -2081,6 +2128,28 @@ function Home() {
       return;
     }
     setSourceMode('sap');
+  };
+
+  const saveAccessWindow = async () => {
+    if (!accessWindowFormValid || !sourceStatusQuery.data) return;
+    setAccessWindowSaving(true);
+    setAccessWindowMessage('');
+    try {
+      await sendAccountRequest('briefings/access-window', 'PUT', {
+        accessWindowFrom: accessWindowFrom || null,
+        accessWindowThrough: accessWindowThrough || null,
+      });
+      await sourceStatusQuery.refetch();
+      setAccessWindowMessage(
+        accessWindowFrom && accessWindowThrough
+          ? 'The Tavily and Qwen access dates were saved.'
+          : 'Tavily and Qwen access were disabled for this account.',
+      );
+    } catch (error) {
+      setAccessWindowMessage(error instanceof Error ? error.message : 'The active dates could not be saved.');
+    } finally {
+      setAccessWindowSaving(false);
+    }
   };
 
   useEffect(() => {
@@ -2203,6 +2272,7 @@ function Home() {
   const runBriefing = useCallback((key: string, pin: string) => {
     const selectedSourceReady =
       (sourceMode === 'public' &&
+        accessWindowActive &&
         tavilyConfigured &&
         !dailyCrawlStartLimitReached &&
         !dailySearchQuotaInsufficient &&
@@ -2210,7 +2280,7 @@ function Home() {
       (sourceMode === 'sap' &&
         sapSourceReady &&
         hasSapOrganization);
-    if (!/^\d{4}$/.test(pin) || !isSignedIn || !selectedSourceReady || !startPinConfigured || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || (useAi && !aiStatus?.activated) || mutation.isPending) return;
+    if (!/^\d{4}$/.test(pin) || !isSignedIn || !accessWindowReady || !selectedSourceReady || !startPinConfigured || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || (useAi && !aiStatus?.activated) || mutation.isPending) return;
     activeRequestKey.current = key;
     setFailedKey('');
     setTimedOutKey('');
@@ -2273,7 +2343,7 @@ function Home() {
         },
       },
     );
-  }, [aiStatus?.activated, companyName, context, crawlAlreadyActive, dailyCrawlStartLimitReached, dailySearchQuotaInsufficient, hasSapOrganization, hasTopics, hasValidRole, hasValidSubject, isSignedIn, meetingAt, meetingTimeIsValid, mutation.isPending, mutation.mutate, personRole, publicRoleTitle, question, sapAreas, sapAreasUnavailable.length, sapAvailableAreas, sapConfigured, sapSourceReady, sourceMode, sourceStatusQuery.refetch, startPinConfigured, subject, subjectType, tavilyConfigured, topics, useAi]);
+  }, [accessWindowReady, aiStatus?.activated, companyName, context, crawlAlreadyActive, dailyCrawlStartLimitReached, dailySearchQuotaInsufficient, hasSapOrganization, hasTopics, hasValidRole, hasValidSubject, isSignedIn, meetingAt, meetingTimeIsValid, mutation.isPending, mutation.mutate, personRole, publicRoleTitle, question, sapAreas, sapAreasUnavailable.length, sapAvailableAreas, sapConfigured, sapSourceReady, sourceMode, sourceStatusQuery.refetch, startPinConfigured, subject, subjectType, tavilyConfigured, topics, useAi]);
 
   const handleGenerateBriefing = () => {
     const pendingQuestion = question.trim();
@@ -2334,6 +2404,14 @@ function Home() {
         ? 'Checking source setup…'
         : !canStart
             ? 'Not ready — only the configured owner account can start crawls.'
+            : accessWindowDirty
+              ? 'Not ready — save or restore the active dates before starting a briefing.'
+            : !accessWindowActive
+              ? accessWindowState === 'scheduled'
+                ? `Not ready — Tavily and Qwen activate on ${savedAccessWindowFrom}.`
+                : accessWindowState === 'expired'
+                  ? `Not ready — the Tavily and Qwen window ended on ${savedAccessWindowThrough}. Set new dates.`
+                  : 'Not ready — set and save Tavily and Qwen active dates, up to one calendar month.'
             : !startPinConfigured
               ? 'Not ready — configure the briefing start PIN in API Server Secrets.'
               : sourceMode === 'private'
@@ -2871,6 +2949,110 @@ function Home() {
                 data-testid="input-meeting-time"
               />
               <p className="mt-1.5 text-sm text-[#625d69]">Leave blank to prepare a brief now. The 30-day research window still ends at the current time.</p>
+              <section
+                className="mt-4 rounded-xl border border-[#d9d4df] bg-[#f8f6fb] p-4 sm:p-5"
+                aria-label="Tavily and Qwen active date window"
+                data-testid="section-access-window"
+              >
+                <div>
+                  <h3 className="text-base font-semibold text-[#35364a]">Tavily + Qwen active dates</h3>
+                  <p className="mt-1 text-sm leading-relaxed text-[#625d69]">
+                    Choose an inclusive date range of up to one calendar month. Both services stay inactive before and after these dates; this does not change the 30-day research period.
+                  </p>
+                </div>
+                {isSignedIn ? (
+                  <>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <label htmlFor="access-window-from" className="mb-1 block text-sm font-semibold text-[#35364a]">Active from</label>
+                        <input
+                          id="access-window-from"
+                          type="date"
+                          value={accessWindowFrom}
+                          onChange={(event) => {
+                            setAccessWindowFrom(event.target.value);
+                            setAccessWindowMessage('');
+                          }}
+                          disabled={accessWindowSaving}
+                          className="h-12 w-full rounded-lg border border-[#bdb6c9] bg-white px-3 text-base text-[#292e46]"
+                          data-testid="input-access-window-from"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="access-window-through" className="mb-1 block text-sm font-semibold text-[#35364a]">Active through</label>
+                        <input
+                          id="access-window-through"
+                          type="date"
+                          value={accessWindowThrough}
+                          min={accessWindowFrom || undefined}
+                          max={maxAccessWindowEnd(accessWindowFrom)}
+                          onChange={(event) => {
+                            setAccessWindowThrough(event.target.value);
+                            setAccessWindowMessage('');
+                          }}
+                          disabled={accessWindowSaving}
+                          className="h-12 w-full rounded-lg border border-[#bdb6c9] bg-white px-3 text-base text-[#292e46]"
+                          data-testid="input-access-window-through"
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-3">
+                      <p
+                        className={`min-h-10 flex-1 rounded-lg border px-3 py-2 text-sm font-semibold ${
+                          accessWindowReady
+                            ? 'border-[#c7dfd2] bg-[#edf6f0] text-[#32634a]'
+                            : 'border-[#e5c5c0] bg-[#fbefed] text-[#7f413b]'
+                        }`}
+                        role="status"
+                        aria-live="polite"
+                        data-testid="status-access-window"
+                      >
+                        {accessWindowDirty
+                          ? 'Unsaved date changes: save them or restore the saved dates before using Tavily or Qwen.'
+                          : accessWindowState === 'active'
+                          ? `Active through ${savedAccessWindowThrough} (inclusive).`
+                          : accessWindowState === 'scheduled'
+                            ? `Scheduled: starts ${savedAccessWindowFrom}; Tavily and Qwen are currently inactive.`
+                            : accessWindowState === 'expired'
+                              ? `Ended ${savedAccessWindowThrough}; Tavily and Qwen are inactive.`
+                              : 'Inactive: set and save both dates to enable Tavily and Qwen.'}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => { void saveAccessWindow(); }}
+                        disabled={
+                          accessWindowSaving ||
+                          !sourceStatusQuery.data ||
+                          !accessWindowDirty ||
+                          !accessWindowFormValid
+                        }
+                        className="min-h-10 rounded-lg bg-[#292e46] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#414765] disabled:cursor-not-allowed disabled:opacity-50"
+                        data-testid="button-save-access-window"
+                      >
+                        {accessWindowSaving
+                          ? 'Saving…'
+                          : !accessWindowFrom && !accessWindowThrough && (savedAccessWindowFrom || savedAccessWindowThrough)
+                            ? 'Disable access'
+                            : 'Save active dates'}
+                      </button>
+                    </div>
+                    {!accessWindowFormValid && (
+                      <p className="mt-2 text-sm font-medium text-[#8f4039]" role="alert">
+                        Choose both dates, keep the end date on or after the start, and limit the range to one calendar month.
+                      </p>
+                    )}
+                    {accessWindowMessage && (
+                      <p className="mt-2 text-sm font-medium text-[#51476e]" role="status" data-testid="access-window-message">
+                        {accessWindowMessage}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <p className="mt-3 rounded-lg border border-[#e5c5c0] bg-[#fbefed] px-3 py-2 text-sm font-semibold text-[#7f413b]">
+                    Sign in to set this account’s active dates.
+                  </p>
+                )}
+              </section>
               {researchWindow && (
                 <p className="mt-2 text-sm text-[#625d69]" data-testid="text-research-window">
                   30-day research window ending today: <strong>{researchWindow}</strong>
@@ -2897,7 +3079,7 @@ function Home() {
                 <input
                   type="checkbox"
                   checked={useAi}
-                  disabled={!aiStatus?.activated || !canStart}
+                  disabled={!aiStatus?.activated || !canStart || !accessWindowReady}
                   onChange={(event) => setUseAi(event.target.checked)}
                   className="mt-1 h-5 w-5 shrink-0 accent-[#655487]"
                   data-testid="checkbox-use-ai-briefing"
@@ -2906,7 +3088,9 @@ function Home() {
                   <span className="block text-base font-semibold text-[#35364a]">Add AI summaries for selected topics</span>
             <span className="mt-1 block text-sm leading-relaxed text-[#625d69]">
                     Off by default. When enabled, one request is allowed per selected topic. The subject, open question, and accepted public-source titles and snippets are sent only to the configured Ollama server; SAP and private records remain separate.
-                    {!canStart
+                    {!accessWindowReady
+                      ? ' Set the active date window first; AI cannot run outside it.'
+                      : !canStart
                       ? ' Add an active Tavily key first; AI can only summarize results Tavily returns.'
                       : !aiStatus?.activated
                         ? ' Set up and activate AI below before selecting this.'
@@ -2933,7 +3117,7 @@ function Home() {
                 <button
                   type="button"
                   onClick={() => { setPinDialogError(''); setStartPin(''); setPinPromptOpen(true); }}
-                  disabled={mutation.isPending || !canStart || !sourceReady || !startPinConfigured || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasRequiredSelections}
+                  disabled={mutation.isPending || !canStart || !accessWindowReady || !sourceReady || !startPinConfigured || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasRequiredSelections}
                   className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#292e46] px-8 text-lg font-bold text-white transition hover:bg-[#3c4160] disabled:cursor-not-allowed disabled:opacity-45"
                   data-testid="button-generate-briefing"
                 >
