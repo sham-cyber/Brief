@@ -99,6 +99,12 @@ The configured developer account may use up to 10 crawl starts and 10 selected-t
 
 **How to apply:** Count one start per valid crawl and one search per selected tab. Keep the counts only when owner, PIN, form, key, and rolling rate checks pass; cancel reservations when preflight checks reject a crawl.
 
+The app follows a bring-your-own-device model: it does not provide Tavily credits or an AI service/model to members. Each user supplies and configures their own provider access and runtime for their deployment.
+
+**Why:** The user clarified that members bring their own device and that Tavily or AI is not provided to them by the app.
+
+**How to apply:** Describe the app as software that connects to user-configured services, not as a provider of search credits or hosted AI. Do not imply that a clone includes funded Tavily usage or a bundled model.
+
 Legacy crawl rows from before daily search counting was added do not record selected-tab totals, so treat each such completed crawl as the maximum five searches for that IST day.
 
 **Why:** The exact earlier request count cannot be recovered; undercounting could exceed the new 10-search daily cap.
