@@ -28,6 +28,7 @@ import {
   TAVILY_REQUEST_LIMIT,
 } from "../lib/tavily-rate-limit";
 import { searchTavily, TavilySearchError } from "../lib/tavily";
+import { getTavilyIncludeDomains } from "../lib/tavily-topic-domains";
 import {
   getTavilyCredentialStatus,
   getUserTavilyApiKey,
@@ -370,7 +371,10 @@ async function searchNews(
   const settled = await Promise.allSettled(
     searchTerms.map(async ({ topic, query }) => ({
       topic,
-      ...(await searchTavily(query, startDate, endDate, apiKey, signal)),
+      ...(await searchTavily(query, startDate, endDate, apiKey, {
+        signal,
+        includeDomains: getTavilyIncludeDomains(topic),
+      })),
     })),
   );
   const fulfilled = settled.flatMap((entry) =>
