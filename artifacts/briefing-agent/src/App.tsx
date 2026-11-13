@@ -664,7 +664,17 @@ function AuthActions() {
   );
 }
 
-function AiGuardrailPanel({ onStatusChange }: { onStatusChange?: (status: AiGuardrailsStatus | null) => void }) {
+function AiGuardrailPanel({
+  onStatusChange,
+  onSpeakNow,
+  voiceListening,
+  voiceSearchMessage,
+}: {
+  onStatusChange?: (status: AiGuardrailsStatus | null) => void;
+  onSpeakNow: () => void;
+  voiceListening: boolean;
+  voiceSearchMessage: string;
+}) {
   const { isLoaded, isSignedIn } = useUser();
   const [status, setStatus] = useState<AiGuardrailsStatus | null>(null);
   const [passcode, setPasscode] = useState('');
@@ -823,6 +833,36 @@ function AiGuardrailPanel({ onStatusChange }: { onStatusChange?: (status: AiGuar
       <summary className="cursor-pointer text-base font-semibold text-[#35364a]" data-testid="summary-ai-guardrails">
         AI control <span className={`ml-2 rounded-full border px-3 py-1 text-sm font-bold text-white ${status?.activated ? 'border-[#218752] bg-[#218752]' : 'border-[#e4b7b2] bg-[#bb5048]'}`}>{status?.activated ? 'ACTIVE · OPT-IN' : 'STOPPED · AI OFF'}</span>
       </summary>
+      <section
+        className="no-print mt-3 flex flex-wrap items-center gap-4 rounded-2xl border border-[#f1c18f] bg-[#fff6ec] p-4"
+        aria-label="Voice input"
+        data-testid="section-speak-now"
+      >
+        <button
+          type="button"
+          onClick={onSpeakNow}
+          aria-label={voiceListening ? 'Stop speaking' : 'Speak now'}
+          aria-pressed={voiceListening}
+          className={`inline-flex h-24 w-24 shrink-0 flex-col items-center justify-center gap-1 rounded-full border-2 border-[#b6500c] text-white shadow-[0_0_0_4px_rgba(242,140,40,.18)] transition focus:outline-none focus:ring-4 focus:ring-[#f28c28]/40 ${
+            voiceListening ? 'animate-pulse bg-[#bb3f32]' : 'bg-[#f28c28] hover:bg-[#e87716]'
+          }`}
+          data-testid="button-speak-now"
+        >
+          <Mic aria-hidden="true" className="h-7 w-7" />
+          <span className="text-xs font-bold leading-tight">{voiceListening ? 'Listening' : <>Speak<br />Now</>}</span>
+        </button>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-base font-semibold text-[#754018]">Voice question</h2>
+          <p className="mt-1 text-sm leading-relaxed text-[#704d34]">
+            Speak to fill the Open question field. Review or edit the transcript; searching still requires Brief and your PIN.
+          </p>
+          {voiceSearchMessage && (
+            <p className="mt-2 text-sm font-semibold text-[#704d34]" role="status" aria-live="polite" data-testid="status-speak-now">
+              {voiceSearchMessage}
+            </p>
+          )}
+        </div>
+      </section>
       <div className="pt-3 text-base">
       <p className="leading-relaxed text-muted-foreground">
         AI is optional; public crawling and the source-based brief work with AI off. When enabled, the app makes at most {status?.requestsPerTab ?? AI_REQUESTS_PER_TAB} summary request per selected topic and keeps the combined speech text under a {Math.floor((status?.speechLimitSeconds ?? AI_SPEECH_LIMIT_SECONDS) / 60)}-minute limit.
@@ -3068,38 +3108,13 @@ function Home() {
               </>
               )}
             </form>
-            {isSignedIn && <AiGuardrailPanel onStatusChange={handleAiStatusChange} />}
             {isSignedIn && (
-              <section
-                className="no-print mt-5 flex flex-wrap items-center gap-4 rounded-2xl border border-[#f1c18f] bg-[#fff6ec] p-4 sm:p-5"
-                aria-label="Voice input"
-                data-testid="section-speak-now"
-              >
-                <button
-                  type="button"
-                  onClick={handleVoiceSearch}
-                  aria-label={voiceListening ? 'Stop speaking' : 'Speak now'}
-                  aria-pressed={voiceListening}
-                  className={`inline-flex h-24 w-24 shrink-0 flex-col items-center justify-center gap-1 rounded-full border-2 border-[#b6500c] text-white shadow-[0_0_0_4px_rgba(242,140,40,.18)] transition focus:outline-none focus:ring-4 focus:ring-[#f28c28]/40 ${
-                    voiceListening ? 'animate-pulse bg-[#bb3f32]' : 'bg-[#f28c28] hover:bg-[#e87716]'
-                  }`}
-                  data-testid="button-speak-now"
-                >
-                  <Mic aria-hidden="true" className="h-7 w-7" />
-                  <span className="text-xs font-bold leading-tight">{voiceListening ? 'Listening' : <>Speak<br />Now</>}</span>
-                </button>
-                <div className="min-w-0 flex-1">
-                  <h2 className="text-base font-semibold text-[#754018]">Voice question</h2>
-                  <p className="mt-1 text-sm leading-relaxed text-[#704d34]">
-                    Speak to fill the Open question field. Review or edit the transcript; searching still requires Brief and your PIN.
-                  </p>
-                  {voiceSearchMessage && (
-                    <p className="mt-2 text-sm font-semibold text-[#704d34]" role="status" aria-live="polite" data-testid="status-speak-now">
-                      {voiceSearchMessage}
-                    </p>
-                  )}
-                </div>
-              </section>
+              <AiGuardrailPanel
+                onStatusChange={handleAiStatusChange}
+                onSpeakNow={handleVoiceSearch}
+                voiceListening={voiceListening}
+                voiceSearchMessage={voiceSearchMessage}
+              />
             )}
 
             {pinPromptOpen && (
