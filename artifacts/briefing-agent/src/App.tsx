@@ -3036,16 +3036,40 @@ function Home() {
                 <label htmlFor="briefing-question" className="text-base font-semibold text-[#35364a]">Open question (optional)</label>
                 <span className="text-sm text-[#625d69]">{question.length} / 500</span>
               </div>
-              <input
-                id="briefing-question"
-                type="text"
-                value={question}
-                onChange={(event) => setQuestion(event.target.value)}
-                maxLength={500}
-                placeholder="Ask about the selected company or person"
-                className="h-12 w-full rounded-lg border border-[#d9d4df] bg-[#fffefa] px-3 text-base text-foreground placeholder:text-[#777280] focus:border-[#8c7dae] focus:outline-none"
-                data-testid="input-briefing-question"
-              />
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <input
+                  id="briefing-question"
+                  type="text"
+                  value={question}
+                  onChange={(event) => setQuestion(event.target.value)}
+                  maxLength={500}
+                  placeholder="Ask about the selected company or person"
+                  className="h-12 min-w-0 flex-1 rounded-lg border border-[#d9d4df] bg-[#fffefa] px-3 text-base text-foreground placeholder:text-[#777280] focus:border-[#8c7dae] focus:outline-none"
+                  data-testid="input-briefing-question"
+                />
+                <button
+                  type="button"
+                  onClick={handleVoiceSearch}
+                  aria-pressed={voiceListening}
+                  className={`inline-flex h-12 w-full shrink-0 items-center justify-center gap-2 rounded-lg border-2 px-4 text-base font-bold transition focus:outline-none focus:ring-2 focus:ring-[#655487] focus:ring-offset-2 sm:w-auto ${
+                    voiceListening
+                      ? 'border-[#a9433b] bg-[#fbefed] text-[#8f4039]'
+                      : 'border-[#655487] bg-[#f1edfa] text-[#443568] hover:bg-[#e6dff5]'
+                  }`}
+                  data-testid="button-voice-search-briefing"
+                >
+                  <Mic className={`h-5 w-5 ${voiceListening ? 'animate-pulse' : ''}`} aria-hidden="true" />
+                  {voiceListening ? 'Listening…' : 'Speak'}
+                </button>
+              </div>
+              {voiceSearchMessage && (
+                <p className="mt-2 text-sm font-semibold text-[#443568]" role="status" aria-live="polite" data-testid="status-voice-search-briefing">
+                  {voiceSearchMessage}
+                </p>
+              )}
+              <p className="mt-1 text-sm leading-relaxed text-[#625d69]">
+                Voice input uses your browser’s speech-recognition service; depending on the browser, audio may be processed by that service. Review or edit the transcript. Searching still requires <strong>Brief</strong> and your PIN.
+              </p>
               <p className="mt-1.5 text-sm leading-relaxed text-[#625d69]">
                 This question guides the selected 30-day Tavily searches without adding requests. If you opt into AI, it is also sent with public evidence to your configured Ollama server.
               </p>
