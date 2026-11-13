@@ -11,6 +11,7 @@ import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
 import { ArrowDown, ArrowUpRight, Check, Clipboard, Clock3, FileText, Link2, LoaderCircle, LockKeyhole, Mic, Moon, Printer, Radio, Search, Send, Square, Sun, Volume2 } from 'lucide-react';
 import { ErrorBoundary } from '@/components/error-boundary';
+import { PdfReadAloud } from '@/components/pdf-read-aloud';
 import { SapConnectionSettings } from '@/components/sap-connection-settings';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -3215,6 +3216,7 @@ function Home() {
               </>
               )}
             </form>
+            {isSignedIn && <PdfReadAloud />}
             {isSignedIn && (
               <AiGuardrailPanel
                 onStatusChange={handleAiStatusChange}
