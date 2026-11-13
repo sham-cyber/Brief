@@ -485,6 +485,8 @@ export const CreateBriefingBody = zod.object({
   "sourceMode": zod.enum(['public', 'private', 'sap']).default(createBriefingBodySourceModeDefault),
   "sapAreas": zod.array(zod.enum(['store', 'production', 'maintenance', 'inventory', 'sales', 'hr', 'power_electrical_solar', 'purchase', 'scrap', 'order', 'delivery'])).max(createBriefingBodySapAreasMax).optional().describe('SAP S/4HANA data areas selected for this briefing. Required only when sourceMode is sap.'),
   "meetingAt": zod.coerce.date().optional(),
+  "researchStartDate": zod.coerce.date().optional().describe('Inclusive start of the user-selected public and SAP research window. Defaults to 30 days before today when omitted.'),
+  "researchEndDate": zod.coerce.date().optional().describe('Inclusive end of the user-selected research window. Defaults to today when omitted.'),
   "context": zod.string().max(createBriefingBodyContextMax).optional(),
   "question": zod.string().max(createBriefingBodyQuestionMax).optional().describe('Optional direct question to guide the selected public searches and cited overview.'),
   "useAi": zod.boolean().default(createBriefingBodyUseAiDefault).describe('Explicitly opt this briefing into source-grounded AI summaries. Defaults to off.'),

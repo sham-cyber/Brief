@@ -96,6 +96,10 @@ export interface BriefingInput {
      */
   sapAreas?: SapDataArea[];
   meetingAt?: string;
+  /** Inclusive start of the user-selected public and SAP research window. Defaults to 30 days before today when omitted. */
+  researchStartDate?: string;
+  /** Inclusive end of the user-selected research window. Defaults to today when omitted. */
+  researchEndDate?: string;
   /** @maxLength 1500 */
   context?: string;
   /**

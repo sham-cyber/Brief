@@ -32,6 +32,7 @@ import {
   getTavilyCredentialStatus,
   getUserTavilyApiKey,
 } from "../lib/user-tavily-credentials";
+import { resolveBriefingWindow } from "../lib/briefing-window";
 import { resolveOwnerUserId } from "../lib/briefing-owner";
 import {
   isBriefingPinConfigured,
@@ -769,17 +770,17 @@ function buildBriefingContent(
     ? matchingSources.length
       ? `In answer to “${questionFocus}” about ${researchLabel}, the closest recent ${evidenceLabel} ${answerSources.length === 1 ? "is" : "are"}: ${answerSources.map(({ source }) => `${source.affiliatedCompanyReport ? "Company-level: " : ""}“${sourceExcerpt(source)}”`).join(" ")}`
       : sources.length
-        ? `No recent ${sourceMode === "sap" ? "SAP record" : "public report"} directly answered “${questionFocus}” about ${researchLabel}. These are the closest selected-topic sources found in the 30-day window.`
-        : `No recent ${sourceMode === "sap" ? "SAP record" : "public report"} matched “${questionFocus}” about ${researchLabel} in the 30-day window.`
+        ? `No recent ${sourceMode === "sap" ? "SAP record" : "public report"} directly answered “${questionFocus}” about ${researchLabel}. These are the closest selected-topic sources found in the selected research window.`
+        : `No recent ${sourceMode === "sap" ? "SAP record" : "public report"} matched “${questionFocus}” about ${researchLabel} in the selected research window.`
     : context
     ? matchingSources.length
       ? `For “${shortContext}” related to ${researchLabel}, the closest recent ${evidenceLabel} ${answerSources.length === 1 ? "is" : "are"}: ${answerSources.map(({ source }) => `${source.affiliatedCompanyReport ? "Company-level: " : ""}“${sourceExcerpt(source)}”`).join(" ")}`
       : sources.length
-        ? `No recent ${sourceMode === "sap" ? "SAP record" : "public report"} directly matched “${shortContext}” related to ${researchLabel}. These are the closest selected-topic sources found in the 30-day window.`
-        : `No recent ${sourceMode === "sap" ? "SAP record" : "public report"} matched “${shortContext}” related to ${researchLabel} in the 30-day window.`
+        ? `No recent ${sourceMode === "sap" ? "SAP record" : "public report"} directly matched “${shortContext}” related to ${researchLabel}. These are the closest selected-topic sources found in the selected research window.`
+        : `No recent ${sourceMode === "sap" ? "SAP record" : "public report"} matched “${shortContext}” related to ${researchLabel} in the selected research window.`
     : latest
-      ? `The 30-day ${evidenceLabel} for ${researchLabel} include ${sources.length} sourced record${sources.length === 1 ? "" : "s"}. Latest: “${latest.title},” recorded by ${latest.publisher}.`
-      : `No recent ${sourceMode === "sap" ? "SAP records" : "public reports"} were found for ${researchLabel} in the selected topics during the 30-day research window.`;
+      ? `The selected-window ${evidenceLabel} for ${researchLabel} include ${sources.length} sourced record${sources.length === 1 ? "" : "s"}. Latest: “${latest.title},” recorded by ${latest.publisher}.`
+      : `No recent ${sourceMode === "sap" ? "SAP records" : "public reports"} were found for ${researchLabel} in the selected topics during the selected research window.`;
   const topicLabels: Record<BriefingTopic, string> = {
     news: "news",
     hire: "hire",
@@ -804,22 +805,22 @@ function buildBriefingContent(
     return {
       category,
       text: latestTopicSource
-        ? `The 30-day ${label} tab has ${topicSources.length} sourced record${topicSources.length === 1 ? "" : "s"} related to ${researchLabel}. Latest: “${latestTopicSource.source.title}.”`
+        ? `The selected-window ${label} tab has ${topicSources.length} sourced record${topicSources.length === 1 ? "" : "s"} related to ${researchLabel}. Latest: “${latestTopicSource.source.title}.”`
         : category === "hire"
-          ? `No confirmed-hire ${sourceMode === "sap" ? "records" : "reports"} related to ${researchLabel} were found in the 30-day ${sourceMode === "sap" ? "SAP source" : "public-news crawl"}.`
-          : `No ${label} reports related to ${researchLabel} were found in the 30-day window.`,
+          ? `No confirmed-hire ${sourceMode === "sap" ? "records" : "reports"} related to ${researchLabel} were found in the selected ${sourceMode === "sap" ? "SAP source" : "public-news crawl"} window.`
+          : `No ${label} reports related to ${researchLabel} were found in the selected research window.`,
       sourceIds: latestTopicSource ? [latestTopicSource.source.id] : [],
       topPositive: buildTopSignal(
         topicSources,
         contextTerms,
         "positive",
-        `the 30-day ${label} reports for ${subject}`,
+        `the selected-window ${label} reports for ${subject}`,
       ),
       topNegative: buildTopSignal(
         topicSources,
         contextTerms,
         "negative",
-        `the 30-day ${label} reports for ${subject}`,
+        `the selected-window ${label} reports for ${subject}`,
       ),
     };
   });
@@ -872,6 +873,18 @@ router.post("/briefings", async (req, res): Promise<void> => {
   if (new Set(input.data.topics).size !== input.data.topics.length) {
     res.status(400).json({
       error: "Select each topic tab only once so it receives one search request.",
+    });
+    return;
+  }
+  let researchWindow: { windowStart: Date; windowEnd: Date };
+  try {
+    researchWindow = resolveBriefingWindow(
+      input.data.researchStartDate,
+      input.data.researchEndDate,
+    );
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Choose a valid research date range.",
     });
     return;
   }
@@ -1115,8 +1128,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
     try {
       const now = new Date();
       const meetingAt = input.data.meetingAt ?? null;
-      const windowEnd = now;
-      const windowStart = new Date(windowEnd.getTime() - 30 * 86_400_000);
+      const { windowStart, windowEnd } = researchWindow;
       const [tavilyResult, sapResult] = await Promise.all([
         searchNews(
           input.data.subject.trim(),
@@ -1391,8 +1403,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
   try {
     const now = new Date();
     const meetingAt = input.data.meetingAt ?? null;
-    const windowEnd = now;
-    const windowStart = new Date(windowEnd.getTime() - 30 * 86_400_000);
+    const { windowStart, windowEnd } = researchWindow;
     const topics = input.data.topics as BriefingTopic[];
     const searchResult = await searchNews(
       input.data.subject.trim(),

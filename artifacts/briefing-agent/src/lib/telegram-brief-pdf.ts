@@ -88,7 +88,7 @@ export async function createTelegramBriefPdf(
   const pdf = await PDFDocument.create();
   pdf.setTitle(`${result.subject} briefing`);
   pdf.setAuthor("Briefing Agent");
-  pdf.setSubject("Source-linked 30-day briefing");
+  pdf.setSubject("Source-linked meeting briefing");
   const page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
@@ -155,7 +155,7 @@ export async function createTelegramBriefPdf(
     : `Prepared: ${new Date(result.generatedAt).toLocaleString()}`;
   drawLine(meeting, { size: 7.6, color: muted });
   drawLine(
-    `30-day research window: ${new Date(result.windowStart).toLocaleDateString()} - ${new Date(result.windowEnd).toLocaleDateString()}`,
+    `Research window: ${new Date(result.windowStart).toLocaleDateString()} - ${new Date(result.windowEnd).toLocaleDateString()}`,
     { size: 7.6, color: muted },
   );
   drawLine(`Generated: ${new Date(result.generatedAt).toLocaleString()}`, {
@@ -189,7 +189,7 @@ export async function createTelegramBriefPdf(
       drawBody(highlight.summary, highlight.sourceIds, 8);
       y -= 2;
     } else if (wordBudget > 0) {
-      drawBody(`No sourced ${TOPIC_LABELS[topic].toLowerCase()} items were found in the selected 30-day results.`);
+      drawBody(`No sourced ${TOPIC_LABELS[topic].toLowerCase()} items were found in the selected research window.`);
     }
   }
 

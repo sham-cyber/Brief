@@ -9,7 +9,7 @@ import type { BriefingResult, BriefSource, SapDataArea } from '@workspace/api-cl
 import { ClerkProvider, SignIn, SignUp, Show, useClerk, useUser } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
-import { ArrowDown, ArrowUpRight, Check, Clipboard, Clock3, FileText, Link2, LoaderCircle, LockKeyhole, Mic, Printer, Radio, Search, Send, Square, Volume2 } from 'lucide-react';
+import { ArrowDown, ArrowUpRight, Check, Clipboard, Clock3, FileText, Link2, LoaderCircle, LockKeyhole, Mic, Moon, Printer, Radio, Search, Send, Square, Sun, Volume2 } from 'lucide-react';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { SapConnectionSettings } from '@/components/sap-connection-settings';
 import { Toaster } from '@/components/ui/toaster';
@@ -1045,6 +1045,30 @@ function formatWindow(start: string, end: string) {
   return `${startLabel} — ${endLabel}`;
 }
 
+function toLocalDateInputValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getDefaultResearchDates() {
+  const end = new Date();
+  const start = new Date(end);
+  start.setDate(start.getDate() - 30);
+  return {
+    startDate: toLocalDateInputValue(start),
+    endDate: toLocalDateInputValue(end),
+  };
+}
+
+function formatDateInputValue(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const date = new Date(`${value}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(date);
+}
+
 function References({ sourceIds, sources }: { sourceIds: string[]; sources: BriefSource[] }) {
   if (!sourceIds.length) return null;
   const sourceById = new Map(sources.map((source) => [source.id, source]));
@@ -1350,7 +1374,7 @@ function SapDataSection({
         </div>
       ) : (
         <p className="rounded-lg border border-[#d5e4e2] bg-white px-4 py-3 text-base leading-relaxed text-[#625d69]" role="status">
-          No matching SAP records were returned for the selected areas and 30-day window.
+          No matching SAP records were returned for the selected areas and research window.
         </p>
       )}
     </section>
@@ -1594,7 +1618,7 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
         <SectionEyebrow>
           {activeTopic === 'all'
             ? '01 / The short read'
-            : `01 / ${TOPICS.find((topic) => topic.value === activeTopic)?.label ?? 'Topic'} · 30-day view`}
+            : `01 / ${TOPICS.find((topic) => topic.value === activeTopic)?.label ?? 'Topic'} · selected date range`}
         </SectionEyebrow>
         <h3 id="overview-heading" className="sr-only">Overview</h3>
         <p className="briefing-prose mt-4 max-w-4xl font-serif text-[22px] leading-[1.45] text-[#30334a] sm:text-[25px]">
@@ -1608,7 +1632,7 @@ function BriefingDocument({ result }: { result: BriefingResult }) {
             data-testid="briefing-empty-state"
           >
             {result.searchResultsReturned === 0
-              ? `Tavily returned no results across ${result.sourceSearchesCompleted} selected-topic searches in this 30-day window.`
+              ? `Tavily returned no results across ${result.sourceSearchesCompleted} selected-topic searches in this research window.`
               : `Tavily returned ${result.searchResultsReturned} results, but none passed the date, source-link, company-name, and selected-topic checks. The source panel explains this check.`}
           </p>
         )}
@@ -1794,10 +1818,10 @@ function PrintOnePageBrief({ result, activeTopic }: { result: BriefingResult; ac
         printSummary: printText(highlight.summary, result.sourceMode === 'sap' ? 120 : 170, result.sourceMode === 'sap' ? 22 : 34),
       }));
     const emptyMessage = topic === 'hire'
-      ? 'No confirmed-hire reports were found in this 30-day public-news crawl; this does not confirm that no vacancies exist.'
+      ? 'No confirmed-hire reports were found in this public-news crawl; this does not confirm that no vacancies exist.'
       : topic === 'news'
         ? 'No separate general-news items were found in this crawl.'
-        : `No sourced ${topicInfo.label.toLowerCase()} items were found in this 30-day crawl.`;
+        : `No sourced ${topicInfo.label.toLowerCase()} items were found in this crawl.`;
     const question = topic === 'risk' ? result.questions[0] : undefined;
     return {
       topic,
@@ -1849,14 +1873,14 @@ function PrintOnePageBrief({ result, activeTopic }: { result: BriefingResult; ac
           {result.sourceMode === 'sap' ? 'Public research + SAP S/4HANA briefing' : `${result.subjectType} briefing`}
           {result.subjectType === 'person' && result.personRole ? ` · ${personContextLabel(result.personRole, result.publicRoleTitle, result.companyName)}` : ''}
           {result.sourceMode === 'sap'
-            ? ` · ${result.sapAreas.map((area) => SAP_AREAS.find((item) => item.value === area)?.label ?? area).join(', ')} · 30-day window`
-            : ` · ${activeTopic === 'all' ? 'all selected topics' : `${TOPICS.find((topic) => topic.value === activeTopic)?.label} tab`} · 30-day research window`}
+            ? ` · ${result.sapAreas.map((area) => SAP_AREAS.find((item) => item.value === area)?.label ?? area).join(', ')} · selected date range`
+            : ` · ${activeTopic === 'all' ? 'all selected topics' : `${TOPICS.find((topic) => topic.value === activeTopic)?.label} tab`} · selected research window`}
         </p>
         <h1>{result.subject}</h1>
         <div className="print-date-details" data-testid="text-print-date-details">
           <span>{result.meetingAt ? `Meeting: ${formatDate(result.meetingAt)}` : `Prepared: ${formatDate(result.generatedAt)}`}</span>
           <span>Crawl started: {formatDate(result.generatedAt)}</span>
-          <span>30-day research window: {formatWindow(result.windowStart, result.windowEnd)}</span>
+          <span>Research window: {formatWindow(result.windowStart, result.windowEnd)}</span>
           <span data-testid="text-print-word-count">Brief text: {printedWordCount} / {PRINT_WORD_LIMIT} words; sources listed separately</span>
         </div>
       </header>
@@ -1910,7 +1934,7 @@ function PrintOnePageBrief({ result, activeTopic }: { result: BriefingResult; ac
                 {item.printDetail}{' '}
                 <PrintReferences sourceIds={item.sourceIds} sources={result.sources} />
               </p>
-            )) : <p>No matching SAP records were returned for the selected areas and 30-day window.</p>}
+            )) : <p>No matching SAP records were returned for the selected areas and research window.</p>}
             {additionalSapNote && <p>{additionalSapNote}</p>}
           </section>
         </>
@@ -2025,8 +2049,22 @@ function Home() {
   const [pinDialogError, setPinDialogError] = useState('');
   const activeRequestKey = useRef('');
   const timeoutRef = useRef<number | undefined>(undefined);
-  const requestKey = JSON.stringify([subject.trim(), subjectType, personRole, publicRoleTitle.trim(), companyName.trim(), sourceMode, sourceMode === 'sap' ? sapAreas : [], meetingAt, topics, context.trim(), question.trim(), useAi]);
+  const [researchDates, setResearchDates] = useState(getDefaultResearchDates);
+  const [appearance, setAppearance] = useState<'light' | 'dark'>(() => {
+    try {
+      return window.localStorage.getItem('briefing-agent-appearance') === 'light' ? 'light' : 'dark';
+    } catch {
+      return 'dark';
+    }
+  });
+  const requestKey = JSON.stringify([subject.trim(), subjectType, personRole, publicRoleTitle.trim(), companyName.trim(), sourceMode, sourceMode === 'sap' ? sapAreas : [], meetingAt, researchDates.startDate, researchDates.endDate, topics, context.trim(), question.trim(), useAi]);
   const meetingTimeIsValid = !meetingAt || !Number.isNaN(new Date(meetingAt).getTime());
+  const todayDateInput = toLocalDateInputValue(new Date());
+  const researchWindowIsValid =
+    /^\d{4}-\d{2}-\d{2}$/.test(researchDates.startDate) &&
+    /^\d{4}-\d{2}-\d{2}$/.test(researchDates.endDate) &&
+    researchDates.startDate <= researchDates.endDate &&
+    researchDates.endDate <= todayDateInput;
   const hasValidSubject = subject.trim().length >= 2;
   const hasValidRoleSelection = subjectType !== 'person' || Boolean(personRole);
   const hasValidPersonDetails = subjectType !== 'person' || (
@@ -2075,6 +2113,13 @@ function Home() {
   const hasRequiredSelections = hasTopics && (sourceMode !== 'sap' || sapAreas.length > 0);
   const hasCurrentResult = Boolean(mutation.data && resultKey === requestKey);
   const result = hasCurrentResult ? mutation.data : undefined;
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('briefing-agent-appearance', appearance);
+    } catch {
+      // The selected appearance remains active for this page session.
+    }
+  }, [appearance]);
   useEffect(() => {
     if (!result) return;
     const frame = window.requestAnimationFrame(() => {
@@ -2257,10 +2302,9 @@ function Home() {
     }
   };
   const researchWindow = useMemo(() => {
-    const end = new Date();
-    const start = new Date(end.getTime() - 30 * 86_400_000);
-    return `${formatDate(start.toISOString(), { dateStyle: 'medium' })} — ${formatDate(end.toISOString(), { dateStyle: 'medium' })}`;
-  }, []);
+    if (!researchWindowIsValid) return '';
+    return `${formatDateInputValue(researchDates.startDate)} — ${formatDateInputValue(researchDates.endDate)}`;
+  }, [researchDates.endDate, researchDates.startDate, researchWindowIsValid]);
 
   const runBriefing = useCallback((key: string, pin: string) => {
     const selectedSourceReady =
@@ -2272,7 +2316,7 @@ function Home() {
       (sourceMode === 'sap' &&
         sapSourceReady &&
         hasSapOrganization);
-    if (!/^\d{4}$/.test(pin) || !isSignedIn || !selectedSourceReady || !startPinConfigured || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasTopics || (useAi && !aiStatus?.activated) || mutation.isPending) return;
+    if (!/^\d{4}$/.test(pin) || !isSignedIn || !selectedSourceReady || !startPinConfigured || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !researchWindowIsValid || !hasTopics || (useAi && !aiStatus?.activated) || mutation.isPending) return;
     activeRequestKey.current = key;
     setFailedKey('');
     setTimedOutKey('');
@@ -2299,6 +2343,8 @@ function Home() {
           sourceMode,
           sapAreas: sourceMode === 'sap' ? sapAreas : [],
           meetingAt: meetingAt ? new Date(meetingAt).toISOString() : undefined,
+          researchStartDate: researchDates.startDate,
+          researchEndDate: researchDates.endDate,
           topics,
           useAi,
           ...(question.trim() ? { question: question.trim() } : {}),
@@ -2335,7 +2381,7 @@ function Home() {
         },
       },
     );
-  }, [aiStatus?.activated, companyName, context, crawlAlreadyActive, dailyCrawlStartLimitReached, dailySearchQuotaInsufficient, hasSapOrganization, hasTopics, hasValidRole, hasValidSubject, isSignedIn, meetingAt, meetingTimeIsValid, mutation.isPending, mutation.mutate, personRole, publicRoleTitle, question, sapAreas, sapAreasUnavailable.length, sapAvailableAreas, sapConfigured, sapSourceReady, sourceMode, sourceStatusQuery.refetch, startPinConfigured, subject, subjectType, tavilyConfigured, topics, useAi]);
+  }, [aiStatus?.activated, companyName, context, crawlAlreadyActive, dailyCrawlStartLimitReached, dailySearchQuotaInsufficient, hasSapOrganization, hasTopics, hasValidRole, hasValidSubject, isSignedIn, meetingAt, meetingTimeIsValid, mutation.isPending, mutation.mutate, personRole, publicRoleTitle, question, researchDates.endDate, researchDates.startDate, researchWindowIsValid, sapAreas, sapAreasUnavailable.length, sapAvailableAreas, sapConfigured, sapSourceReady, sourceMode, sourceStatusQuery.refetch, startPinConfigured, subject, subjectType, tavilyConfigured, topics, useAi]);
 
   const handleGenerateBriefing = () => {
     const pendingQuestion = question.trim();
@@ -2475,7 +2521,9 @@ function Home() {
                         : personRole === 'mp'
                           ? 'Not ready — enter the public office or title.'
                           : 'Not ready — complete the person context.'
-                    : !meetingTimeIsValid
+                    : !researchWindowIsValid
+                      ? 'Not ready — choose a valid research date range ending today or earlier.'
+                      : !meetingTimeIsValid
                       ? 'Not ready — enter a valid meeting time or leave it blank.'
                       : !hasTopics
                         ? 'Not ready — select at least one topic.'
@@ -2509,7 +2557,7 @@ function Home() {
                                                 ? 'Not ready — complete the selected source settings.'
                                                 : 'Not ready — press Brief when the settings are complete.';
   return (
-    <main className={`paper-grid min-h-[100dvh] overflow-hidden ${isSignedIn ? 'settings-neon' : ''}`}>
+    <main className={`paper-grid min-h-[100dvh] overflow-hidden ${isSignedIn ? appearance === 'dark' ? 'settings-neon' : 'settings-light' : ''}`}>
       <div className="mx-auto max-w-[1240px] px-5 pb-16 pt-5 sm:px-8 lg:px-12">
         <nav className="no-print flex items-center justify-between border-b border-[#d9d4df] pb-4" aria-label="Main">
           <a href={`${basePath}/`} className="inline-flex items-center gap-2.5 text-foreground no-underline" aria-label="Briefing Agent home" data-testid="link-home">
@@ -2541,7 +2589,7 @@ function Home() {
             {isSignedIn ? (
               <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
                 <div>
-                  <p className="font-mono text-xs uppercase tracking-[.14em] text-[#655487]">30-day meeting brief</p>
+                  <p className="font-mono text-xs uppercase tracking-[.14em] text-[#655487]">Source-linked meeting brief</p>
                   <h1 id="create-heading" className="mt-1 font-serif text-3xl leading-tight tracking-[-.02em] text-[#282d43]">Settings</h1>
                 </div>
                 <p className="text-base font-medium text-[#625d69]">Start a crawl only when you press Brief.</p>
@@ -2550,7 +2598,7 @@ function Home() {
               <div className="mb-5 rounded-2xl border border-[#d8d2df] bg-[#f4f1f8] px-5 py-6 sm:px-8 sm:py-8">
                 <p className="font-mono text-xs uppercase tracking-[.14em] text-[#655487]">Briefing Agent · source-first research</p>
                 <h1 id="create-heading" className="mt-2 max-w-3xl font-serif text-4xl leading-tight tracking-[-.025em] text-[#282d43] sm:text-5xl">Your AI Briefing Assistant</h1>
-                <p className="mt-4 max-w-2xl text-lg leading-relaxed text-[#514e5c]">Tavily Search finds cited public reports from the last 30 days. Optional Qwen summaries use each account’s saved Ollama connection when enabled.</p>
+                <p className="mt-4 max-w-2xl text-lg leading-relaxed text-[#514e5c]">Tavily Search finds cited public reports within the research dates you choose. Optional Qwen summaries use each account’s saved Ollama connection when enabled.</p>
                 <form
                   className="mt-6 max-w-4xl rounded-xl border border-[#d8d2df] bg-[#fffefa] p-4 sm:p-5"
                   onSubmit={(event) => {
@@ -2592,6 +2640,34 @@ function Home() {
                 </form>
               </div>
             )}
+            {isSignedIn && (
+              <section className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#d8d2df] bg-white/85 px-4 py-3" aria-label="Appearance settings" data-testid="appearance-settings">
+                <div>
+                  <h2 className="text-base font-semibold text-[#292e46]">Appearance</h2>
+                  <p className="mt-0.5 text-sm text-[#625d69]">Choose how this app looks on this device.</p>
+                </div>
+                <div className="flex gap-2" role="group" aria-label="Choose light or dark appearance">
+                  <button
+                    type="button"
+                    aria-pressed={appearance === 'light'}
+                    onClick={() => setAppearance('light')}
+                    className={`inline-flex min-h-11 items-center gap-2 rounded-lg border px-4 text-sm font-semibold ${appearance === 'light' ? 'border-[#655487] bg-[#eeeaf4] text-[#3e345a]' : 'border-[#d8d2df] bg-white text-[#35364a]'}`}
+                    data-testid="button-appearance-light"
+                  >
+                    <Sun className="h-4 w-4" aria-hidden="true" /> Light
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={appearance === 'dark'}
+                    onClick={() => setAppearance('dark')}
+                    className={`inline-flex min-h-11 items-center gap-2 rounded-lg border px-4 text-sm font-semibold ${appearance === 'dark' ? 'border-[#655487] bg-[#292e46] text-white' : 'border-[#d8d2df] bg-white text-[#35364a]'}`}
+                    data-testid="button-appearance-dark"
+                  >
+                    <Moon className="h-4 w-4" aria-hidden="true" /> Dark
+                  </button>
+                </div>
+              </section>
+            )}
             <form onSubmit={submit} className="rounded-2xl border border-[#d8d2df] bg-[#fbfaf6] p-5 shadow-[0_12px_35px_rgba(38,37,55,.06)] sm:p-6" aria-describedby={isSignedIn ? 'form-note' : undefined}>
               {!isSignedIn ? (
                 <section className="rounded-xl border border-[#d8d2df] bg-[#f4f1f8] px-5 py-6 sm:px-7" aria-label="Sign in before starting a briefing" data-testid="signin-before-briefing">
@@ -2607,7 +2683,7 @@ function Home() {
               <>
               <div className="mb-4 flex items-center justify-between border-b border-[#e5e0e7] pb-3">
                 <span className="text-base font-semibold text-[#292e46]">Briefing details</span>
-                <span className="rounded-full bg-[#eeeaf4] px-3 py-1 font-mono text-xs font-semibold text-[#594b87]">30 DAYS</span>
+                  <span className="rounded-full bg-[#eeeaf4] px-3 py-1 font-mono text-xs font-semibold text-[#594b87]">DATE RANGE</span>
               </div>
               <fieldset className="mt-4">
                     <legend className="mb-2 text-base font-semibold text-[#35364a]">Briefing subject</legend>
@@ -2985,7 +3061,7 @@ function Home() {
                 data-testid="input-briefing-question"
               />
               <p className="mt-1.5 text-sm leading-relaxed text-[#625d69]">
-                This question guides the selected 30-day Tavily searches without adding requests. If you opt into AI, it is also sent with public evidence to your configured Ollama server.
+                This question guides the selected Tavily searches without adding requests. If you opt into AI, it is also sent with public evidence to your configured Ollama server.
               </p>
 
               <label htmlFor="meetingAt" className="mb-1.5 mt-5 block text-base font-semibold text-[#35364a]">Meeting time (optional)</label>
@@ -2997,12 +3073,43 @@ function Home() {
                 className="h-12 w-full rounded-lg border border-[#d9d4df] bg-[#fffefa] px-3 text-base text-foreground focus:border-[#8c7dae] focus:outline-none"
                 data-testid="input-meeting-time"
               />
-              <p className="mt-1.5 text-sm text-[#625d69]">Leave blank to prepare a brief now. The 30-day research window still ends at the current time.</p>
-              {researchWindow && (
-                <p className="mt-2 text-sm text-[#625d69]" data-testid="text-research-window">
-                  30-day research window ending today: <strong>{researchWindow}</strong>
+              <p className="mt-1.5 text-sm text-[#625d69]">Leave blank to prepare a brief now. Set the research window below; its end date cannot be in the future.</p>
+              <fieldset className="mt-4 rounded-xl border border-[#ded9e2] bg-white/75 p-4" data-testid="research-window-settings">
+                <legend className="px-1 text-base font-semibold text-[#35364a]">Research date window</legend>
+                <p className="mb-3 text-sm leading-relaxed text-[#625d69]">Defaults to the last 30 days. Change either date to choose your own window for this briefing.</p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="research-start-date" className="mb-1.5 block text-sm font-semibold text-[#35364a]">From date</label>
+                    <input
+                      id="research-start-date"
+                      type="date"
+                      value={researchDates.startDate}
+                      max={researchDates.endDate || todayDateInput}
+                      onChange={(event) => setResearchDates((current) => ({ ...current, startDate: event.target.value }))}
+                      className="h-12 w-full rounded-lg border border-[#d9d4df] bg-[#fffefa] px-3 text-base text-foreground focus:border-[#8c7dae] focus:outline-none"
+                      data-testid="input-research-start-date"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="research-end-date" className="mb-1.5 block text-sm font-semibold text-[#35364a]">To date</label>
+                    <input
+                      id="research-end-date"
+                      type="date"
+                      value={researchDates.endDate}
+                      min={researchDates.startDate}
+                      max={todayDateInput}
+                      onChange={(event) => setResearchDates((current) => ({ ...current, endDate: event.target.value }))}
+                      className="h-12 w-full rounded-lg border border-[#d9d4df] bg-[#fffefa] px-3 text-base text-foreground focus:border-[#8c7dae] focus:outline-none"
+                      data-testid="input-research-end-date"
+                    />
+                  </div>
+                </div>
+                <p className="mt-3 text-sm text-[#625d69]" data-testid="text-research-window">
+                  {researchWindowIsValid
+                    ? <>Selected research window: <strong>{researchWindow}</strong></>
+                    : 'Choose valid dates, with the start date on or before the end date and no future end date.'}
                 </p>
-              )}
+              </fieldset>
 
               <div className="mb-1.5 mt-5 flex items-center justify-between">
                 <label htmlFor="context" className="text-base font-semibold text-[#35364a]">Optional context</label>
@@ -3060,7 +3167,7 @@ function Home() {
                 <button
                   type="button"
                   onClick={() => { setPinDialogError(''); setStartPin(''); setPinPromptOpen(true); }}
-                  disabled={mutation.isPending || !canStart || !sourceReady || !startPinConfigured || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !hasRequiredSelections}
+                  disabled={mutation.isPending || !canStart || !sourceReady || !startPinConfigured || !hasValidSubject || !hasValidRole || !meetingTimeIsValid || !researchWindowIsValid || !hasRequiredSelections}
                   className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#292e46] px-8 text-lg font-bold text-white transition hover:bg-[#3c4160] disabled:cursor-not-allowed disabled:opacity-45"
                   data-testid="button-generate-briefing"
                 >
