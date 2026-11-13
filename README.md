@@ -114,6 +114,7 @@ The reader accepts selectable-text PDFs up to 15 MB and 20 pages. It reads at mo
 | [`docs/evidence/finolex-deepak-brief-2026-11-03.pdf`](docs/evidence/finolex-deepak-brief-2026-11-03.pdf) | The available two-page Deepak / Finolex Cables all-topics brief, dated 3 Nov 2026. It is a PDF input for read-aloud testing, not the DKC Hires-only brief. |
 | [`docs/evidence/tavily-brief-2026-11-11-1940-IST.pdf`](docs/evidence/tavily-brief-2026-11-11-1940-IST.pdf) | One-page Tavily.com brief with a 19:40 IST crawl timestamp. |
 | [`docs/evidence/tavily-brief-2026-11-11-1955-IST.pdf`](docs/evidence/tavily-brief-2026-11-11-1955-IST.pdf) | One-page Tavily.com brief with a 19:55 IST crawl timestamp. |
+| [`docs/evidence/browser-read-aloud-tavily-finolex-2026-11-13.mp3`](docs/evidence/browser-read-aloud-tavily-finolex-2026-11-13.mp3) | User-supplied recording described as read-aloud for the Tavily and Finolex briefs; approximately six minutes. The app itself does not generate this audio file. |
 
 The API log reviewed on 13 Nov 2026 contains a successful `POST /api/briefings` response (HTTP 200, about 20.1 seconds). API logs do not capture browser speech playback, so this confirms a briefing request—not that audio was heard or recorded. See [`docs/evidence/read-aloud-check.md`](docs/evidence/read-aloud-check.md) for the verification scope.
 

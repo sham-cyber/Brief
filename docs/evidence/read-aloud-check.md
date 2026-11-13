@@ -5,6 +5,7 @@
 - `finolex-deepak-brief-2026-11-03.pdf` — two pages and 457 selectable words. This is a Deepak / Finolex Cables all-topics brief dated 3 Nov 2026, not the DKC Hires-only brief.
 - `tavily-brief-2026-11-11-1940-IST.pdf` — one-page Tavily.com brief.
 - `tavily-brief-2026-11-11-1955-IST.pdf` — one-page Tavily.com brief.
+- `browser-read-aloud-tavily-finolex-2026-11-13.mp3` — user-supplied audio described as the browser read-aloud of the Tavily and Finolex briefs. The file was copied unchanged; metadata reports MP3, 48 kHz stereo, 320 kbps, and 5:59.9 duration.
 
 The PDFs are saved as test inputs so a signed-in user can select them in the app's **Read a saved PDF aloud** panel.
 
@@ -19,3 +20,7 @@ The PDFs are saved as test inputs so a signed-in user can select them in the app
 Browser speech playback is client-side and is not written to API logs. The checked logs do not prove that a person heard the audio, and the browser feature does not save an audio file. A separate device/system-audio recording is required if a downloadable sound recording is needed.
 
 The current browser preview was not signed in for an end-to-end playback check. Therefore this record does not claim that live audio playback was manually heard or recorded in that preview session.
+
+The supplied MP3 metadata is readable, but a decoder reported a few missing-frame-header warnings during its scan. It was preserved byte-for-byte; listen through it in a media player to confirm the full recording is clear.
+
+SHA-256: `d94023c78a51b6cc3dc2397a0f1ca67f8584d3a104c12670a3cb8dbea34bbfdb`
