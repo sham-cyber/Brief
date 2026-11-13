@@ -9,7 +9,7 @@ import type { BriefingResult, BriefSource, SapDataArea } from '@workspace/api-cl
 import { ClerkProvider, SignIn, SignUp, Show, useClerk, useUser } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
-import { ArrowDown, ArrowUpRight, Check, Clipboard, Clock3, FileText, Link2, LoaderCircle, LockKeyhole, Printer, Radio, Search, Send, Square, Volume2 } from 'lucide-react';
+import { ArrowDown, ArrowUpRight, Check, Clipboard, Clock3, FileText, Link2, LoaderCircle, LockKeyhole, Mic, Printer, Radio, Search, Send, Square, Volume2 } from 'lucide-react';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { SapConnectionSettings } from '@/components/sap-connection-settings';
 import { Toaster } from '@/components/ui/toaster';
@@ -91,6 +91,25 @@ const SPEECH_WORD_LIMIT = 280;
 const PRINT_WORD_LIMIT = 400;
 const AI_REQUESTS_PER_TAB = 1;
 const AI_SPEECH_LIMIT_SECONDS = 120;
+
+type SpeechRecognitionResultLike = {
+  isFinal: boolean;
+  [index: number]: { transcript: string };
+};
+
+type SpeechRecognitionLike = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((event: { resultIndex: number; results: ArrayLike<SpeechRecognitionResultLike> }) => void) | null;
+  onerror: ((event: { error?: string }) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+};
+
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
 
 function maxAccessWindowEnd(from: string): string | undefined {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(from)) return undefined;
@@ -1978,6 +1997,9 @@ function Home() {
   const [context, setContext] = useState('');
   const [question, setQuestion] = useState('');
   const [landingAskMessage, setLandingAskMessage] = useState('');
+  const [voiceListening, setVoiceListening] = useState(false);
+  const [voiceSearchMessage, setVoiceSearchMessage] = useState('');
+  const speechRecognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const [aiStatus, setAiStatus] = useState<AiGuardrailsStatus | null>(null);
   const [useAi, setUseAi] = useState(false);
   const [resultKey, setResultKey] = useState('');
@@ -2359,6 +2381,71 @@ function Home() {
     }
   };
 
+  const handleVoiceSearch = () => {
+    if (voiceListening) {
+      speechRecognitionRef.current?.stop();
+      setVoiceSearchMessage('Stopped listening.');
+      return;
+    }
+
+    const speechWindow = window as Window & {
+      SpeechRecognition?: SpeechRecognitionConstructor;
+      webkitSpeechRecognition?: SpeechRecognitionConstructor;
+    };
+    const SpeechRecognition = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setVoiceSearchMessage('Voice input is not supported by this browser. Type your question instead.');
+      return;
+    }
+
+    setVoiceSearchMessage('');
+    const recognition = new SpeechRecognition();
+    recognition.lang = navigator.language || 'en-IN';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results)
+        .slice(event.resultIndex)
+        .filter((result) => result.isFinal)
+        .map((result) => result[0]?.transcript ?? '')
+        .join(' ')
+        .trim();
+      if (!transcript) return;
+      setQuestion((current) => `${current.trim()}${current.trim() ? ' ' : ''}${transcript}`.slice(0, 500));
+      setLandingAskMessage('');
+      setVoiceSearchMessage('Speech added to your question. Review or edit it before continuing.');
+    };
+    recognition.onerror = (event) => {
+      const message = event.error === 'not-allowed' || event.error === 'service-not-allowed'
+        ? 'Microphone access was blocked. Allow it in your browser settings or type your question.'
+        : event.error === 'no-speech'
+          ? 'No speech was detected. Try again or type your question.'
+          : 'Voice input could not start. Try again or type your question.';
+      setVoiceSearchMessage(message);
+      setVoiceListening(false);
+      speechRecognitionRef.current = null;
+    };
+    recognition.onend = () => {
+      setVoiceListening(false);
+      speechRecognitionRef.current = null;
+    };
+
+    try {
+      speechRecognitionRef.current = recognition;
+      recognition.start();
+      setVoiceListening(true);
+    } catch {
+      speechRecognitionRef.current = null;
+      setVoiceListening(false);
+      setVoiceSearchMessage('Voice input could not start. Try again or type your question.');
+    }
+  };
+
+  useEffect(() => () => {
+    speechRecognitionRef.current?.abort();
+    speechRecognitionRef.current = null;
+  }, []);
+
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
   };
@@ -2513,20 +2600,36 @@ function Home() {
                 >
                   <label htmlFor="landing-question" className="mb-2 block text-base font-semibold text-[#35364a]">Ask an open question</label>
                   <div className="flex flex-col gap-3 sm:flex-row">
-                    <input
-                      id="landing-question"
-                      type="text"
-                      value={question}
-                      onChange={(event) => {
-                        setQuestion(event.target.value);
-                        setLandingAskMessage('');
-                      }}
-                      maxLength={500}
-                      required
-                      placeholder="Ask about a company or person (for example, latest Finolex Cables launches)"
-                      className="h-12 min-w-0 flex-1 rounded-lg border border-[#d9d4df] bg-white px-3 text-base text-foreground placeholder:text-[#777280] focus:border-[#8c7dae] focus:outline-none"
-                      data-testid="input-landing-question"
-                    />
+                    <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row">
+                      <input
+                        id="landing-question"
+                        type="text"
+                        value={question}
+                        onChange={(event) => {
+                          setQuestion(event.target.value);
+                          setLandingAskMessage('');
+                        }}
+                        maxLength={500}
+                        required
+                        placeholder="Ask about a company or person (for example, latest Finolex Cables launches)"
+                        className="h-12 min-w-0 flex-1 rounded-lg border border-[#d9d4df] bg-white px-3 text-base text-foreground placeholder:text-[#777280] focus:border-[#8c7dae] focus:outline-none"
+                        data-testid="input-landing-question"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleVoiceSearch}
+                        aria-pressed={voiceListening}
+                        className={`inline-flex h-12 w-full shrink-0 items-center justify-center gap-2 rounded-lg border-2 px-4 text-base font-bold transition focus:outline-none focus:ring-2 focus:ring-[#655487] focus:ring-offset-2 sm:w-auto ${
+                          voiceListening
+                            ? 'border-[#a9433b] bg-[#fbefed] text-[#8f4039]'
+                            : 'border-[#655487] bg-[#f1edfa] text-[#443568] hover:bg-[#e6dff5]'
+                        }`}
+                        data-testid="button-voice-search"
+                      >
+                        <Mic className={`h-5 w-5 ${voiceListening ? 'animate-pulse' : ''}`} aria-hidden="true" />
+                        {voiceListening ? 'Listening…' : 'Speak'}
+                      </button>
+                    </div>
                     <button
                       type="submit"
                       disabled={!question.trim()}
@@ -2539,6 +2642,14 @@ function Home() {
                   <p className="mt-3 text-sm leading-relaxed text-[#625d69]">
                     The question is sent to Tavily with the selected company or person and topics after you sign in, complete the brief, and enter your account PIN. No search starts before that. Don’t include private information.
                   </p>
+                  <p className="mt-2 text-sm leading-relaxed text-[#625d69]">
+                    Voice input uses your browser’s speech-recognition service; depending on the browser, audio may be processed by that service. Review the editable transcript. The app does not begin a search until you continue through Brief and PIN.
+                  </p>
+                  {voiceSearchMessage && (
+                    <p className="mt-2 text-sm font-semibold text-[#443568]" role="status" aria-live="polite" data-testid="status-voice-search">
+                      {voiceSearchMessage}
+                    </p>
+                  )}
                   {landingAskMessage && <p role="alert" className="mt-2 text-sm font-semibold text-[#8f4039]">{landingAskMessage}</p>}
                 </form>
               </div>
