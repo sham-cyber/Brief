@@ -11,10 +11,19 @@ import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
 import { ArrowDown, ArrowUpRight, Check, Clipboard, Clock3, FileText, Link2, LoaderCircle, LockKeyhole, Mic, Moon, Printer, Radio, Search, Send, Square, Sun, Volume2 } from 'lucide-react';
 import { ErrorBoundary } from '@/components/error-boundary';
+import { OfflineBriefingsPanel } from '@/components/offline-briefings-panel';
 import { PdfReadAloud } from '@/components/pdf-read-aloud';
 import { SapConnectionSettings } from '@/components/sap-connection-settings';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import {
+  clearOfflineBriefings,
+  loadOfflineBriefings,
+  offlineBriefingsStorageKey,
+  removeOfflineBriefing,
+  saveOfflineBriefing,
+  type SavedOfflineBriefing,
+} from '@/lib/offline-briefings';
 import NotFound from '@/pages/not-found';
 import { Redirect, Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 
@@ -1391,9 +1400,19 @@ function SapDataSection({
 function BriefingDocument({
   result,
   onRegisterCopy,
+  onSaveOffline,
+  isSavedOffline = false,
+  offlineCopy = false,
+  isOnline = true,
+  onCloseOfflineCopy,
 }: {
   result: BriefingResult;
   onRegisterCopy: (action: CopyAction | null) => void;
+  onSaveOffline?: (result: BriefingResult) => void;
+  isSavedOffline?: boolean;
+  offlineCopy?: boolean;
+  isOnline?: boolean;
+  onCloseOfflineCopy?: () => void;
 }) {
   const [copied, setCopied] = useState(false);
   const [activeTopic, setActiveTopic] = useState<'all' | Topic>('all');
@@ -1424,6 +1443,12 @@ function BriefingDocument({
   useEffect(() => {
     let active = true;
     setTelegramStatus(null);
+    if (offlineCopy || !isOnline) {
+      setTelegramMessage('');
+      return () => {
+        active = false;
+      };
+    }
     void sendAccountRequest('telegram-credentials', 'GET')
       .then((payload) => {
         if (active) setTelegramStatus(payload as TelegramCredentialStatus);
@@ -1434,7 +1459,7 @@ function BriefingDocument({
     return () => {
       active = false;
     };
-  }, [result.generatedAt]);
+  }, [result.generatedAt, offlineCopy, isOnline]);
 
   const copyBrief = async () => {
     const visibleSourceIds = new Set([
@@ -1573,7 +1598,7 @@ function BriefingDocument({
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3 no-print">
         <div className="flex items-center gap-2 text-xs font-medium text-[#5d5279]">
           <span className="h-2 w-2 rounded-full bg-[#4c9c7b]" aria-hidden="true" />
-          Briefing ready
+          {offlineCopy ? 'Saved briefing' : 'Briefing ready'}
           <span className="text-muted-foreground">·</span>
           Crawl started {formatDate(result.generatedAt)}
         </div>
@@ -1585,24 +1610,66 @@ function BriefingDocument({
           <button type="button" onClick={() => window.print()} className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#292e46] px-3 text-xs font-semibold text-white transition hover:bg-[#3c4160]" data-testid="button-print-brief-top">
             <Printer className="h-3.5 w-3.5" aria-hidden="true" /> Print one-page brief
           </button>
-          <button
-            type="button"
-            onClick={() => void sendPdfToTelegram()}
-            disabled={telegramSending || !telegramStatus?.connected || telegramStatus.remaining <= 0}
-            className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#547a61] bg-[#eaf4ed] px-3 text-xs font-semibold text-[#285b39] transition hover:bg-[#dcefe2] disabled:cursor-not-allowed disabled:opacity-50"
-            title={!telegramStatus?.connected ? 'Connect Telegram in source key settings first' : `Up to ${telegramStatus.limit} PDFs per rolling hour`}
-            data-testid="button-send-telegram-pdf"
-          >
-            {telegramSending ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : <Send className="h-3.5 w-3.5" aria-hidden="true" />}
-            {telegramSending ? 'Sending…' : 'Telegram PDF'}
-          </button>
+          {result.sourceMode === 'public' && result.sapData.length === 0 && !offlineCopy && onSaveOffline && (
+            <button
+              type="button"
+              onClick={() => onSaveOffline(result)}
+              disabled={isSavedOffline}
+              className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#8fbd9a] bg-[#eff8f0] px-3 text-xs font-bold text-[#28603c] transition hover:bg-[#e0f0e2] disabled:cursor-not-allowed disabled:opacity-70"
+              title="Save this public brief in this browser for offline reading"
+              data-testid="button-save-offline-brief"
+            >
+              {isSavedOffline ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />}
+              {isSavedOffline ? 'Saved on this device' : 'Save on this device'}
+            </button>
+          )}
+          {isOnline && !offlineCopy && (
+            <button
+              type="button"
+              onClick={() => void sendPdfToTelegram()}
+              disabled={telegramSending || !telegramStatus?.connected || telegramStatus.remaining <= 0}
+              className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#547a61] bg-[#eaf4ed] px-3 text-xs font-semibold text-[#285b39] transition hover:bg-[#dcefe2] disabled:cursor-not-allowed disabled:opacity-50"
+              title={!telegramStatus?.connected ? 'Connect Telegram in the source key settings first' : `Up to ${telegramStatus.limit} PDFs per rolling hour`}
+              data-testid="button-send-telegram-pdf"
+            >
+              {telegramSending ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : <Send className="h-3.5 w-3.5" aria-hidden="true" />}
+              {telegramSending ? 'Sending…' : 'Telegram PDF'}
+            </button>
+          )}
+          {offlineCopy && onCloseOfflineCopy && (
+            <button type="button" onClick={onCloseOfflineCopy} className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-card px-3 text-xs font-semibold text-foreground" data-testid="button-close-offline-brief">
+              Close saved brief
+            </button>
+          )}
         </div>
       </div>
-      <p className="no-print -mt-4 mb-5 text-right text-xs text-[#625d69]" role="status" aria-live="polite" data-testid="status-telegram-send">
-        {telegramMessage || (telegramStatus?.connected
-          ? `${telegramStatus.remaining} of ${telegramStatus.limit} Telegram PDF sends remain this rolling hour. Sending uses the current brief and does not start another Tavily search.`
-          : 'Connect Telegram in source key settings to send this brief as a PDF.')}
-      </p>
+      {offlineCopy ? (
+        <p className="no-print -mt-4 mb-5 rounded-lg border border-[#efcfad] bg-[#fff8ee] px-3 py-2 text-sm text-[#744716]" role="status" data-testid="status-offline-brief">
+          Saved public copy · reading, copying, and printing work offline. Source links open when internet is available.
+        </p>
+      ) : !isOnline ? (
+        <p className="no-print -mt-4 mb-5 rounded-lg border border-[#efcfad] bg-[#fff8ee] px-3 py-2 text-sm text-[#744716]" role="status" data-testid="status-offline-brief">
+          Device is offline. You can read, copy, and print this brief; source links and Telegram need internet.
+        </p>
+      ) : (
+        <>
+          {(result.sourceMode !== 'public' || result.sapData.length > 0) && (
+            <p className="no-print -mt-4 mb-5 text-right text-xs text-[#625d69]" role="status" data-testid="status-offline-save-unavailable">
+              For privacy, only public-source briefs can be saved offline. SAP and private-source results stay out of local storage.
+            </p>
+          )}
+          {result.sourceMode === 'public' && result.sapData.length === 0 && !onSaveOffline && (
+            <p className="no-print -mt-4 mb-5 text-right text-xs text-[#625d69]" role="status" data-testid="status-offline-save-unavailable">
+              Sign in to save a public brief for offline use.
+            </p>
+          )}
+          <p className="no-print -mt-4 mb-5 text-right text-xs text-[#625d69]" role="status" aria-live="polite" data-testid="status-telegram-send">
+            {telegramMessage || (telegramStatus?.connected
+              ? `${telegramStatus.remaining} of ${telegramStatus.limit} Telegram PDF sends remain this rolling hour. Sending uses the current brief and does not start another Tavily search.`
+              : 'Connect Telegram in the source key settings to send this brief as a PDF.')}
+          </p>
+        </>
+      )}
 
       <header className="print-card relative overflow-hidden rounded-2xl border border-[#d8d2df] bg-[#262b42] px-6 py-7 text-[#f6f1e8] shadow-[0_15px_45px_rgba(36,35,54,.12)] sm:px-9 sm:py-9">
         <div className="absolute -right-16 -top-24 h-64 w-64 rounded-full border border-white/10" aria-hidden="true" />
@@ -2190,7 +2257,16 @@ function PrintReferences({ sourceIds, sources }: { sourceIds: string[]; sources:
 }
 
 function Home() {
-  const { isLoaded: accountLoaded, isSignedIn } = useUser();
+  const { isLoaded: accountLoaded, isSignedIn, user } = useUser();
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+  const [offlineBriefings, setOfflineBriefings] = useState<SavedOfflineBriefing[]>([]);
+  const [loadedOfflineStorageKey, setLoadedOfflineStorageKey] = useState<string | null>(null);
+  const [offlineStorageError, setOfflineStorageError] = useState<string | null>(null);
+  const [offlineLibraryMessage, setOfflineLibraryMessage] = useState('');
+  const [selectedOfflineBriefingId, setSelectedOfflineBriefingId] = useState('');
+  const offlineStorageKey = isSignedIn && user?.id
+    ? offlineBriefingsStorageKey(user.id, basePath || '/')
+    : null;
   const [installPrompt, setInstallPrompt] = useState<PwaInstallPromptEvent | null>(null);
   const [installHelpOpen, setInstallHelpOpen] = useState(false);
   const [appInstalled, setAppInstalled] = useState(() =>
@@ -2207,14 +2283,46 @@ function Home() {
   const sourceStatusQuery = useGetBriefingSourceStatus({
     query: {
       queryKey: getGetBriefingSourceStatusQueryKey(),
-      refetchInterval: 15_000,
+      enabled: isOnline,
+      refetchInterval: isOnline ? 15_000 : false,
       refetchOnWindowFocus: true,
       retry: false,
     },
   });
   useEffect(() => {
-    if (accountLoaded) void sourceStatusQuery.refetch();
-  }, [accountLoaded, isSignedIn, sourceStatusQuery.refetch]);
+    const goOnline = () => setIsOnline(true);
+    const goOffline = () => setIsOnline(false);
+    window.addEventListener('online', goOnline);
+    window.addEventListener('offline', goOffline);
+    return () => {
+      window.removeEventListener('online', goOnline);
+      window.removeEventListener('offline', goOffline);
+    };
+  }, []);
+  useEffect(() => {
+    if (accountLoaded && isOnline) void sourceStatusQuery.refetch();
+  }, [accountLoaded, isSignedIn, isOnline, sourceStatusQuery.refetch]);
+  useEffect(() => {
+    if (!accountLoaded) return;
+    setSelectedOfflineBriefingId('');
+    setOfflineLibraryMessage('');
+    setOfflineStorageError(null);
+    if (!offlineStorageKey) {
+      setOfflineBriefings([]);
+      setLoadedOfflineStorageKey(null);
+      return;
+    }
+    try {
+      const saved = loadOfflineBriefings(window.localStorage, offlineStorageKey);
+      setOfflineBriefings(saved.items);
+      setLoadedOfflineStorageKey(offlineStorageKey);
+      setOfflineStorageError(saved.error);
+    } catch {
+      setOfflineBriefings([]);
+      setLoadedOfflineStorageKey(offlineStorageKey);
+      setOfflineStorageError('This browser blocked access to saved offline briefs.');
+    }
+  }, [accountLoaded, offlineStorageKey]);
   useEffect(() => {
     try {
       window.localStorage.setItem(settingsThemeStorageKey, settingsTheme);
@@ -2274,7 +2382,9 @@ function Home() {
   const [aiStatus, setAiStatus] = useState<AiGuardrailsStatus | null>(null);
   const [useAi, setUseAi] = useState(false);
   const [resultKey, setResultKey] = useState('');
+  const [resultOwnerId, setResultOwnerId] = useState('');
   const [customerSearchResultKey, setCustomerSearchResultKey] = useState('');
+  const [customerSearchResultOwnerId, setCustomerSearchResultOwnerId] = useState('');
   const [failedKey, setFailedKey] = useState('');
   const [timedOutKey, setTimedOutKey] = useState('');
   const [cancelledKey, setCancelledKey] = useState('');
@@ -2370,15 +2480,28 @@ function Home() {
   const hasRequiredSelections = customerSearchSelected
     ? customerSearchReady
     : hasTopics && (sourceMode !== 'sap' || sapAreas.length > 0);
-  const hasCurrentResult = !customerSearchSelected && Boolean(mutation.data && resultKey === requestKey);
-  const result = hasCurrentResult ? mutation.data : undefined;
+  const accountOfflineBriefings = offlineStorageKey && loadedOfflineStorageKey === offlineStorageKey
+    ? offlineBriefings
+    : [];
+  const hasCurrentResult = isSignedIn &&
+    resultOwnerId === user?.id &&
+    !customerSearchSelected &&
+    Boolean(mutation.data && resultKey === requestKey);
+  const selectedOfflineBriefing = !customerSearchSelected
+    ? accountOfflineBriefings.find((item) => item.result.briefingId === selectedOfflineBriefingId)
+    : undefined;
+  const result = selectedOfflineBriefing?.result ?? (hasCurrentResult ? mutation.data : undefined);
+  const isViewingOfflineBriefing = Boolean(selectedOfflineBriefing);
   const hasCurrentCustomerSearchResult = customerSearchSelected &&
+    isSignedIn &&
+    customerSearchResultOwnerId === user?.id &&
     Boolean(customerSearchMutation.data && customerSearchResultKey === requestKey);
   const customerSearchResult = hasCurrentCustomerSearchResult
     ? customerSearchMutation.data
     : undefined;
   const hasPrintableOutput = Boolean(result || customerSearchResult);
   const startActionDisabled = !isSignedIn ||
+    !isOnline ||
     isAnySearchPending ||
     !canStart ||
     !sourceReady ||
@@ -2391,6 +2514,63 @@ function Home() {
     copyOutputActionRef.current = action;
     setCopyActionReady(Boolean(action));
   }, []);
+  const saveCurrentBriefOffline = (briefing: BriefingResult) => {
+    if (!isSignedIn || !offlineStorageKey) {
+      setOfflineStorageError('Sign in on this device before saving an offline copy.');
+      return;
+    }
+    try {
+      const saved = saveOfflineBriefing(window.localStorage, offlineStorageKey, briefing);
+      if (!saved.ok) {
+        setOfflineStorageError(saved.error);
+        setOfflineLibraryMessage('');
+        return;
+      }
+      setOfflineBriefings(saved.items);
+      setLoadedOfflineStorageKey(offlineStorageKey);
+      setOfflineStorageError(null);
+      setOfflineLibraryMessage('Saved on this device. Open it offline after signing in with this account.');
+    } catch {
+      setOfflineStorageError('This browser could not save the brief on this device.');
+      setOfflineLibraryMessage('');
+    }
+  };
+  const removeSavedOfflineBrief = (briefingId: string) => {
+    if (!offlineStorageKey) return;
+    try {
+      const removed = removeOfflineBriefing(window.localStorage, offlineStorageKey, briefingId);
+      if (!removed.ok) {
+        setOfflineStorageError(removed.error);
+        setOfflineLibraryMessage('');
+        return;
+      }
+      setOfflineBriefings(removed.items);
+      setLoadedOfflineStorageKey(offlineStorageKey);
+      setOfflineStorageError(null);
+      setOfflineLibraryMessage('Offline copy removed from this device.');
+      if (selectedOfflineBriefingId === briefingId) setSelectedOfflineBriefingId('');
+    } catch {
+      setOfflineStorageError('This browser could not remove the saved offline copy.');
+    }
+  };
+  const clearSavedOfflineBriefs = () => {
+    if (!offlineStorageKey) return;
+    if (!window.confirm('Remove all saved public briefs for this account from this device?')) return;
+    try {
+      const error = clearOfflineBriefings(window.localStorage, offlineStorageKey);
+      if (error) {
+        setOfflineStorageError(error);
+        return;
+      }
+      setOfflineBriefings([]);
+      setLoadedOfflineStorageKey(offlineStorageKey);
+      setSelectedOfflineBriefingId('');
+      setOfflineStorageError(null);
+      setOfflineLibraryMessage('All saved offline copies for this account were removed from this device.');
+    } catch {
+      setOfflineStorageError('This browser could not clear saved offline data.');
+    }
+  };
   useEffect(() => {
     if (!result && !customerSearchResult) return;
     const frame = window.requestAnimationFrame(() => {
@@ -2407,6 +2587,13 @@ function Home() {
     };
     window.addEventListener('pagehide', stopRequestOnPageExit);
     return () => window.removeEventListener('pagehide', stopRequestOnPageExit);
+  }, []);
+  useEffect(() => {
+    const stopSearchWhenOffline = () => {
+      abortControllerRef.current?.abort(new DOMException('Device connection was lost.', 'AbortError'));
+    };
+    window.addEventListener('offline', stopSearchWhenOffline);
+    return () => window.removeEventListener('offline', stopSearchWhenOffline);
   }, []);
   const selectedSavedProfile = savedPersonProfiles.find((profile) => profile.id === selectedSavedProfileId);
   const selectedProfileMatchesForm = Boolean(
@@ -2585,6 +2772,10 @@ function Home() {
   }, [researchDates.endDate, researchDates.startDate, researchWindowIsValid]);
 
   const runBriefing = useCallback((key: string, pin: string) => {
+    if (!isOnline) {
+      setPinDialogError('This device is offline. Reconnect before starting a search.');
+      return;
+    }
     const selectedSourceReady = sourceReady &&
       !dailyCrawlStartLimitReached &&
       !dailySearchQuotaInsufficient &&
@@ -2606,6 +2797,7 @@ function Home() {
       requestIsPending
     ) return;
 
+    setSelectedOfflineBriefingId('');
     activeRequestKey.current = key;
     setFailedKey('');
     setTimedOutKey('');
@@ -2627,8 +2819,10 @@ function Home() {
         if (activeRequestKey.current === key) {
           if (customerSearchSelected) {
             setCustomerSearchResultKey(key);
+            setCustomerSearchResultOwnerId(user?.id ?? '');
           } else {
             setResultKey(key);
+            setResultOwnerId(user?.id ?? '');
           }
           setFailedKey('');
           setPinPromptOpen(false);
@@ -2650,7 +2844,7 @@ function Home() {
         }
       },
       onSettled: () => {
-        void sourceStatusQuery.refetch();
+        if (isOnline) void sourceStatusQuery.refetch();
       },
     };
 
@@ -2714,6 +2908,8 @@ function Home() {
     hasValidRole,
     hasValidSubject,
     isSignedIn,
+    isOnline,
+    user?.id,
     meetingAt,
     meetingTimeIsValid,
     mutation.isPending,
@@ -2857,6 +3053,8 @@ function Home() {
   const errorMessage = apiError?.data?.error ?? apiError?.message ?? (customerSearchSelected ? 'Customer Search could not be completed. Check your connection and try again.' : 'The briefing could not be generated. Check your connection and try again.');
   const readinessState = !isSignedIn
     ? 'not-ready'
+    : !isOnline
+      ? isViewingOfflineBriefing ? 'ready' : 'not-ready'
     : currentRequestCancelled
       ? 'error'
     : currentRequestFailed
@@ -2874,6 +3072,10 @@ function Home() {
   }[readinessState];
   const readinessMessage = !isSignedIn
     ? 'Sign in before using the briefing.'
+    : !isOnline
+      ? isViewingOfflineBriefing
+        ? 'Saved public brief ready — reading and printing work offline.'
+        : 'Offline — open a saved public brief or reconnect before starting a search.'
     : sourceStatusQuery.isError
       ? 'Not ready — the server could not confirm source status. Check the API Server workflow.'
       : sourceStatusQuery.isLoading
@@ -2987,6 +3189,28 @@ function Home() {
             </button>
           </div>
         </nav>
+
+        {!isOnline && (
+          <aside className="mt-4 rounded-xl border border-[#efcfad] bg-[#fff8ee] px-4 py-3 text-sm font-semibold text-[#744716]" role="status" aria-live="polite" data-testid="status-device-offline">
+            Device is offline. Any active crawl is stopped; new searches, sign-in checks, and source websites need internet. Saved public briefs on this device can still be read, copied, and printed.
+          </aside>
+        )}
+
+        {isSignedIn && offlineStorageKey && (
+          <OfflineBriefingsPanel
+            items={accountOfflineBriefings}
+            isOnline={isOnline}
+            error={offlineStorageError}
+            message={offlineLibraryMessage}
+            onOpen={(briefingId) => {
+              setCustomerSearchSelected(false);
+              setSelectedOfflineBriefingId(briefingId);
+              setOfflineLibraryMessage('');
+            }}
+            onRemove={removeSavedOfflineBrief}
+            onClear={clearSavedOfflineBriefs}
+          />
+        )}
 
         {isSignedIn && (
           <div
@@ -3883,7 +4107,10 @@ function Home() {
                     <li>On iPhone or iPad Safari, tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>.</li>
                   </ol>
                   <p className="mt-4 text-sm leading-relaxed text-[#4b5870]">
-                    The app shell can reopen offline after it has loaded once. Sign-in, searches, and source data still require an internet connection.
+                    While online, sign in, prepare a public brief, and choose <strong>Save on this device</strong>. Later, open it from <strong>Saved for offline</strong>; reading, copying, printing, and device read-aloud work without internet. New searches and source websites need a connection.
+                  </p>
+                  <p className="mt-2 text-sm leading-relaxed text-[#4b5870]">
+                    Saved public briefs are stored only in this browser, are not encrypted or synced, and can be removed from the offline list. SAP and private-source results are not saved. If your sign-in session expires, reconnect to sign in again.
                   </p>
                   <p className="mt-2 text-sm leading-relaxed text-[#4b5870]">
                     If your browser does not list Install app in its menu, use a production build over HTTPS or localhost; the development Preview may not offer native installation.
@@ -3947,7 +4174,15 @@ function Home() {
             ) : customerSearchResult ? (
               <CustomerSearchDocument result={customerSearchResult} onRegisterCopy={registerCopyOutputAction} />
             ) : result ? (
-              <BriefingDocument result={result} onRegisterCopy={registerCopyOutputAction} />
+              <BriefingDocument
+                result={result}
+                onRegisterCopy={registerCopyOutputAction}
+                onSaveOffline={isSignedIn && !isViewingOfflineBriefing ? saveCurrentBriefOffline : undefined}
+                isSavedOffline={accountOfflineBriefings.some((item) => item.result.briefingId === result.briefingId)}
+                offlineCopy={isViewingOfflineBriefing}
+                isOnline={isOnline}
+                onCloseOfflineCopy={isViewingOfflineBriefing ? () => setSelectedOfflineBriefingId('') : undefined}
+              />
             ) : null}
           </section>
         </div>

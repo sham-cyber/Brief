@@ -38,7 +38,7 @@ Briefing Agent gathers public reporting from the 30 days ending when the user st
 - Provides a concise brief and a one-page print with up to 400 words of briefing text, plus its cited source list, and browser read-aloud.
 - Reads a selected text-based PDF aloud in the browser using the device's speech voice; PDF text is extracted locally, with no Tavily or Qwen request.
 - SAP briefs combine Tavily public research with approved, read-only SAP S/4HANA records; public links and internal records remain in separate sections.
-- Can be installed as a Progressive Web App (PWA) with app icons and a cached app shell; live sign-in, search, and data still require a network connection.
+- Can be installed as a Progressive Web App (PWA). Users can explicitly save up to five public briefs in their signed-in browser profile for offline reading, copying, printing, and device read-aloud.
 
 The app includes Qwen summaries through Ollama. After Tavily results pass the source checks, a summary can run when the server switch, account PIN and activation, and per-brief opt-in are all satisfied. The example configuration keeps the server switch false until the operator enables it. SAP records and private sources are not sent to the model.
 
@@ -53,7 +53,16 @@ The app includes Qwen summaries through Ollama. After Tavily results pass the so
 - **Validation and API contracts:** Zod and an OpenAPI specification, with generated TypeScript API clients.
 - **PDF and project tooling:** `pdf-lib`, pnpm workspaces, and TypeScript type checks.
 - **PDF read-aloud:** PDF.js for local text extraction and the browser Web Speech API for device-voice playback.
-- **Installable app:** Web App Manifest and a service worker that caches the app shell and same-origin static assets.
+- **Offline app:** Web App Manifest and service worker cache the app shell and same-origin static assets, while API and authenticated responses are excluded.
+
+## Offline operation
+
+1. Install/open the app and sign in while online.
+2. Run a public-source briefing, then choose **Save on this device**.
+3. When offline, open **Saved for offline** to read, copy, print, or use device read-aloud. Source websites and new searches need internet.
+4. If the device reports a connection loss during a crawl, the app aborts that request; reconnect before starting again.
+
+The offline library is local to the current browser and account on that device; it is not encrypted or synced. Save only on a trusted device and remove local copies when no longer needed. Only public-source briefs are eligible; SAP and private-source results are not stored locally. The service worker caches the app shell and static assets, never API responses or authenticated content.
 
 ## Sign-in, account PIN, and crawl procedure
 
