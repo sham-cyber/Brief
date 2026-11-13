@@ -35,6 +35,7 @@ Briefing Agent gathers public reporting from the 30 days ending when the user st
 - Accepts an optional open question about the selected company or person, guides the existing topic searches, and returns a cited source-based answer without adding Tavily requests.
 - Shows source links and, when Tavily returns them for an accepted source, a photo or supported video preview.
 - Provides a concise brief and a one-page print with up to 400 words of briefing text, plus its cited source list, and browser read-aloud.
+- Reads a selected text-based PDF aloud in the browser using the device's speech voice; PDF text is extracted locally, with no Tavily or Qwen request.
 - SAP briefs combine Tavily public research with approved, read-only SAP S/4HANA records; public links and internal records remain in separate sections.
 
 The app includes Qwen summaries through Ollama. After Tavily results pass the source checks, a summary can run when the server switch, account PIN and activation, and per-brief opt-in are all satisfied. The example configuration keeps the server switch false until the operator enables it. SAP records and private sources are not sent to the model.
@@ -49,6 +50,7 @@ The app includes Qwen summaries through Ollama. After Tavily results pass the so
 - **SAP connection:** SAP S/4HANA business OData APIs using OAuth; SAP records remain separate from public search results.
 - **Validation and API contracts:** Zod and an OpenAPI specification, with generated TypeScript API clients.
 - **PDF and project tooling:** `pdf-lib`, pnpm workspaces, and TypeScript type checks.
+- **PDF read-aloud:** PDF.js for local text extraction and the browser Web Speech API for device-voice playback.
 
 ## Sign-in, account PIN, and crawl procedure
 
@@ -96,6 +98,24 @@ Repeated incorrect PIN attempts are temporarily rate-limited. The PIN is per acc
 - Qwen allows up to five topic requests per signed-in account per rolling five minutes. All Qwen summaries in one briefing share a 400-word cap, whether the user selects one topic or combines several; each summary cites only source IDs returned for that topic.
 - Local Ollama uses the computer running the clone. A missing or unavailable model leaves the source-based brief available.
 - The existing read-aloud text has a separate 280-word cap (about two minutes at the app's estimate); AI summary generation does not start speech automatically.
+
+### Read a saved PDF aloud in the browser
+
+1. Sign in and open the Briefing Agent page.
+2. Scroll below the briefing form to **Read a saved PDF aloud**, choose **Choose PDF**, and select a PDF from the device.
+3. Select **Read PDF aloud**. Use **Pause**, **Resume**, or **Stop** as needed.
+
+The reader accepts selectable-text PDFs up to 15 MB and 20 pages. It reads at most the first 280 words (about two minutes), using the browser/device speech voice. Scanned image-only PDFs need OCR first. The selected PDF is processed in the browser and is not uploaded to the app server. This browser playback does not call Tavily or Qwen and does not create or download an audio file. To keep an audio recording, use a separate device or system-audio recorder; add that recording to `docs/evidence/` only after it has actually been recorded.
+
+#### PDF test inputs and evidence
+
+| File | What it contains |
+| --- | --- |
+| [`docs/evidence/finolex-deepak-brief-2026-11-03.pdf`](docs/evidence/finolex-deepak-brief-2026-11-03.pdf) | The available two-page Deepak / Finolex Cables all-topics brief, dated 3 Nov 2026. It is a PDF input for read-aloud testing, not the DKC Hires-only brief. |
+| [`docs/evidence/tavily-brief-2026-11-11-1940-IST.pdf`](docs/evidence/tavily-brief-2026-11-11-1940-IST.pdf) | One-page Tavily.com brief with a 19:40 IST crawl timestamp. |
+| [`docs/evidence/tavily-brief-2026-11-11-1955-IST.pdf`](docs/evidence/tavily-brief-2026-11-11-1955-IST.pdf) | One-page Tavily.com brief with a 19:55 IST crawl timestamp. |
+
+The API log reviewed on 13 Nov 2026 contains a successful `POST /api/briefings` response (HTTP 200, about 20.1 seconds). API logs do not capture browser speech playback, so this confirms a briefing request—not that audio was heard or recorded. See [`docs/evidence/read-aloud-check.md`](docs/evidence/read-aloud-check.md) for the verification scope.
 
 ### Personal Tavily key security
 
