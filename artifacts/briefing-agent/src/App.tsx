@@ -3039,9 +3039,25 @@ function Home() {
               </fieldset>
               </div>
 
-              <div className="mb-1.5 mt-5 flex items-center justify-between">
+              <div className="mb-1.5 mt-5 flex flex-wrap items-center justify-between gap-2">
                 <label htmlFor="briefing-question" className="text-base font-semibold text-[#35364a]">Open question (optional)</label>
-                <span className="text-sm text-[#625d69]">{question.length} / 500</span>
+                <div className="ml-auto flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleVoiceSearch}
+                    aria-pressed={voiceListening}
+                    className={`inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg border-2 px-3 text-sm font-bold transition focus:outline-none focus:ring-2 focus:ring-[#655487] focus:ring-offset-2 ${
+                      voiceListening
+                        ? 'border-[#a9433b] bg-[#fbefed] text-[#8f4039]'
+                        : 'border-[#655487] bg-[#f1edfa] text-[#443568] hover:bg-[#e6dff5]'
+                    }`}
+                    data-testid="button-voice-search-briefing"
+                  >
+                    <Mic className={`h-5 w-5 ${voiceListening ? 'animate-pulse' : ''}`} aria-hidden="true" />
+                    {voiceListening ? 'Listening…' : 'Speak'}
+                  </button>
+                  <span className="text-sm text-[#625d69]">{question.length} / 500</span>
+                </div>
               </div>
               <div className="flex flex-row gap-2">
                 <input
@@ -3054,20 +3070,6 @@ function Home() {
                   className="h-12 min-w-0 flex-1 rounded-lg border border-[#d9d4df] bg-[#fffefa] px-3 text-base text-foreground placeholder:text-[#777280] focus:border-[#8c7dae] focus:outline-none"
                   data-testid="input-briefing-question"
                 />
-                <button
-                  type="button"
-                  onClick={handleVoiceSearch}
-                  aria-pressed={voiceListening}
-                  className={`inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-lg border-2 px-4 text-base font-bold transition focus:outline-none focus:ring-2 focus:ring-[#655487] focus:ring-offset-2 ${
-                    voiceListening
-                      ? 'border-[#a9433b] bg-[#fbefed] text-[#8f4039]'
-                      : 'border-[#655487] bg-[#f1edfa] text-[#443568] hover:bg-[#e6dff5]'
-                  }`}
-                  data-testid="button-voice-search-briefing"
-                >
-                  <Mic className={`h-5 w-5 ${voiceListening ? 'animate-pulse' : ''}`} aria-hidden="true" />
-                  {voiceListening ? 'Listening…' : 'Speak'}
-                </button>
               </div>
               {voiceSearchMessage && (
                 <p className="mt-2 text-sm font-semibold text-[#443568]" role="status" aria-live="polite" data-testid="status-voice-search-briefing">
