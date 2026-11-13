@@ -2130,10 +2130,13 @@ function Home() {
       return;
     }
     let issue = '';
-    if (sourceStatusQuery.isLoading || !sourceStatusQuery.data) {
-      issue = 'The app could not confirm source setup yet.';
-    } else if (sourceStatusQuery.isError) {
+    if (sourceStatusQuery.isError) {
       issue = 'The server could not verify SAP and Tavily setup.';
+    } else if (sourceStatusQuery.isLoading || !sourceStatusQuery.data) {
+      setSourceMode('sap');
+      setSourceModeAlert('Checking SAP and Tavily setup…');
+      if (!sourceStatusQuery.isFetching) void sourceStatusQuery.refetch();
+      return;
     } else if (!canStart) {
       issue = 'The approved account is required to start SAP briefings.';
     } else if (!sapConfigured || sapAvailableAreas.length === 0) {
@@ -2175,7 +2178,11 @@ function Home() {
   };
 
   useEffect(() => {
-    if (sourceMode !== 'sap' || sourceStatusQuery.isLoading) return;
+    if (
+      sourceMode !== 'sap' ||
+      sourceStatusQuery.isLoading ||
+      (!sourceStatusQuery.data && !sourceStatusQuery.isError)
+    ) return;
     const issue = sourceStatusQuery.isError
       ? 'The server could not verify SAP and Tavily setup.'
       : !canStart
@@ -2190,7 +2197,7 @@ function Home() {
     if (!issue) return;
     setSourceMode('public');
     setSourceModeAlert(`SAP setup is incomplete; returned to Public. ${issue}`);
-  }, [canStart, sapAreasUnavailable.length, sapAvailableAreas.length, sapConfigured, sourceMode, sourceStatusQuery.isError, sourceStatusQuery.isLoading, tavilyConfigured]);
+  }, [canStart, sapAreasUnavailable.length, sapAvailableAreas.length, sapConfigured, sourceMode, sourceStatusQuery.data, sourceStatusQuery.isError, sourceStatusQuery.isLoading, tavilyConfigured]);
 
   useEffect(() => {
     if (!accountLoaded) return;
@@ -2874,7 +2881,7 @@ function Home() {
                           {label}
                           {value === 'private' && <span className="text-sm font-normal">(Person only)</span>}
                         </label>
-                        {value === 'sap' && canStart && (
+                        {value === 'sap' && isSignedIn && (
                           <div className="absolute right-1 top-1/2 z-10 -translate-y-1/2">
                             <SapConnectionSettings
                               basePath={basePath}
