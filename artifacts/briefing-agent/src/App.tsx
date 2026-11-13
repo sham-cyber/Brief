@@ -9,7 +9,7 @@ import type { BriefingResult, BriefSource, SapDataArea } from '@workspace/api-cl
 import { ClerkProvider, SignIn, SignUp, Show, useClerk, useUser } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
-import { ArrowDown, ArrowUpRight, Check, Clipboard, Clock3, FileText, Link2, LoaderCircle, LockKeyhole, Printer, Radio, Search, Send, Square, Volume2 } from 'lucide-react';
+import { ArrowDown, ArrowUpRight, Check, Clipboard, Clock3, FileText, Link2, LoaderCircle, LockKeyhole, Mic, Printer, Radio, Search, Send, Square, Volume2 } from 'lucide-react';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { SapConnectionSettings } from '@/components/sap-connection-settings';
 import { Toaster } from '@/components/ui/toaster';
@@ -91,6 +91,25 @@ const SPEECH_WORD_LIMIT = 280;
 const PRINT_WORD_LIMIT = 400;
 const AI_REQUESTS_PER_TAB = 1;
 const AI_SPEECH_LIMIT_SECONDS = 120;
+
+type SpeechRecognitionResultLike = {
+  isFinal: boolean;
+  [index: number]: { transcript: string };
+};
+
+type SpeechRecognitionLike = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((event: { resultIndex: number; results: ArrayLike<SpeechRecognitionResultLike> }) => void) | null;
+  onerror: ((event: { error?: string }) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+};
+
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
 
 type AiGuardrailsStatus = {
   provider: 'ollama';
@@ -1952,6 +1971,9 @@ function Home() {
   const [context, setContext] = useState('');
   const [question, setQuestion] = useState('');
   const [landingAskMessage, setLandingAskMessage] = useState('');
+  const [voiceListening, setVoiceListening] = useState(false);
+  const [voiceSearchMessage, setVoiceSearchMessage] = useState('');
+  const speechRecognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const [aiStatus, setAiStatus] = useState<AiGuardrailsStatus | null>(null);
   const [useAi, setUseAi] = useState(false);
   const [resultKey, setResultKey] = useState('');
@@ -2288,6 +2310,71 @@ function Home() {
       setLandingAskMessage('Your browser could not save the question. Sign in, then enter it again.');
     }
   };
+
+  const handleVoiceSearch = () => {
+    if (voiceListening) {
+      speechRecognitionRef.current?.stop();
+      setVoiceSearchMessage('Stopped listening.');
+      return;
+    }
+
+    const speechWindow = window as Window & {
+      SpeechRecognition?: SpeechRecognitionConstructor;
+      webkitSpeechRecognition?: SpeechRecognitionConstructor;
+    };
+    const SpeechRecognition = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setVoiceSearchMessage('Voice input is not supported by this browser. Type your question instead.');
+      return;
+    }
+
+    setVoiceSearchMessage('');
+    const recognition = new SpeechRecognition();
+    recognition.lang = navigator.language || 'en-IN';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results)
+        .slice(event.resultIndex)
+        .filter((result) => result.isFinal)
+        .map((result) => result[0]?.transcript ?? '')
+        .join(' ')
+        .trim();
+      if (!transcript) return;
+      setQuestion((current) => `${current.trim()}${current.trim() ? ' ' : ''}${transcript}`.slice(0, 500));
+      setLandingAskMessage('');
+      setVoiceSearchMessage('Speech added to your question. Review or edit it before continuing.');
+    };
+    recognition.onerror = (event) => {
+      const message = event.error === 'not-allowed' || event.error === 'service-not-allowed'
+        ? 'Microphone access was blocked. Allow it in your browser settings or type your question.'
+        : event.error === 'no-speech'
+          ? 'No speech was detected. Try again or type your question.'
+          : 'Voice input could not start. Try again or type your question.';
+      setVoiceSearchMessage(message);
+      setVoiceListening(false);
+      speechRecognitionRef.current = null;
+    };
+    recognition.onend = () => {
+      setVoiceListening(false);
+      speechRecognitionRef.current = null;
+    };
+
+    try {
+      speechRecognitionRef.current = recognition;
+      recognition.start();
+      setVoiceListening(true);
+    } catch {
+      speechRecognitionRef.current = null;
+      setVoiceListening(false);
+      setVoiceSearchMessage('Voice input could not start. Try again or type your question.');
+    }
+  };
+
+  useEffect(() => () => {
+    speechRecognitionRef.current?.abort();
+    speechRecognitionRef.current = null;
+  }, []);
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -2982,6 +3069,38 @@ function Home() {
               )}
             </form>
             {isSignedIn && <AiGuardrailPanel onStatusChange={handleAiStatusChange} />}
+            {isSignedIn && (
+              <section
+                className="no-print mt-5 flex flex-wrap items-center gap-4 rounded-2xl border border-[#f1c18f] bg-[#fff6ec] p-4 sm:p-5"
+                aria-label="Voice input"
+                data-testid="section-speak-now"
+              >
+                <button
+                  type="button"
+                  onClick={handleVoiceSearch}
+                  aria-label={voiceListening ? 'Stop speaking' : 'Speak now'}
+                  aria-pressed={voiceListening}
+                  className={`inline-flex h-24 w-24 shrink-0 flex-col items-center justify-center gap-1 rounded-full border-2 border-[#b6500c] text-white shadow-[0_0_0_4px_rgba(242,140,40,.18)] transition focus:outline-none focus:ring-4 focus:ring-[#f28c28]/40 ${
+                    voiceListening ? 'animate-pulse bg-[#bb3f32]' : 'bg-[#f28c28] hover:bg-[#e87716]'
+                  }`}
+                  data-testid="button-speak-now"
+                >
+                  <Mic aria-hidden="true" className="h-7 w-7" />
+                  <span className="text-xs font-bold leading-tight">{voiceListening ? 'Listening' : <>Speak<br />Now</>}</span>
+                </button>
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-base font-semibold text-[#754018]">Voice question</h2>
+                  <p className="mt-1 text-sm leading-relaxed text-[#704d34]">
+                    Speak to fill the Open question field. Review or edit the transcript; searching still requires Brief and your PIN.
+                  </p>
+                  {voiceSearchMessage && (
+                    <p className="mt-2 text-sm font-semibold text-[#704d34]" role="status" aria-live="polite" data-testid="status-speak-now">
+                      {voiceSearchMessage}
+                    </p>
+                  )}
+                </div>
+              </section>
+            )}
 
             {pinPromptOpen && (
               <div
