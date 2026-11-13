@@ -12,31 +12,22 @@ export type TavilySearchResponse = {
 };
 
 export class TavilySearchError extends Error {
-  readonly status: number;
-
-  constructor(status: number) {
+  constructor(readonly status: number) {
     super(`Tavily search failed with status ${status}.`);
     this.name = "TavilySearchError";
-    this.status = status;
   }
 }
-
-export type TavilySearchOptions = {
-  signal?: AbortSignal;
-  includeDomains?: readonly string[];
-};
 
 export async function searchTavily(
   query: string,
   startDate: string,
   endDate: string,
   apiKey: string,
-  options: TavilySearchOptions = {},
+  signal?: AbortSignal,
 ): Promise<{ results: TavilyResult[]; creditsUsed: number | null }> {
-  const requestSignal = options.signal
-    ? AbortSignal.any([options.signal, AbortSignal.timeout(25_000)])
+  const requestSignal = signal
+    ? AbortSignal.any([signal, AbortSignal.timeout(25_000)])
     : AbortSignal.timeout(25_000);
-  const includeDomains = [...new Set(options.includeDomains ?? [])];
   const response = await fetch("https://api.tavily.com/search", {
     method: "POST",
     headers: {
@@ -58,8 +49,6 @@ export async function searchTavily(
       include_image_descriptions: true,
       include_usage: true,
       language: "en",
-      include_domains: includeDomains,
-      include_domains_mode: "restrict",
     }),
     signal: requestSignal,
   });

@@ -608,42 +608,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-  /briefings/access-window:
-    put:
-      operationId: setBriefingAccessWindow
-      tags: [briefings]
-      summary: Set the signed-in user's Tavily and Qwen active date window
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/BriefingAccessWindowInput"
-      responses:
-        "200":
-          description: The saved access window
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/BriefingAccessWindowResponse"
-        "400":
-          description: Dates are invalid or span longer than one calendar month
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "401":
-          description: Sign-in is required
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "403":
-          description: Request did not come from this app
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
   /person-profiles:
     get:
       operationId: listPersonProfiles
@@ -977,37 +941,6 @@ components:
           minimum: 1
           maximum: 10
       required: [dailyEventLimit]
-    BriefingAccessWindowInput:
-      type: object
-      properties:
-        accessWindowFrom:
-          type: ["string", "null"]
-          format: date
-          description: Inclusive first date when this account may use Tavily and Qwen.
-        accessWindowThrough:
-          type: ["string", "null"]
-          format: date
-          description: Inclusive final date; the window may span at most one calendar month.
-      required: [accessWindowFrom, accessWindowThrough]
-    BriefingAccessWindowResponse:
-      type: object
-      properties:
-        accessWindowFrom:
-          type: ["string", "null"]
-          format: date
-        accessWindowThrough:
-          type: ["string", "null"]
-          format: date
-        accessWindowState:
-          type: string
-          enum: [not-configured, scheduled, active, expired]
-        accessWindowActive:
-          type: boolean
-      required:
-        - accessWindowFrom
-        - accessWindowThrough
-        - accessWindowState
-        - accessWindowActive
     BriefingSourceStatus:
       type: object
       properties:
@@ -1019,19 +952,7 @@ components:
           description: Whether this signed-in account has an effective Tavily key.
         canStart:
           type: boolean
-          description: Whether the request is authenticated; an active date window, effective Tavily key, and account PIN are reported and enforced separately.
-        accessWindowFrom:
-          type: ["string", "null"]
-          format: date
-        accessWindowThrough:
-          type: ["string", "null"]
-          format: date
-        accessWindowState:
-          type: string
-          enum: [not-configured, scheduled, active, expired]
-        accessWindowActive:
-          type: boolean
-          description: Whether the signed-in user's inclusive Tavily and Qwen access window includes today's Asia/Kolkata date.
+          description: Whether an authenticated account may start a crawl; an effective Tavily key and that account's PIN are still required.
         keySource:
           type: string
           enum: [project-owner, account, missing]
@@ -1095,10 +1016,6 @@ components:
         - provider
         - configured
         - canStart
-        - accessWindowFrom
-        - accessWindowThrough
-        - accessWindowState
-        - accessWindowActive
         - keySource
         - startPinConfigured
         - ownerAccountConfigured

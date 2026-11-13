@@ -28,7 +28,6 @@ import {
   TAVILY_REQUEST_LIMIT,
 } from "../lib/tavily-rate-limit";
 import { searchTavily, TavilySearchError } from "../lib/tavily";
-import { getTavilyIncludeDomains } from "../lib/tavily-topic-domains";
 import {
   getTavilyCredentialStatus,
   getUserTavilyApiKey,
@@ -48,12 +47,6 @@ import {
 } from "../lib/ai-briefing-summary";
 import { getAiProviderConfig } from "../lib/ai-provider";
 import {
-  assessAccessWindow,
-  getUserBriefingAccessWindow,
-  saveUserBriefingAccessWindow,
-  validateAccessWindow,
-} from "../lib/user-briefing-access-window";
-import {
   getAiGuardrailStatus,
   reserveAiBriefingBatch,
   reserveAiBriefingRequest,
@@ -71,10 +64,6 @@ let sapBriefingActive = false;
 const QWEN_REQUEST_WINDOW_SECONDS = QWEN_REQUEST_WINDOW_MS / 1000;
 const DailyEventLimitBody = z.object({
   dailyEventLimit: z.number().int().min(1).max(TAVILY_DAILY_CRAWL_START_LIMIT),
-});
-const BriefingAccessWindowBody = z.object({
-  accessWindowFrom: z.string().nullable(),
-  accessWindowThrough: z.string().nullable(),
 });
 
 type NewsItem = {
@@ -120,13 +109,6 @@ async function getOptionalAiSummaries(input: {
     };
   }
   try {
-    const accessWindow = await getUserBriefingAccessWindow(input.userId);
-    if (!accessWindow.active) {
-      return {
-        aiSummaries: [],
-        aiSummaryNotice: "The Tavily and Qwen access window ended before AI started. The source-only briefing is ready.",
-      };
-    }
     const config = await getAiProviderConfig(input.userId);
     if (!config) {
       return {
@@ -371,10 +353,7 @@ async function searchNews(
   const settled = await Promise.allSettled(
     searchTerms.map(async ({ topic, query }) => ({
       topic,
-      ...(await searchTavily(query, startDate, endDate, apiKey, {
-        signal,
-        includeDomains: getTavilyIncludeDomains(topic),
-      })),
+      ...(await searchTavily(query, startDate, endDate, apiKey, signal)),
     })),
   );
   const fulfilled = settled.flatMap((entry) =>
@@ -537,12 +516,6 @@ router.get("/briefings", async (req, res): Promise<void> => {
   const dailyUsage = userId
     ? await getTavilyDailyUsageStatus(userId)
     : null;
-  const accessWindow = userId
-    ? await getUserBriefingAccessWindow(userId).catch((error) => {
-        req.log.error({ error }, "Could not load the user's Tavily and Qwen access window");
-        return assessAccessWindow(null, null);
-      })
-    : assessAccessWindow(null, null);
   const sapStatus = await getSapConfigurationStatus(
     userId ?? undefined,
   );
@@ -553,10 +526,6 @@ router.get("/briefings", async (req, res): Promise<void> => {
     provider: "tavily",
     configured: keySource !== "missing",
     canStart: Boolean(userId),
-    accessWindowFrom: accessWindow.from,
-    accessWindowThrough: accessWindow.through,
-    accessWindowState: accessWindow.state,
-    accessWindowActive: accessWindow.active,
     keySource,
     startPinConfigured,
     ownerAccountConfigured: Boolean(ownerEmail),
@@ -576,64 +545,6 @@ router.get("/briefings", async (req, res): Promise<void> => {
     sapConfigured: sapStatus.configured,
     sapAvailableAreas: sapStatus.availableAreas,
   }));
-});
-
-router.put("/briefings/access-window", async (req, res): Promise<void> => {
-  const userId = getAuth(req).userId;
-  if (!userId) {
-    res.status(401).json({ error: "Sign in to set the Tavily and Qwen active dates." });
-    return;
-  }
-  const origin = req.get("origin");
-  const host = (req.get("x-forwarded-host") ?? req.get("host") ?? "")
-    .split(",")[0]
-    .trim()
-    .toLowerCase();
-  let sameOrigin = false;
-  try {
-    sameOrigin = Boolean(origin && host && new URL(origin).host.toLowerCase() === host);
-  } catch {
-    sameOrigin = false;
-  }
-  if (!sameOrigin) {
-    res.status(403).json({ error: "Update the active dates from this app." });
-    return;
-  }
-
-  const input = BriefingAccessWindowBody.safeParse(req.body);
-  if (!input.success) {
-    res.status(400).json({ error: "Provide both active dates, or leave both blank to disable access." });
-    return;
-  }
-  const validationMessage = validateAccessWindow(
-    input.data.accessWindowFrom,
-    input.data.accessWindowThrough,
-  );
-  if (validationMessage) {
-    res.status(400).json({ error: validationMessage });
-    return;
-  }
-
-  try {
-    await saveUserBriefingAccessWindow(
-      userId,
-      input.data.accessWindowFrom,
-      input.data.accessWindowThrough,
-    );
-    const accessWindow = assessAccessWindow(
-      input.data.accessWindowFrom,
-      input.data.accessWindowThrough,
-    );
-    res.json({
-      accessWindowFrom: accessWindow.from,
-      accessWindowThrough: accessWindow.through,
-      accessWindowState: accessWindow.state,
-      accessWindowActive: accessWindow.active,
-    });
-  } catch (error) {
-    req.log.error({ error }, "Could not save the user's Tavily and Qwen access window");
-    res.status(503).json({ error: "The active dates could not be saved." });
-  }
 });
 
 router.put("/briefings/daily-event-limit", async (req, res): Promise<void> => {
@@ -965,25 +876,6 @@ router.post("/briefings", async (req, res): Promise<void> => {
     return;
   }
 
-  let accessWindow;
-  try {
-    accessWindow = await getUserBriefingAccessWindow(userId);
-  } catch (error) {
-    req.log.error({ error }, "Could not verify the user's Tavily and Qwen access window");
-    res.status(503).json({ error: "The active dates could not be verified. No search request was sent." });
-    return;
-  }
-  if (!accessWindow.active) {
-    res.status(403).json({
-      error: accessWindow.state === "scheduled"
-        ? `Tavily and Qwen access starts on ${accessWindow.from}. No search request was sent.`
-        : accessWindow.state === "expired"
-          ? `The Tavily and Qwen access window ended on ${accessWindow.through}. Set a new date window to continue.`
-          : "Set and save an active date window of up to one calendar month before starting a Tavily or Qwen briefing.",
-    });
-    return;
-  }
-
   let isProjectKeyOwner = false;
   const ownerEmail = process.env.BRIEFING_OWNER_EMAIL?.trim().toLowerCase();
   if (ownerEmail && process.env.TAVILY_API_KEY?.trim()) {
@@ -1196,7 +1088,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
 
     sapBriefingActive = true;
     const crawlController = new AbortController();
-    let stopReason: "time-limit" | "hard-stop" | "client-disconnect" | "access-window-ended" | null = null;
+    let stopReason: "time-limit" | "hard-stop" | "client-disconnect" | null = null;
     const stopOnClientDisconnect = () => {
       if (res.writableEnded || crawlController.signal.aborted) return;
       stopReason = "client-disconnect";
@@ -1219,12 +1111,6 @@ router.post("/briefings", async (req, res): Promise<void> => {
       stopReason = "hard-stop";
       crawlController.abort(new Error("SAP briefing reached its three-minute hard stop."));
     }, SAP_BRIEFING_HARD_STOP_MS);
-    const accessWindowTimer = accessWindow.expiresAt
-      ? setTimeout(() => {
-          stopReason = "access-window-ended";
-          crawlController.abort(new Error("The Tavily and Qwen access window ended."));
-        }, Math.max(1, accessWindow.expiresAt.getTime() - Date.now()))
-      : undefined;
 
     try {
       const now = new Date();
@@ -1260,12 +1146,6 @@ router.post("/briefings", async (req, res): Promise<void> => {
       if (stopReason) {
         await settleQuota();
         if (stopReason === "client-disconnect" || res.destroyed) return;
-        if (stopReason === "access-window-ended") {
-          res.status(403).json({
-            error: "The Tavily and Qwen access window ended during this briefing, so remaining processing was stopped.",
-          });
-          return;
-        }
         res.status(504).json({
           error: stopReason === "time-limit"
             ? "This combined Tavily and SAP briefing reached its two-minute collection limit and was stopped."
@@ -1323,12 +1203,6 @@ router.post("/briefings", async (req, res): Promise<void> => {
         cancellationSignal: crawlController.signal,
       });
       if (stopReason === "client-disconnect" || res.destroyed) return;
-      if (stopReason === "access-window-ended") {
-        res.status(403).json({
-          error: "The Tavily and Qwen access window ended during this briefing, so remaining processing was stopped.",
-        });
-        return;
-      }
 
       const result = CreateBriefingResponse.parse({
         briefingId,
@@ -1408,7 +1282,6 @@ router.post("/briefings", async (req, res): Promise<void> => {
     } finally {
       clearTimeout(durationTimer);
       clearTimeout(hardStopTimer);
-      if (accessWindowTimer) clearTimeout(accessWindowTimer);
       res.off("close", stopOnClientDisconnect);
       sapBriefingActive = false;
     }
@@ -1492,7 +1365,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
 
   const crawlStartedAt = Date.now();
   const crawlController = new AbortController();
-  let stopReason: "daily-budget" | "hard-stop" | "client-disconnect" | "access-window-ended" | null = null;
+  let stopReason: "daily-budget" | "hard-stop" | "client-disconnect" | null = null;
   const stopOnClientDisconnect = () => {
     if (res.writableEnded || crawlController.signal.aborted) return;
     stopReason = "client-disconnect";
@@ -1514,12 +1387,6 @@ router.post("/briefings", async (req, res): Promise<void> => {
     stopReason = "hard-stop";
     crawlController.abort(new Error("The three-minute Tavily crawl hard stop has been reached."));
   }, TAVILY_CRAWL_HARD_STOP_MS);
-  const accessWindowTimer = accessWindow.expiresAt
-    ? setTimeout(() => {
-        stopReason = "access-window-ended";
-        crawlController.abort(new Error("The Tavily and Qwen access window ended."));
-      }, Math.max(1, accessWindow.expiresAt.getTime() - Date.now()))
-    : undefined;
 
   try {
     const now = new Date();
@@ -1544,12 +1411,6 @@ router.post("/briefings", async (req, res): Promise<void> => {
     if (stopReason) {
       await settleQuota();
       if (stopReason === "client-disconnect" || res.destroyed) return;
-      if (stopReason === "access-window-ended") {
-        res.status(403).json({
-          error: "The Tavily and Qwen access window ended during this briefing, so remaining processing was stopped.",
-        });
-        return;
-      }
       if (stopReason === "daily-budget") {
         res.status(429).json({
           error: "This briefing reached its two-minute Tavily crawl limit and was stopped.",
@@ -1637,12 +1498,6 @@ router.post("/briefings", async (req, res): Promise<void> => {
       });
       return;
     }
-    if (stopReason === "access-window-ended") {
-      res.status(403).json({
-        error: "The Tavily and Qwen access window ended during this briefing, so remaining processing was stopped.",
-      });
-      return;
-    }
     if (stopReason === "client-disconnect" || res.destroyed) return;
     if (error instanceof BriefingSearchFailure) {
       req.log.error(
@@ -1675,7 +1530,6 @@ router.post("/briefings", async (req, res): Promise<void> => {
   } finally {
     clearTimeout(dailyBudgetTimer);
     clearTimeout(hardStopTimer);
-    if (accessWindowTimer) clearTimeout(accessWindowTimer);
     res.off("close", stopOnClientDisconnect);
   }
 });

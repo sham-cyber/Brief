@@ -23,7 +23,6 @@ import {
 } from "../lib/user-ollama-credentials";
 import { verifyBriefingStartPin } from "../lib/briefing-start-pin";
 import { hashBriefingPin } from "../lib/briefing-pin-crypto";
-import { getUserBriefingAccessWindow } from "../lib/user-briefing-access-window";
 
 const router: IRouter = Router();
 const AI_REQUESTS_PER_TAB = 1;
@@ -77,22 +76,13 @@ router.use((req, res, next) => {
 });
 
 export async function getAiGuardrailStatus(userId: string) {
-  const [result, accessWindow] = await Promise.all([
+  const [result, providerStatus] = await Promise.all([
     pool.query<{ is_activated: boolean }>(
       "SELECT is_activated FROM user_ai_guardrails WHERE user_id = $1",
       [userId],
     ),
-    getUserBriefingAccessWindow(userId),
+    getAiProviderStatusForUser(userId),
   ]);
-  const providerStatus = accessWindow.active
-    ? await getAiProviderStatusForUser(userId)
-    : {
-        provider: "ollama" as const,
-        connected: false,
-        model: null,
-        providerEndpoint: null,
-        message: "Qwen is inactive outside this account's saved access dates.",
-      };
   const serverEnabled = aiServerEnabled();
   return {
     provider: providerStatus.provider,
@@ -102,8 +92,7 @@ export async function getAiGuardrailStatus(userId: string) {
     activated:
       result.rows[0]?.is_activated === true &&
       serverEnabled &&
-      providerStatus.connected &&
-      accessWindow.active,
+      providerStatus.connected,
     requestsPerTab: AI_REQUESTS_PER_TAB,
     speechLimitSeconds: AI_SPEECH_LIMIT_SECONDS,
     qwenRequestTimeoutSeconds: QWEN_REQUEST_TIMEOUT_MS / 1000,
@@ -224,17 +213,6 @@ router.post("/ai/guardrails/activate", async (req, res): Promise<void> => {
     res.status(503).json({ error: "AI is disabled by the server switch." });
     return;
   }
-  const accessWindow = await getUserBriefingAccessWindow(userId).catch(() => null);
-  if (!accessWindow?.active) {
-    res.status(403).json({
-      error: accessWindow?.state === "scheduled"
-        ? `AI activation starts on ${accessWindow.from}.`
-        : accessWindow?.state === "expired"
-          ? `The Tavily and Qwen access window ended on ${accessWindow.through}. Set a new active window first.`
-          : "Set and save an active date window of up to one calendar month before activating AI.",
-    });
-    return;
-  }
   const input = passcodeBody.safeParse(req.body);
   if (!input.success) {
     res.status(400).json({ error: "Enter your four-digit account PIN." });
@@ -306,9 +284,6 @@ export async function reserveAiBriefingBatch(
   | { allowed: false; reason: "disabled" | "inactive" | "rate-limit"; retryAfterSeconds?: number }
 > {
   if (!aiServerEnabled()) return { allowed: false, reason: "disabled" };
-  if (!(await getUserBriefingAccessWindow(userId)).active) {
-    return { allowed: false, reason: "inactive" };
-  }
 
   if (topics.length < 1 || topics.length > QWEN_REQUEST_LIMIT) {
     return { allowed: false, reason: "rate-limit", retryAfterSeconds: QWEN_REQUEST_WINDOW_SECONDS };
@@ -394,7 +369,6 @@ export async function reserveAiBriefingRequest(
   tab: z.infer<typeof aiRequestTab>,
 ): Promise<boolean> {
   if (!aiServerEnabled()) return false;
-  if (!(await getUserBriefingAccessWindow(userId)).active) return false;
   if (!await getAiProviderConfig(userId)) return false;
 
   const state = await pool.query(

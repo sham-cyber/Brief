@@ -428,11 +428,7 @@ export const getBriefingSourceStatusResponseMaxSearchesPerBriefingMax = 5;
 export const GetBriefingSourceStatusResponse = zod.object({
   "provider": zod.enum(['tavily']),
   "configured": zod.boolean().describe('Whether this signed-in account has an effective Tavily key.'),
-  "canStart": zod.boolean().describe('Whether the request is authenticated; an active date window, effective Tavily key, and account PIN are reported and enforced separately.'),
-  "accessWindowFrom": zod.coerce.date().nullable(),
-  "accessWindowThrough": zod.coerce.date().nullable(),
-  "accessWindowState": zod.enum(['not-configured', 'scheduled', 'active', 'expired']),
-  "accessWindowActive": zod.boolean().describe('Whether the signed-in user\'s inclusive Tavily and Qwen access window includes today\'s Asia/Kolkata date.'),
+  "canStart": zod.boolean().describe('Whether an authenticated account may start a crawl; an effective Tavily key and that account\'s PIN are still required.'),
   "keySource": zod.enum(['project-owner', 'account', 'missing']).describe('Effective key source for this account; the project key is owner-only.'),
   "startPinConfigured": zod.boolean(),
   "ownerAccountConfigured": zod.boolean(),
@@ -611,22 +607,6 @@ export const setDailyBriefingEventLimitResponseDailyEventLimitMax = 10;
 
 export const SetDailyBriefingEventLimitResponse = zod.object({
   "dailyEventLimit": zod.number().int().min(1).max(setDailyBriefingEventLimitResponseDailyEventLimitMax)
-})
-
-
-/**
- * @summary Set the signed-in user's Tavily and Qwen active date window
- */
-export const SetBriefingAccessWindowBody = zod.object({
-  "accessWindowFrom": zod.coerce.date().nullable().describe('Inclusive first date when this account may use Tavily and Qwen.'),
-  "accessWindowThrough": zod.coerce.date().nullable().describe('Inclusive final date; the window may span at most one calendar month.')
-})
-
-export const SetBriefingAccessWindowResponse = zod.object({
-  "accessWindowFrom": zod.coerce.date().nullable(),
-  "accessWindowThrough": zod.coerce.date().nullable(),
-  "accessWindowState": zod.enum(['not-configured', 'scheduled', 'active', 'expired']),
-  "accessWindowActive": zod.boolean()
 })
 
 

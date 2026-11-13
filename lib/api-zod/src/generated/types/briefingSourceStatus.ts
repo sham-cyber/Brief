@@ -5,7 +5,6 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { BriefingSourceStatusAccessWindowState } from './briefingSourceStatusAccessWindowState';
 import type { BriefingSourceStatusKeySource } from './briefingSourceStatusKeySource';
 import type { BriefingSourceStatusProvider } from './briefingSourceStatusProvider';
 import type { BriefingSourceStatusSearchDepth } from './briefingSourceStatusSearchDepth';
@@ -15,15 +14,8 @@ export interface BriefingSourceStatus {
   provider: BriefingSourceStatusProvider;
   /** Whether this signed-in account has an effective Tavily key. */
   configured: boolean;
-  /** Whether the request is authenticated; an active date window, effective Tavily key, and account PIN are reported and enforced separately. */
+  /** Whether an authenticated account may start a crawl; an effective Tavily key and that account's PIN are still required. */
   canStart: boolean;
-  /** @nullable */
-  accessWindowFrom: Date | null;
-  /** @nullable */
-  accessWindowThrough: Date | null;
-  accessWindowState: BriefingSourceStatusAccessWindowState;
-  /** Whether the signed-in user's inclusive Tavily and Qwen access window includes today's Asia/Kolkata date. */
-  accessWindowActive: boolean;
   /** Effective key source for this account; the project key is owner-only. */
   keySource: BriefingSourceStatusKeySource;
   startPinConfigured: boolean;
