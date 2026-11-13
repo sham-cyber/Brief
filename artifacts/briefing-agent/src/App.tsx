@@ -2607,7 +2607,7 @@ function Home() {
                 >
                   <label htmlFor="landing-question" className="mb-2 block text-base font-semibold text-[#35364a]">Ask an open question</label>
                   <div className="flex flex-col gap-3 sm:flex-row">
-                    <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row">
+                    <div className="flex min-w-0 flex-1 flex-row gap-2">
                       <input
                         id="landing-question"
                         type="text"
@@ -2626,7 +2626,7 @@ function Home() {
                         type="button"
                         onClick={handleVoiceSearch}
                         aria-pressed={voiceListening}
-                        className={`inline-flex h-12 w-full shrink-0 items-center justify-center gap-2 rounded-lg border-2 px-4 text-base font-bold transition focus:outline-none focus:ring-2 focus:ring-[#655487] focus:ring-offset-2 sm:w-auto ${
+                        className={`inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-lg border-2 px-4 text-base font-bold transition focus:outline-none focus:ring-2 focus:ring-[#655487] focus:ring-offset-2 ${
                           voiceListening
                             ? 'border-[#a9433b] bg-[#fbefed] text-[#8f4039]'
                             : 'border-[#655487] bg-[#f1edfa] text-[#443568] hover:bg-[#e6dff5]'
@@ -3043,7 +3043,7 @@ function Home() {
                 <label htmlFor="briefing-question" className="text-base font-semibold text-[#35364a]">Open question (optional)</label>
                 <span className="text-sm text-[#625d69]">{question.length} / 500</span>
               </div>
-              <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="flex flex-row gap-2">
                 <input
                   id="briefing-question"
                   type="text"
@@ -3058,7 +3058,7 @@ function Home() {
                   type="button"
                   onClick={handleVoiceSearch}
                   aria-pressed={voiceListening}
-                  className={`inline-flex h-12 w-full shrink-0 items-center justify-center gap-2 rounded-lg border-2 px-4 text-base font-bold transition focus:outline-none focus:ring-2 focus:ring-[#655487] focus:ring-offset-2 sm:w-auto ${
+                  className={`inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-lg border-2 px-4 text-base font-bold transition focus:outline-none focus:ring-2 focus:ring-[#655487] focus:ring-offset-2 ${
                     voiceListening
                       ? 'border-[#a9433b] bg-[#fbefed] text-[#8f4039]'
                       : 'border-[#655487] bg-[#f1edfa] text-[#443568] hover:bg-[#e6dff5]'
