@@ -350,6 +350,46 @@ test("Bifrost failure leaves the source-only briefing available without Ollama f
   assert.deepEqual(result.failedCategories, ["news"]);
 });
 
+test("stopping AI aborts an active Bifrost request for that user", async () => {
+  let markStarted;
+  const started = new Promise((resolve) => {
+    markStarted = resolve;
+  });
+  let requestSignal;
+
+  const generation = generateAiBriefingSummaries({
+    userId: "user-bifrost-cancel",
+    briefingId: "brief-bifrost-cancel",
+    subject: "Example Company",
+    topics: ["news"],
+    evidenceByTopic: { news: [source] },
+    config: bifrostConfig,
+    fetcher: async (_url, options) => {
+      requestSignal = options.signal;
+      markStarted();
+      return new Promise((_resolve, reject) => {
+        const rejectOnAbort = () => reject(requestSignal.reason);
+        if (requestSignal.aborted) {
+          rejectOnAbort();
+          return;
+        }
+        requestSignal.addEventListener("abort", rejectOnAbort, { once: true });
+      });
+    },
+    reserveRequest: async () => true,
+  });
+
+  await started;
+  assert.equal(cancelActiveAiBriefingSummaries("user-bifrost-cancel"), 1);
+
+  const result = await generation;
+  assert.equal(requestSignal.aborted, true);
+  assert.deepEqual(result.summaries, []);
+  assert.deepEqual(result.failedCategories, []);
+  assert.equal(result.cancelled, true);
+  assert.equal(result.cancellationReason, "user");
+});
+
 test("stopping AI aborts active Ollama requests for that user", async () => {
   let markStarted;
   const started = new Promise((resolve) => {
