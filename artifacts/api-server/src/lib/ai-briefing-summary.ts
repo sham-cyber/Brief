@@ -1,3 +1,9 @@
+import { randomUUID } from "node:crypto";
+import {
+  emitFraudGuardEvent as defaultFraudGuardEmitter,
+  type FraudGuardEventEmitter,
+  type FraudGuardEventInput,
+} from "./fraudguard-events.ts";
 import type {
   AiProviderConfig,
   BifrostProviderConfig,
@@ -41,6 +47,13 @@ const QWEN_SUMMARY_RESPONSE_FORMAT = {
   additionalProperties: false,
 } as const;
 type AiSummaryStopReason = "user" | "client-disconnect" | "backup-timeout" | null;
+export class AiGuardrailValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AiGuardrailValidationError";
+  }
+}
+
 type ActiveSummaryRun = {
   controller: AbortController;
   stopReason: AiSummaryStopReason;
@@ -138,10 +151,17 @@ function parseModelJson(content: string | null): {
   summary?: unknown;
   sourceIds?: unknown;
 } {
-  if (!content) throw new Error("The AI provider returned an empty response.");
-  const parsed: unknown = JSON.parse(content);
+  if (!content) {
+    throw new AiGuardrailValidationError("The AI provider returned an empty response.");
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    throw new AiGuardrailValidationError("The AI provider returned invalid summary JSON.");
+  }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("The AI provider returned an invalid summary.");
+    throw new AiGuardrailValidationError("The AI provider returned an invalid summary.");
   }
   return parsed as { summary?: unknown; sourceIds?: unknown };
 }
@@ -164,7 +184,9 @@ export function validateAiTopicResponse(
     : [];
 
   if (!summary || !sourceIds.length) {
-    throw new Error("The AI summary did not include a supported citation.");
+    throw new AiGuardrailValidationError(
+      "The AI summary did not include a supported citation.",
+    );
   }
   return { category: topic, summary, sourceIds };
 }
@@ -326,6 +348,7 @@ export async function generateAiBriefingSummaries(input: {
   fetcher?: typeof fetch;
   backupTimeoutMs?: number;
   cancellationSignal?: AbortSignal;
+  fraudGuardEmitter?: FraudGuardEventEmitter;
   reserveRequest: (
     userId: string,
     briefingId: string,
@@ -338,6 +361,7 @@ export async function generateAiBriefingSummaries(input: {
   cancellationReason: AiSummaryStopReason;
 }> {
   const aiConfig = input.config;
+  const emitFraudGuard = input.fraudGuardEmitter ?? defaultFraudGuardEmitter;
   if (!aiConfig) {
     return {
       summaries: [],
@@ -401,17 +425,98 @@ export async function generateAiBriefingSummaries(input: {
           publisher: item.publisher.slice(0, 120),
           snippet: item.snippet.slice(0, 900),
         }));
-        const summary = await requestAiSummary(
-          aiConfig,
-          topic,
-          input.subject,
-          boundedEvidence,
-          input.fetcher,
-          input.question,
-          run.controller.signal,
-          maxWordsPerTopic,
-        );
-        return { topic, summary, failed: false };
+        const attemptId = randomUUID();
+        const eventBase = {
+          userId: input.userId,
+          attemptId,
+          operation: "model_summary" as const,
+          provider: aiConfig.provider,
+          model: aiConfig.model,
+        };
+        const emitSafe = (event: FraudGuardEventInput) => {
+          try {
+            emitFraudGuard(event);
+          } catch {
+            // Optional telemetry must not affect summary delivery.
+          }
+        };
+        const startedAt = Date.now();
+        emitSafe({
+          ...eventBase,
+          eventType: "start",
+          status: "started",
+        });
+        try {
+          const summary = await requestAiSummary(
+            aiConfig,
+            topic,
+            input.subject,
+            boundedEvidence,
+            input.fetcher,
+            input.question,
+            run.controller.signal,
+            maxWordsPerTopic,
+          );
+          const durationMs = Date.now() - startedAt;
+          emitSafe({
+            ...eventBase,
+            eventType: "completion",
+            status: "completed",
+            durationMs,
+          });
+          emitSafe({
+            ...eventBase,
+            eventType: "citation_guardrail",
+            status: "passed",
+            validationOutcome: "passed",
+          });
+          return { topic, summary, failed: false };
+        } catch (error) {
+          const durationMs = Date.now() - startedAt;
+          if (error instanceof AiGuardrailValidationError) {
+            emitSafe({
+              ...eventBase,
+              eventType: "completion",
+              status: "completed",
+              durationMs,
+            });
+            emitSafe({
+              ...eventBase,
+              eventType: "citation_guardrail",
+              status: "failed",
+              validationOutcome: "failed",
+            });
+            return { topic, summary: null, failed: true };
+          }
+          if (run.controller.signal.aborted) {
+            emitSafe({
+              ...eventBase,
+              eventType: "cancellation",
+              status: "cancelled",
+              durationMs,
+            });
+            emitSafe({
+              ...eventBase,
+              eventType: "citation_guardrail",
+              status: "not_run",
+              validationOutcome: "not_run",
+            });
+            return { topic, summary: null, failed: false };
+          }
+          emitSafe({
+            ...eventBase,
+            eventType: "failure",
+            status: "failed",
+            durationMs,
+          });
+          emitSafe({
+            ...eventBase,
+            eventType: "citation_guardrail",
+            status: "not_run",
+            validationOutcome: "not_run",
+          });
+          return { topic, summary: null, failed: true };
+        }
       } catch {
         return { topic, summary: null, failed: !run.controller.signal.aborted };
       }

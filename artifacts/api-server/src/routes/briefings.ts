@@ -323,6 +323,7 @@ async function searchNews(
   publicRoleTitle: string | null = null,
   companyName: string | null = null,
   signal?: AbortSignal,
+  fraudGuardUserId?: string,
 ): Promise<SearchNewsResult> {
   const startDate = start.toISOString().slice(0, 10);
   const endDate = end.toISOString().slice(0, 10);
@@ -361,7 +362,15 @@ async function searchNews(
   const settled = await Promise.allSettled(
     searchTerms.map(async ({ topic, query }) => ({
       topic,
-      ...(await searchTavily(query, startDate, endDate, apiKey, signal)),
+      ...(await searchTavily(
+        query,
+        startDate,
+        endDate,
+        apiKey,
+        signal,
+        {},
+        fraudGuardUserId ? { userId: fraudGuardUserId } : undefined,
+      )),
     })),
   );
   const fulfilled = settled.flatMap((entry) =>
@@ -1150,6 +1159,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
           publicRoleTitle,
           companyName,
           crawlController.signal,
+          userId,
         ),
         searchSapS4Hana({
           userId,
@@ -1425,6 +1435,7 @@ router.post("/briefings", async (req, res): Promise<void> => {
       publicRoleTitle,
       companyName,
       crawlController.signal,
+      userId,
     );
     if (stopReason) {
       await settleQuota();
@@ -1728,6 +1739,7 @@ router.post("/customer-search", async (req, res): Promise<void> => {
         excludeDomains: CUSTOMER_SEARCH_EXCLUDED_DOMAINS,
         includeImages: false,
       },
+      { userId },
     );
 
     if (stopReason) {

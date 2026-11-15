@@ -245,6 +245,53 @@ test("configured provider dispatch sends Bifrost requests through the gateway", 
   assert.equal(requestedUrl, "https://gateway.example/v1/chat/completions");
 });
 
+for (const config of [ollamaConfig, bifrostConfig]) {
+  test(`${config.provider} summaries emit metadata lifecycle and citation events`, async () => {
+    const events = [];
+    const result = await generateAiBriefingSummaries({
+      userId: "private-account-id",
+      briefingId: "private-brief-id",
+      subject: "Example Company",
+      topics: ["news"],
+      evidenceByTopic: { news: [source] },
+      config,
+      fetcher: async () => config.provider === "ollama"
+        ? ollamaResponse(JSON.stringify({
+            summary: "The company reported new information.",
+            sourceIds: ["source-1"],
+          }))
+        : new Response(JSON.stringify({
+            choices: [{
+              message: {
+                content: JSON.stringify({
+                  summary: "The company reported new information.",
+                  sourceIds: ["source-1"],
+                }),
+              },
+            }],
+          }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+      reserveRequest: async () => true,
+      fraudGuardEmitter: (event) => events.push(event),
+    });
+
+    assert.equal(result.summaries.length, 1);
+    assert.deepEqual(events.map((event) => [event.eventType, event.status]), [
+      ["start", "started"],
+      ["completion", "completed"],
+      ["citation_guardrail", "passed"],
+    ]);
+    assert.ok(events.every((event) => event.provider === config.provider));
+    assert.ok(events.every((event) => event.model === config.model));
+    assert.ok(events.every((event) => event.attemptId === events[0].attemptId));
+    assert.equal(events[1].durationMs >= 0, true);
+    assert.equal("subject" in events[0], false);
+    assert.equal("prompt" in events[0], false);
+  });
+}
+
 test("Ollama summaries reject citations outside supplied evidence", async () => {
   await assert.rejects(
     () => requestOllamaSummary(
@@ -308,6 +355,7 @@ test("Ollama generate requests include Cloudflare Access service-token headers",
 
 test("Ollama failure leaves the source-only briefing available", async () => {
   let reservations = 0;
+  const events = [];
   const result = await generateAiBriefingSummaries({
     userId: "user-1",
     briefingId: "brief-1",
@@ -318,6 +366,7 @@ test("Ollama failure leaves the source-only briefing available", async () => {
     fetcher: async () => {
       throw new Error("Ollama is unavailable");
     },
+    fraudGuardEmitter: (event) => events.push(event),
     reserveRequest: async () => {
       reservations += 1;
       return true;
@@ -327,6 +376,13 @@ test("Ollama failure leaves the source-only briefing available", async () => {
   assert.equal(reservations, 1);
   assert.deepEqual(result.summaries, []);
   assert.deepEqual(result.failedCategories, ["news"]);
+  assert.deepEqual(events.map((event) => event.eventType), [
+    "start",
+    "failure",
+    "citation_guardrail",
+  ]);
+  assert.equal(events[1].status, "failed");
+  assert.equal(events[2].validationOutcome, "not_run");
 });
 
 test("Bifrost failure leaves the source-only briefing available without Ollama fallback", async () => {
@@ -396,6 +452,7 @@ test("stopping AI aborts active Ollama requests for that user", async () => {
     markStarted = resolve;
   });
   let requestSignal;
+  const events = [];
 
   const generation = generateAiBriefingSummaries({
     userId: "user-1",
@@ -404,6 +461,7 @@ test("stopping AI aborts active Ollama requests for that user", async () => {
     topics: ["news"],
     evidenceByTopic: { news: [source] },
     config: ollamaConfig,
+    fraudGuardEmitter: (event) => events.push(event),
     fetcher: async (_url, options) => {
       requestSignal = options.signal;
       markStarted();
@@ -429,6 +487,13 @@ test("stopping AI aborts active Ollama requests for that user", async () => {
   assert.deepEqual(result.failedCategories, []);
   assert.equal(result.cancelled, true);
   assert.equal(result.cancellationReason, "user");
+  assert.deepEqual(events.map((event) => event.eventType), [
+    "start",
+    "cancellation",
+    "citation_guardrail",
+  ]);
+  assert.equal(events[1].status, "cancelled");
+  assert.equal(events[2].validationOutcome, "not_run");
   assert.equal(cancelActiveAiBriefingSummaries("user-1"), 0);
 });
 
