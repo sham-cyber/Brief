@@ -51,7 +51,7 @@ export const DeleteTavilyCredentialResponse = zod.object({
  * @summary Get AI activation and cost-guardrail status for the signed-in user
  */
 export const GetAiGuardrailsResponse = zod.object({
-  "provider": zod.enum(['ollama']),
+  "provider": zod.enum(['ollama', 'bifrost']),
   "aiProviderMessage": zod.string().nullable(),
   "serverEnabled": zod.boolean(),
   "passcodeConfigured": zod.boolean(),

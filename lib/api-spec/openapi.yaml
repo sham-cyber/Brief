@@ -1215,7 +1215,7 @@ components:
       properties:
         provider:
           type: string
-          enum: [ollama]
+          enum: [ollama, bifrost]
         aiProviderMessage:
           type: ["string", "null"]
         serverEnabled:

@@ -11,4 +11,5 @@ export type AiGuardrailStatusProvider = typeof AiGuardrailStatusProvider[keyof t
 
 export const AiGuardrailStatusProvider = {
   ollama: 'ollama',
+  bifrost: 'bifrost',
 } as const;

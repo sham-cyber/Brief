@@ -450,6 +450,7 @@ export type AiGuardrailStatusProvider = typeof AiGuardrailStatusProvider[keyof t
 
 export const AiGuardrailStatusProvider = {
   ollama: 'ollama',
+  bifrost: 'bifrost',
 } as const;
 
 export type AiGuardrailStatusRequestsPerTab = typeof AiGuardrailStatusRequestsPerTab[keyof typeof AiGuardrailStatusRequestsPerTab];

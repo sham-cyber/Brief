@@ -8,6 +8,10 @@ const environmentKeys = [
   "OLLAMA_AUTH_TOKEN",
   "OLLAMA_CLOUDFLARE_ACCESS_CLIENT_ID",
   "OLLAMA_CLOUDFLARE_ACCESS_CLIENT_SECRET",
+  "BRIEF_AI_PROVIDER",
+  "BIFROST_BASE_URL",
+  "BIFROST_MODEL",
+  "BIFROST_VIRTUAL_KEY",
   "NODE_ENV",
 ];
 
@@ -238,5 +242,77 @@ test("a local clone may use its loopback Ollama server in production mode", asyn
 
     assert.equal(status.connected, true);
     assert.equal(status.providerEndpoint, "http://127.0.0.1:11434");
+  });
+});
+
+test("Bifrost readiness checks the configured model with the virtual-key header", async () => {
+  await withEnvironment({
+    BRIEF_AI_PROVIDER: "bifrost",
+    BIFROST_BASE_URL: "https://gateway.example",
+    BIFROST_MODEL: "ollama/qwen3:0.6b",
+    BIFROST_VIRTUAL_KEY: "bfv_test_virtual_key",
+    NODE_ENV: "production",
+  }, async () => {
+    let requestedUrl = "";
+    let requestedHeaders;
+    const status = await getAiProviderStatus(async (url, options) => {
+      requestedUrl = String(url);
+      requestedHeaders = options.headers;
+      return new Response(JSON.stringify({
+        data: [{ id: "ollama/qwen3:0.6b" }],
+      }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+
+    assert.equal(requestedUrl, "https://gateway.example/v1/models");
+    assert.equal(requestedHeaders["x-bf-vk"], "bfv_test_virtual_key");
+    assert.equal(requestedHeaders.authorization, undefined);
+    assert.equal(status.provider, "bifrost");
+    assert.equal(status.connected, true);
+    assert.equal(status.model, "ollama/qwen3:0.6b");
+    assert.equal(status.providerEndpoint, "https://gateway.example");
+  });
+});
+
+test("Bifrost mode fails closed when its virtual key is missing", async () => {
+  await withEnvironment({
+    BRIEF_AI_PROVIDER: "bifrost",
+    BIFROST_BASE_URL: "https://gateway.example",
+    BIFROST_MODEL: "ollama/qwen3:0.6b",
+    NODE_ENV: "production",
+  }, async () => {
+    let requests = 0;
+    const status = await getAiProviderStatus(async () => {
+      requests += 1;
+      throw new Error("An incomplete Bifrost configuration must not be called");
+    });
+
+    assert.equal(status.provider, "bifrost");
+    assert.equal(status.connected, false);
+    assert.equal(status.providerEndpoint, null);
+    assert.equal(requests, 0);
+    assert.match(status.message, /BIFROST_VIRTUAL_KEY/);
+  });
+});
+
+test("remote Bifrost gateway must use HTTPS in production", async () => {
+  await withEnvironment({
+    BRIEF_AI_PROVIDER: "bifrost",
+    BIFROST_BASE_URL: "http://gateway.example",
+    BIFROST_MODEL: "ollama/qwen3:0.6b",
+    BIFROST_VIRTUAL_KEY: "bfv_test_virtual_key",
+    NODE_ENV: "production",
+  }, async () => {
+    let requests = 0;
+    const status = await getAiProviderStatus(async () => {
+      requests += 1;
+      throw new Error("An insecure gateway must not be called");
+    });
+
+    assert.equal(status.connected, false);
+    assert.equal(status.providerEndpoint, null);
+    assert.equal(requests, 0);
   });
 });

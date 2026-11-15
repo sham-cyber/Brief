@@ -1,5 +1,12 @@
-import type { AiProviderConfig, OllamaProviderConfig } from "./ai-provider";
-import { getOllamaRequestHeaders } from "./ai-provider.ts";
+import type {
+  AiProviderConfig,
+  BifrostProviderConfig,
+  OllamaProviderConfig,
+} from "./ai-provider";
+import {
+  getBifrostRequestHeaders,
+  getOllamaRequestHeaders,
+} from "./ai-provider.ts";
 
 export type AiBriefingTopic = "news" | "hire" | "launch" | "financial" | "risk";
 
@@ -219,6 +226,95 @@ export async function requestOllamaSummary(
   );
 }
 
+export async function requestBifrostSummary(
+  config: BifrostProviderConfig,
+  topic: AiBriefingTopic,
+  subject: string,
+  evidence: AiBriefingEvidence[],
+  fetcher: typeof fetch = fetch,
+  question?: string,
+  cancellationSignal?: AbortSignal,
+  maxWords = QWEN_BRIEF_WORD_LIMIT,
+): Promise<AiBriefingSummary> {
+  const endpoint = new URL("v1/chat/completions", `${config.baseUrl}/`).toString();
+  const response = await fetcher(endpoint, {
+    method: "POST",
+    headers: getBifrostRequestHeaders(config),
+    body: JSON.stringify({
+      model: config.model,
+      messages: [{
+        role: "user",
+        content: summaryPrompt(topic, subject, evidence, question, maxWords),
+      }],
+      stream: false,
+      temperature: 0,
+      max_tokens: 280,
+      response_format: { type: "json_object" },
+    }),
+    signal: cancellationSignal
+      ? AbortSignal.any([AbortSignal.timeout(QWEN_REQUEST_TIMEOUT_MS), cancellationSignal])
+      : AbortSignal.timeout(QWEN_REQUEST_TIMEOUT_MS),
+  });
+  if (!response.ok) throw new Error("The Bifrost summary request failed.");
+
+  const payload: unknown = await response.json();
+  const choices =
+    payload && typeof payload === "object" && "choices" in payload &&
+    Array.isArray(payload.choices)
+      ? payload.choices
+      : [];
+  const firstChoice = choices[0];
+  const message =
+    firstChoice && typeof firstChoice === "object" && "message" in firstChoice
+      ? firstChoice.message
+      : null;
+  const content =
+    message && typeof message === "object" && "content" in message &&
+    typeof message.content === "string"
+      ? message.content
+      : null;
+  return validateAiTopicResponse(
+    content,
+    topic,
+    evidence.map((item) => item.id),
+    maxWords,
+  );
+}
+
+export async function requestAiSummary(
+  config: AiProviderConfig,
+  topic: AiBriefingTopic,
+  subject: string,
+  evidence: AiBriefingEvidence[],
+  fetcher: typeof fetch = fetch,
+  question?: string,
+  cancellationSignal?: AbortSignal,
+  maxWords = QWEN_BRIEF_WORD_LIMIT,
+): Promise<AiBriefingSummary> {
+  if (config.provider === "bifrost") {
+    return requestBifrostSummary(
+      config,
+      topic,
+      subject,
+      evidence,
+      fetcher,
+      question,
+      cancellationSignal,
+      maxWords,
+    );
+  }
+  return requestOllamaSummary(
+    config,
+    topic,
+    subject,
+    evidence,
+    fetcher,
+    question,
+    cancellationSignal,
+    maxWords,
+  );
+}
+
 export async function generateAiBriefingSummaries(input: {
   userId: string;
   briefingId: string;
@@ -305,7 +401,7 @@ export async function generateAiBriefingSummaries(input: {
           publisher: item.publisher.slice(0, 120),
           snippet: item.snippet.slice(0, 900),
         }));
-        const summary = await requestOllamaSummary(
+        const summary = await requestAiSummary(
           aiConfig,
           topic,
           input.subject,

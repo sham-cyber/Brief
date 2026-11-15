@@ -128,7 +128,7 @@ type SpeechRecognitionLike = {
 type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
 
 type AiGuardrailsStatus = {
-  provider: 'ollama';
+  provider: 'ollama' | 'bifrost';
   aiProviderMessage: string | null;
   serverEnabled: boolean;
   passcodeConfigured: boolean;
@@ -832,7 +832,7 @@ function AiGuardrailPanel({
       setPasscode('');
       setMessage(
         result.cancelledActiveSummaries
-          ? 'AI access stopped; active Qwen summaries were cancelled. Ollama itself remains running.'
+          ? `AI access stopped; active Qwen summaries were cancelled. ${status?.provider === 'bifrost' ? 'Bifrost itself remains running.' : 'Ollama itself remains running.'}`
           : 'AI access stopped; no Qwen summary was running.',
       );
       await refreshStatus();
@@ -854,7 +854,7 @@ function AiGuardrailPanel({
         AI is optional; public crawling and the source-based brief work with AI off. When enabled, the app makes at most {status?.requestsPerTab ?? AI_REQUESTS_PER_TAB} summary request per selected topic and keeps the combined speech text under a {Math.floor((status?.speechLimitSeconds ?? AI_SPEECH_LIMIT_SECONDS) / 60)}-minute limit.
       </p>
       <p className="mt-2 leading-relaxed text-muted-foreground">
-        Qwen starts only after Tavily finishes and source checks pass. It skips topics without a stable, linked source. Each signed-in account is limited to {status?.qwenRequestLimit ?? 5} topic requests per {Math.round((status?.qwenRequestWindowSeconds ?? 300) / 60)} minutes; all summaries for one brief share a {status?.qwenBriefWordLimit ?? 400}-word maximum. Each request stops after {status?.qwenRequestTimeoutSeconds ?? 26} seconds, with a {status?.qwenBatchBackupSeconds ?? 120}-second backup stop. Ollama unloads the local model after {status?.qwenModelIdleUnloadSeconds ?? 26} seconds idle.
+        Qwen starts only after Tavily finishes and source checks pass. It skips topics without a stable, linked source. Each signed-in account is limited to {status?.qwenRequestLimit ?? 5} topic requests per {Math.round((status?.qwenRequestWindowSeconds ?? 300) / 60)} minutes; all summaries for one brief share a {status?.qwenBriefWordLimit ?? 400}-word maximum. Each request stops after {status?.qwenRequestTimeoutSeconds ?? 26} seconds, with a {status?.qwenBatchBackupSeconds ?? 120}-second backup stop. {status?.provider === 'bifrost' ? 'The summary request is sent through the configured Bifrost gateway; Tavily remains separate.' : `Ollama unloads the local model after ${status?.qwenModelIdleUnloadSeconds ?? 26} seconds idle.`}
       </p>
       {status ? (
         <>
@@ -862,13 +862,17 @@ function AiGuardrailPanel({
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="font-semibold" role="status" data-testid="ollama-provider-status">
                 {status.aiProviderConnected
-                  ? `Ollama connected · ${status.model ?? 'model ready'}`
-                  : 'Ollama is offline or the model is missing'}
+                  ? `${status.provider === 'bifrost' ? 'Bifrost connected' : 'Ollama connected'} · ${status.model ?? 'model ready'}`
+                  : status.provider === 'bifrost'
+                    ? 'Bifrost is offline or the model is unavailable'
+                    : 'Ollama is offline or the model is missing'}
               </p>
               <span className="rounded-full border border-current/20 bg-white/70 px-2.5 py-1 text-xs font-bold uppercase tracking-wide">
-                Local model
+                {status.provider === 'bifrost' ? 'Bifrost gateway · FraudGuard' : 'Local model'}
               </span>
             </div>
+            {status.provider === 'ollama' ? (
+              <>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <label className="grid gap-1 text-xs font-semibold uppercase tracking-wide">
                 Ollama endpoint
@@ -918,6 +922,23 @@ function AiGuardrailPanel({
               <p className="mt-2 font-medium" role="status">{status.aiProviderMessage}</p>
             )}
             <p className="mt-1">Only the subject, selected topic, and accepted public-source titles and snippets are sent to Ollama. SAP and private records are not sent.</p>
+              </>
+            ) : (
+              <div className="mt-3 space-y-2">
+                <p>
+                  This Brief deployment sends optional Qwen summaries through its configured Bifrost gateway. Tavily search stays separate. The gateway uses one server-side virtual key for Brief, so FraudGuard observes application-level behavior rather than separate member profiles.
+                </p>
+                <p>
+                  The subject, open question, selected topic, and accepted public-source titles and snippets are sent through Bifrost to the selected model. SAP records and private sources are not sent. Bifrost's own logging follows its operator settings.
+                </p>
+                {status.providerEndpoint && (
+                  <p className="break-all">Gateway: <code>{status.providerEndpoint}</code></p>
+                )}
+                {!status.aiProviderConnected && status.aiProviderMessage && (
+                  <p className="font-medium" role="status">{status.aiProviderMessage}</p>
+                )}
+              </div>
+            )}
           </div>
           <p className="mt-1 text-sm leading-relaxed text-muted-foreground">AI may misstate evidence; check each linked source before relying on a summary.</p>
           <form className="mt-3 grid gap-2 sm:grid-cols-[1fr_1fr_auto]" onSubmit={savePasscode}>
@@ -951,9 +972,9 @@ function AiGuardrailPanel({
             <button type="button" onClick={() => void activate()} disabled={busy || !status.serverEnabled || !status.passcodeConfigured || !status.aiProviderConnected || !passcode} className="h-11 rounded-lg border border-[#d7b3ae] bg-[#fbefed] px-4 text-base font-semibold text-[#98453e] disabled:cursor-not-allowed disabled:opacity-50">Activate AI</button>
             <button type="button" onClick={() => void deactivate()} disabled={busy || !status.activated} className="h-11 rounded-lg border border-[#d8d1e5] bg-white px-4 text-base font-semibold text-[#443a66] disabled:cursor-not-allowed disabled:opacity-50">Stop AI</button>
           </div>
-          <p className="mt-2 text-sm text-muted-foreground">Stop AI blocks future summaries and cancels any Qwen summaries already running for this account. The Ollama service remains running.</p>
+          <p className="mt-2 text-sm text-muted-foreground">Stop AI blocks future summaries and cancels any Qwen summaries already running for this account. {status.provider === 'bifrost' ? 'The Bifrost service remains running.' : 'The Ollama service remains running.'}</p>
           {!status.serverEnabled && <p className="mt-2 text-[#98453e]">The server switch is off. No AI request can run.</p>}
-          {!status.aiProviderConnected && <p className="mt-1 text-muted-foreground">Start Ollama on this computer and install the selected model before activating AI. Your factual, source-linked brief still works without it.</p>}
+          {!status.aiProviderConnected && <p className="mt-1 text-muted-foreground">{status.provider === 'bifrost' ? 'Make the configured Bifrost gateway reachable and ensure this model is available to its virtual key before activating AI.' : 'Start Ollama on this computer and install the selected model before activating AI.'} Your factual, source-linked brief still works without it.</p>}
         </>
       ) : (
         <p className="mt-2 text-[#98453e]" role="status">{message || 'AI access settings are unavailable.'}</p>
@@ -3156,11 +3177,11 @@ function Home() {
                 className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[9px] font-bold uppercase tracking-wide sm:text-[10px] ${aiStatus.aiProviderConnected ? 'border-[#c7dfd2] bg-[#edf6f0] text-[#32634a]' : 'border-[#e5c5c0] bg-[#fbefed] text-[#7f413b]'}`}
                 role="status"
                 aria-label={`AI provider status: ${aiStatus.provider}, ${aiStatus.aiProviderConnected ? 'connected' : 'not connected'}`}
-                title="Local Ollama model configured for this app"
+                title={`${aiStatus.provider === 'bifrost' ? 'Bifrost gateway' : 'Ollama model'} configured for this app`}
                 data-testid="ai-provider-badge"
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
-                {`${aiStatus.aiProviderConnected ? 'Ollama' : 'Ollama offline'}${aiStatus.model ? ` · ${aiStatus.model}` : ''}`}
+                {`${aiStatus.aiProviderConnected ? (aiStatus.provider === 'bifrost' ? 'Bifrost' : 'Ollama') : (aiStatus.provider === 'bifrost' ? 'Bifrost offline' : 'Ollama offline')}${aiStatus.model ? ` · ${aiStatus.model}` : ''}`}
               </span>
             )}
             {isSignedIn && (
@@ -3225,7 +3246,7 @@ function Home() {
               className="rounded-lg border px-3 py-2 text-sm font-semibold no-underline"
               data-testid="link-qwen-settings"
             >
-              Qwen / Ollama
+              Qwen / AI provider
             </a>
             <button
               type="button"
@@ -3260,7 +3281,7 @@ function Home() {
               <div className="mb-5 rounded-2xl border border-[#d8d2df] bg-[#f4f1f8] px-5 py-6 sm:px-8 sm:py-8">
                 <p className="font-mono text-xs uppercase tracking-[.14em] text-[#655487]">Briefing Agent · source-first research</p>
                 <h1 id="create-heading" className="mt-2 max-w-3xl font-serif text-4xl leading-tight tracking-[-.025em] text-[#282d43] sm:text-5xl">Your AI Briefing Assistant</h1>
-                <p className="mt-4 max-w-2xl text-lg leading-relaxed text-[#514e5c]">Tavily Search finds cited public reports within the research dates you choose. Optional Qwen summaries use each account’s saved Ollama connection when enabled.</p>
+                <p className="mt-4 max-w-2xl text-lg leading-relaxed text-[#514e5c]">Tavily Search finds cited public reports within the research dates you choose. Optional Qwen summaries use each account’s Ollama connection or the configured Bifrost gateway when enabled.</p>
                 <form
                   className="mt-6 max-w-4xl rounded-xl border border-[#d8d2df] bg-[#fffefa] p-4 sm:p-5"
                   onSubmit={(event) => {
@@ -3796,7 +3817,7 @@ function Home() {
                     {customerSearchSelected && (
                       <div className="mt-3 rounded-xl border border-[#d5e4e2] bg-[#f7fbfa] p-4" data-testid="customer-search-fields">
                         <p className="mb-4 text-sm leading-relaxed text-[#355c59]">
-                          Enter every required field before the PIN prompt opens. This uses one Tavily request only; the regular topic choices are unchanged, and Ollama is not used.
+                          Enter every required field before the PIN prompt opens. This uses one Tavily request only; the regular topic choices are unchanged, and no AI summary runs.
                         </p>
                         <div className="grid gap-3 sm:grid-cols-3">
                           <label className="block text-sm font-semibold text-[#35364a]">
@@ -3866,7 +3887,7 @@ function Home() {
                 data-testid="input-briefing-question"
               />
               <p className="mt-1.5 text-sm leading-relaxed text-[#625d69]">
-                This question guides the selected Tavily searches without adding requests. If you opt into AI, it is also sent with public evidence to your configured Ollama server.
+                This question guides the selected Tavily searches without adding requests. If you opt into AI, it is also sent with public evidence to your configured AI provider.
               </p>
 
               <label htmlFor="meetingAt" className="mb-1.5 mt-5 block text-base font-semibold text-[#35364a]">Meeting time (optional)</label>
@@ -3944,7 +3965,7 @@ function Home() {
                 <span>
                   <span className="block text-base font-semibold text-[#35364a]">Add AI summaries for selected topics</span>
             <span className="mt-1 block text-sm leading-relaxed text-[#625d69]">
-                    Off by default. When enabled, one request is allowed per selected topic. The subject, open question, and accepted public-source titles and snippets are sent only to the configured Ollama server; SAP and private records remain separate.
+                    Off by default. When enabled, one request is allowed per selected topic. The subject, open question, and accepted public-source titles and snippets are sent to the configured AI provider; SAP and private records remain separate.
                     {!canStart
                       ? ' Add an active Tavily key first; AI can only summarize results Tavily returns.'
                       : !aiStatus?.activated
@@ -3984,7 +4005,7 @@ function Home() {
                 {sourceMode === 'public' && (
                   <p>
                     {customerSearchSelected
-                      ? 'Customer Search makes one current public-web Tavily request, without a 30-day date filter and without Ollama. It runs only after every required field is filled, you press Search customers, and verify the PIN. The two-minute limit and three-minute backup stop still apply.'
+                      ? 'Customer Search makes one current public-web Tavily request, without a 30-day date filter and without an AI summary. It runs only after every required field is filled, you press Search customers, and verify the PIN. The two-minute limit and three-minute backup stop still apply.'
                       : 'Each event can search up to five selected topic tabs, one Tavily request per tab. A crawl can run for up to two minutes; the three-minute backup stop remains. The app-wide rate limit is five Tavily requests per rolling five minutes. Briefing starts only when you press Brief and verify the PIN.'}
                   </p>
                 )}
@@ -4030,7 +4051,7 @@ function Home() {
                   <h2 id="start-pin-title" className="mt-2 font-serif text-2xl text-[#292e46]">Enter the start PIN</h2>
                   <p id="start-pin-description" className="mt-2 text-sm leading-relaxed text-[#625d69]">
                     {customerSearchSelected
-                      ? 'The API Server checks this PIN before one public Tavily Customer Search. Ollama and private sources are not used.'
+                      ? 'The API Server checks this PIN before one public Tavily Customer Search. No AI summary or private sources are used.'
                       : 'The API Server checks this PIN for each crawl. It is not saved on this device.'}
                   </p>
                   <form onSubmit={submitStartPin} className="mt-5">
@@ -4132,7 +4153,7 @@ function Home() {
             {isAnySearchPending && (
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#ddd6e8] bg-[#f4f1f8] px-4 py-3" role="status" aria-live="polite" data-testid="status-generating">
                 <span className="mt-1 flex h-4 w-4 shrink-0 items-center justify-center"><span className="h-2 w-2 animate-pulse rounded-full bg-[#796a9d]" /></span>
-                <div className="min-w-0 flex-1"><p className="text-xs font-semibold text-[#49405e]">{customerSearchSelected ? 'Searching public businesses' : 'Reading the latest coverage'}</p><p className="mt-1 text-[11px] leading-relaxed text-[#777082]">{customerSearchSelected ? 'One Tavily request only. Ollama is not used. The search stops after two minutes.' : 'Tavily searches first; optional Qwen follows. The whole request stops after two minutes.'}</p></div>
+                <div className="min-w-0 flex-1"><p className="text-xs font-semibold text-[#49405e]">{customerSearchSelected ? 'Searching public businesses' : 'Reading the latest coverage'}</p><p className="mt-1 text-[11px] leading-relaxed text-[#777082]">{customerSearchSelected ? 'One Tavily request only. No AI summary runs. The search stops after two minutes.' : 'Tavily searches first; optional Qwen follows through the configured AI provider. The whole request stops after two minutes.'}</p></div>
                 <button
                   type="button"
                   onClick={() => {
@@ -4154,7 +4175,7 @@ function Home() {
             {currentRequestCancelled && !isAnySearchPending && (
               <div className="mt-4 rounded-xl border border-[#e4c9c3] bg-[#fbf0ed] p-4" role="status" data-testid="status-briefing-cancelled">
                 {customerSearchSelected
-                  ? 'The Tavily Customer Search was stopped. Ollama was not used.'
+                  ? 'The Tavily Customer Search was stopped. No AI summary was run.'
                   : 'Tavily search and any follow-up Qwen request were stopped.'}
               </div>
             )}

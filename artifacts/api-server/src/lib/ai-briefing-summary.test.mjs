@@ -10,6 +10,8 @@ import {
   QWEN_REQUEST_TIMEOUT_MS,
   QWEN_REQUEST_WINDOW_MS,
   getQwenRequestRateLimitState,
+  requestBifrostSummary,
+  requestAiSummary,
   requestOllamaSummary,
   validateAiTopicResponse,
 } from "./ai-briefing-summary.ts";
@@ -18,6 +20,12 @@ const ollamaConfig = {
   provider: "ollama",
   baseUrl: "https://ollama.example",
   model: "qwen2.5:3b",
+};
+const bifrostConfig = {
+  provider: "bifrost",
+  baseUrl: "https://gateway.example",
+  model: "ollama/qwen3:0.6b",
+  virtualKey: "bfv_test_virtual_key",
 };
 const source = {
   id: "source-1",
@@ -168,6 +176,75 @@ test("Ollama summaries use the configured model and JSON generate endpoint", asy
   assert.deepEqual(result.sourceIds, ["source-1"]);
 });
 
+test("Bifrost summaries use chat completions and the Bifrost virtual-key header", async () => {
+  let requestUrl = "";
+  let requestOptions;
+  const result = await requestBifrostSummary(
+    bifrostConfig,
+    "launch",
+    "Example Company",
+    [source],
+    async (url, options) => {
+      requestUrl = String(url);
+      requestOptions = options;
+      return new Response(JSON.stringify({
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              summary: "Example Company launched a new product line.",
+              sourceIds: ["source-1"],
+            }),
+          },
+        }],
+      }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    },
+    "What changed?",
+  );
+
+  assert.equal(requestUrl, "https://gateway.example/v1/chat/completions");
+  assert.equal(requestOptions.method, "POST");
+  assert.equal(requestOptions.headers["x-bf-vk"], "bfv_test_virtual_key");
+  assert.equal(requestOptions.headers.authorization, undefined);
+  const requestBody = JSON.parse(requestOptions.body);
+  assert.equal(requestBody.model, "ollama/qwen3:0.6b");
+  assert.equal(requestBody.stream, false);
+  assert.equal(requestBody.response_format.type, "json_object");
+  assert.equal(requestBody.messages.length, 1);
+  assert.match(requestBody.messages[0].content, /Example Company/);
+  assert.match(requestBody.messages[0].content, /source-1/);
+  assert.deepEqual(result.sourceIds, ["source-1"]);
+});
+
+test("configured provider dispatch sends Bifrost requests through the gateway", async () => {
+  let requestedUrl = "";
+  await requestAiSummary(
+    bifrostConfig,
+    "news",
+    "Example Company",
+    [source],
+    async (url) => {
+      requestedUrl = String(url);
+      return new Response(JSON.stringify({
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              summary: "The report describes recent company news.",
+              sourceIds: ["source-1"],
+            }),
+          },
+        }],
+      }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    },
+  );
+  assert.equal(requestedUrl, "https://gateway.example/v1/chat/completions");
+});
+
 test("Ollama summaries reject citations outside supplied evidence", async () => {
   await assert.rejects(
     () => requestOllamaSummary(
@@ -248,6 +325,27 @@ test("Ollama failure leaves the source-only briefing available", async () => {
   });
 
   assert.equal(reservations, 1);
+  assert.deepEqual(result.summaries, []);
+  assert.deepEqual(result.failedCategories, ["news"]);
+});
+
+test("Bifrost failure leaves the source-only briefing available without Ollama fallback", async () => {
+  let requestedUrl = "";
+  const result = await generateAiBriefingSummaries({
+    userId: "user-bifrost",
+    briefingId: "brief-bifrost",
+    subject: "Example Company",
+    topics: ["news"],
+    evidenceByTopic: { news: [source] },
+    config: bifrostConfig,
+    fetcher: async (url) => {
+      requestedUrl = String(url);
+      throw new Error("Bifrost is unavailable");
+    },
+    reserveRequest: async () => true,
+  });
+
+  assert.equal(requestedUrl, "https://gateway.example/v1/chat/completions");
   assert.deepEqual(result.summaries, []);
   assert.deepEqual(result.failedCategories, ["news"]);
 });

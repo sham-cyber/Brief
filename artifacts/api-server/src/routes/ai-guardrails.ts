@@ -160,7 +160,7 @@ router.put("/ai/guardrails/passcode", async (req, res): Promise<void> => {
 router.put("/ai/guardrails/connection", async (req, res): Promise<void> => {
   const userId = authenticatedUserId(req);
   if (!userId) {
-    res.status(401).json({ error: "Sign in before saving an Ollama connection." });
+    res.status(401).json({ error: "Sign in before saving an AI provider connection." });
     return;
   }
   const input = ollamaConnectionBody.safeParse(req.body);
@@ -179,7 +179,7 @@ router.put("/ai/guardrails/connection", async (req, res): Promise<void> => {
     res.status(400).json({
       error: error instanceof Error
         ? error.message
-        : "The Ollama connection could not be saved.",
+        : "The AI provider connection could not be saved.",
     });
   }
 });
@@ -237,7 +237,7 @@ router.post("/ai/guardrails/activate", async (req, res): Promise<void> => {
 
     if (!(await getAiProviderStatusForUser(userId)).connected) {
       res.status(503).json({
-        error: "AI cannot be activated until your saved Ollama connection and model are available.",
+        error: "AI cannot be activated until the configured provider and model are available.",
       });
       return;
     }
