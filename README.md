@@ -280,8 +280,11 @@ Hackathon rules differ, so follow the event's submission form and deadline. A ty
 - Project, team, and license information required by the event.
 - If judges need access, share a dedicated demo account through the event's private submission field and configure its own key.
 
-## License
+## Support the project
 
+If Briefing Agent is useful to you, you can [buy me a coffee via Razorpay](https://razorpay.me/@suanpower). Choose the amount on Razorpay and pay securely. Support is voluntary and does not affect access to the app.
+
+## License
 This repository is licensed under the Apache License 2.0. See [LICENSE](./LICENSE) and [NOTICE](./NOTICE). Third-party packages and assets remain subject to their respective licenses.
 
 Before submission, review the repository contents and include any additional information required by the event.
