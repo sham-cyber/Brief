@@ -8,7 +8,7 @@ A source-first pre-meeting briefing app. Choose a company or person, select the 
 
 **GitHub repository:** [sham-cyber/Brief](https://github.com/sham-cyber/Brief)
 
-**Run mode:** Clone and run locally. Optional model summaries use per-account Ollama by default; members can select and configure their own Bifrost gateway instead.
+**Run mode:** Clone and run locally. Tavily handles public-source research. Optional summaries use the signed-in account's Ollama connection by default, or an operator-configured Bifrost gateway for the deployment.
 
 ## Submission overview
 
@@ -40,16 +40,16 @@ Briefing Agent gathers public reporting from the 30 days ending when the user st
 - SAP briefs combine Tavily public research with approved, read-only SAP S/4HANA records; public links and internal records remain in separate sections.
 - Can be installed as a Progressive Web App (PWA). Users can explicitly save up to five public briefs in their signed-in browser profile for offline reading, copying, printing, and device read-aloud.
 
-The app includes optional summaries through Ollama or a member-configured Bifrost gateway. After Tavily results pass the source checks, a summary can run only when the server switch, account PIN and activation, and per-brief opt-in are all satisfied. The example configuration keeps the server switch false until the operator enables it. Tavily remains the public-source search path; only the later model summary call can use Bifrost.
+The app includes optional summaries through Ollama or Bifrost. After Tavily results pass the source checks, a summary can run only when the server switch, account PIN and activation, and per-brief opt-in are all satisfied. The example configuration keeps the server switch false until the operator enables it. Tavily remains the public-source search path; only the later model-summary call can use Bifrost.
 
 ## How Tavily and Bifrost work together
 
 1. **Tavily searches public sources** for the selected topics. The app checks returned links, dates, subject match, and topic relevance before using findings.
 2. **The source-based brief stays available** whether AI is enabled or not. Tavily search is separate from Bifrost and is not routed through the model gateway.
-3. **Optional summaries run after source checks.** When the operator enables AI and the signed-in user activates it with their account PIN and per-brief opt-in, accepted public-source text can be summarized by the selected provider: the account's Ollama connection or its Bifrost gateway.
-4. **Bifrost settings belong to each account.** The account saves its gateway URL, model ID, and virtual key; the app encrypts those settings on the server and does not return the saved key to the browser. Bifrost failure leaves the cited, source-based brief available and does not automatically switch to Ollama.
+3. **Optional summaries run after source checks.** When the operator enables AI and the signed-in user activates it with their account PIN and per-brief opt-in, accepted public-source text can be summarized through the account's Ollama connection or the deployment's Bifrost gateway.
+4. **Bifrost is configured by the deployment operator.** The operator selects Bifrost and supplies its URL, model ID, and virtual key through server-side environment variables. The shared gateway credential is not exposed to the browser. Bifrost failure leaves the cited, source-based brief available and does not automatically switch to Ollama.
 
-Tavily and Bifrost are separate services with separate credentials. FraudGuard is optional monitoring, not a requirement for search or summaries; its Brief event sender remains disabled until a non-production receiver is configured and verified. See [How AI is used](#how-ai-is-used) for provider limits and verification status.
+Tavily and Bifrost are separate services with separate credentials: Tavily searches the public web directly, while Bifrost handles only the optional summary request. FraudGuard is not required for search or summaries. If FraudGuard is installed in a Bifrost gateway, it can observe requests routed through that gateway; this repository does not include a Brief-side FraudGuard event sender.
 
 ## Technologies used
 
@@ -58,7 +58,7 @@ Tavily and Bifrost are separate services with separate credentials. FraudGuard i
 - **Database:** PostgreSQL with Drizzle ORM.
 - **AI-powered retrieval:** Tavily Search API finds public reporting for selected topics; the app checks source links, date range, subject match, and relevance.
 - **Optional local AI summaries:** Ollama using the configured local model; one request per selected topic when the user opts in.
-- **Optional AI gateway:** Each signed-in account can configure its own Bifrost URL, model, and `x-bf-vk` virtual key. Bifrost can route through FraudGuard when that plugin is installed and configured on the member's gateway.
+- **Optional AI gateway:** The deployment operator can configure a Bifrost URL, model, and server-side virtual key. Brief sends the key in the `x-bf-vk` header. A Bifrost gateway can route requests through FraudGuard if its operator has installed and configured that plugin.
 - **SAP connection:** SAP S/4HANA business OData APIs using OAuth; SAP records remain separate from public search results.
 - **Validation and API contracts:** Zod and an OpenAPI specification, with generated TypeScript API clients.
 - **PDF and project tooling:** `pdf-lib`, pnpm workspaces, and TypeScript type checks.
@@ -80,13 +80,13 @@ The repository includes the Clerk sign-in and sign-up screens, browser session h
 
 ### Use your own clone
 
-Each signed-in account uses its own PIN and Tavily key. Ollama remains the default AI provider; each account may save its own Ollama connection or select Bifrost and save a separate gateway URL, model, and virtual key.
+Each signed-in account uses its own PIN and Tavily key. The signed-in account can save its own Ollama connection. Bifrost, when used, is configured once by the deployment operator through server-side environment variables and is shared by that deployment.
 
 1. Configure Clerk and PostgreSQL for the clone; enable account creation in that Clerk environment if members need to register.
 2. Set a unique `USER_CREDENTIALS_ENCRYPTION_KEY` in the clone's server-side secret manager.
 3. Leave `TAVILY_API_KEY` unset for member accounts. Each person signs in and saves their own Tavily key in Settings; those searches are billed to that person's Tavily account.
 4. Each person sets a four-digit account PIN in the AI control panel. That same PIN is checked for crawl starts and AI activation; it is stored as a salted hash, not in browser storage.
-5. In AI settings, each person chooses Ollama or Bifrost. Ollama settings and Bifrost URL/model/virtual key are saved separately and encrypted on the server, scoped to that signed-in account. Bifrost keys are never returned to the browser after saving. The application server can decrypt credentials to make requests; protect `USER_CREDENTIALS_ENCRYPTION_KEY` in the server's secret manager. Never commit provider keys.
+5. In AI settings, each person may save their own Ollama endpoint and optional token. To use Bifrost for the deployment, the operator sets `BRIEF_AI_PROVIDER=bifrost`, `BIFROST_BASE_URL`, `BIFROST_MODEL`, and `BIFROST_VIRTUAL_KEY` in the server's secret manager. The Bifrost virtual key is shared by that deployment and is never placed in browser code or Git. Never commit provider keys.
 6. Configure the clone's database and Clerk keys, apply the database schema, and start the app as described below.
 
 The project-level `TAVILY_API_KEY` remains restricted to the account matching `BRIEFING_OWNER_EMAIL`; other accounts cannot use it and must save their own key. A member can use their own credentials in the same deployment without sharing another member's PIN or Tavily key.
@@ -112,12 +112,12 @@ Repeated incorrect PIN attempts are temporarily rate-limited. The PIN is per acc
 ### How AI is used
 
 - **Tavily retrieval (default):** Tavily's AI-powered Search API finds public sources for the selected topics and returns cited research.
-- **Shared AI guardrails:** Ollama and Bifrost use the same account PIN, activation and per-brief opt-in, one request per selected topic, five AI topic requests per account per rolling five minutes, 400-word cap per brief, 26-second per-request timeout, 120-second backup stop, and common Stop AI behavior. The example configuration keeps `AI_FEATURE_ENABLED=false`; the hosting operator must enable the switch before users can activate AI.
+- **Shared AI guardrails:** Ollama and Bifrost use the same account PIN, activation and per-brief opt-in, topic request limits, word cap, timeouts, and Stop AI behavior. The example configuration keeps `AI_FEATURE_ENABLED=false`; the hosting operator must enable the switch before users can activate AI. See the code and tests for the current exact limits.
 - **Ollama:** Choose Ollama in signed-in AI settings and enter that account's Ollama URL and model (for example, Qwen 3), plus any endpoint token. The local model receives an idle-unload request after 26 seconds. A local clone can use loopback HTTP; remote production endpoints require HTTPS and authentication. Inference uses the Ollama server configured by that account.
-- **Bifrost:** Choose Bifrost in the signed-in AI settings and enter that account's gateway URL, exact model ID, and virtual key. The key is sent in the `x-bf-vk` header and stored encrypted with account-bound data; it is not returned after saving. Remote gateways must use HTTPS and resolve to public addresses. Loopback HTTP is allowed only for a local development clone; a hosted API cannot reach Bifrost running only on a member's computer. Switching providers stops AI and cancels active summaries. Bifrost failure leaves the source-based brief available and does not silently fall back to Ollama. FraudGuard may also be installed inside a Bifrost gateway, but that only observes requests routed through that gateway.
-- **Bifrost verification status (15 Nov 2026):** Automated checks cover gateway validation, encrypted per-account credential storage, request headers, readiness, source-only fallback, and cancellation using synthetic data or mocked gateway responses. This workspace has no configured Bifrost URL or virtual key, so no live gateway request has been verified. The configured Ollama endpoint returned no installed model entries in this check. Treat live AI as unverified until a member configures a non-production gateway and completes a live test.
+- **Bifrost:** The deployment operator selects Bifrost with `BRIEF_AI_PROVIDER=bifrost` and sets `BIFROST_BASE_URL`, `BIFROST_MODEL`, and `BIFROST_VIRTUAL_KEY` in server-side Secrets. The virtual key is sent in the `x-bf-vk` header. Remote gateways must use HTTPS; loopback HTTP is permitted only for local development. This configuration applies to the deployment rather than being an individual member's Bifrost connection. Bifrost failure leaves the source-based brief available and does not silently fall back to Ollama.
+- **Bifrost verification status:** Automated checks cover provider configuration, gateway request headers, readiness, source-only fallback, and cancellation with synthetic data or mocked gateway responses. No live Bifrost gateway is configured or verified by this repository's README update. Treat live AI as unverified until the operator configures a non-production gateway and completes a live test.
 - **Tavily remains separate:** Tavily discovery and source validation happen before AI summaries and do not pass through Bifrost. Brief sends only the subject, selected topic, optional question, and accepted public-source snippets to the selected model. SAP and private records remain outside this AI step.
-- **FraudGuard:** The optional Brief sender targets `POST /api/v2/events` for Tavily search/retrieval and Ollama/Bifrost model summaries, following the v2 contract supplied for this integration. It can emit start, terminal, and citation/guardrail events. Model token fields are marked `provider-reported`, `estimated`, or `unavailable`; Tavily events include duration/result count only. Queries, URLs, source text, prompts, PINs, credentials, and raw account IDs are never sent. Delivery is asynchronous, bounded, and fail-open. Set `FRAUDGUARD_ENABLED=true` only after a non-production receiver is deployed and verified. Configure `FRAUDGUARD_API_URL`, the sender key `FRAUDGUARD_CLIENT_KEY`, and the separate pseudonymization key `FRAUDGUARD_PROFILE_HMAC_KEY` through server-side Secrets. Remote URLs must use HTTPS; loopback HTTP is allowed only in local development. `/api/healthz` exposes `X-Brief-FraudGuard-Enabled`, `X-Brief-FraudGuard-Pending-Events`, and `X-Brief-FraudGuard-Dropped-Events`; the drop count resets on API process restart. The receiver acknowledges start/citation events without scoring or retaining them, and does not yet use Tavily duration/result count as scoring signals. No live FraudGuard service is configured or verified in this workspace; keep the sender disabled until non-production end-to-end verification.
+- **FraudGuard:** Brief does not send events directly to FraudGuard in this repository. A FraudGuard plugin may be configured by the Bifrost operator; it can observe only requests that pass through that Bifrost gateway. Tavily search remains a separate direct request and is not routed through Bifrost.
 - **Local Ollama:** For a local clone, run Ollama on the same computer as the API server. In the signed-in AI control panel, enter `http://127.0.0.1:11434` and the installed model name (for example, `qwen3:0.6b`), then save and test the connection. Inference uses that clone's computer resources.
 - **Remote Ollama-compatible endpoint:** Use a public HTTPS endpoint protected by a bearer token. Enter the endpoint and token in the signed-in AI controls; the app encrypts the saved connection and scopes it to that account. Do not use an endpoint you do not control. A hosted API cannot reach a member's computer by entering `localhost`; use a secured, reachable endpoint if the app and model run on different computers.
 - The selected model makes at most one request per selected topic in a briefing, with no automatic retries. It receives the subject, open question, selected topic, and accepted public-source titles and snippets. SAP records and private sources remain outside this AI step.
@@ -179,7 +179,7 @@ Keep the committed lockfile. The frozen install uses its exact dependency resolu
 
 1. Install Ollama on the same computer that will run the cloned app.
 2. Start Ollama with `ollama serve`, then install the example model with `ollama pull qwen3:0.6b`. Confirm it appears in `ollama list`.
-3. Copy `.env.example` to `.env` and fill in the app's own database, Clerk, owner, and encryption settings. Keep `AI_FEATURE_ENABLED=false` until the operator chooses to enable AI. Each account adds its own Tavily and Ollama connections in the app.
+3. Copy `.env.example` to `.env` and fill in the app's own database, Clerk, owner, and encryption settings. Keep `AI_FEATURE_ENABLED=false` until the operator chooses to enable AI. Each account adds its own Tavily key and may add its own Ollama connection in the app. Bifrost is optional and configured by the operator for the deployment.
 4. In each terminal, load the local environment before starting a service:
 
    ```sh
@@ -272,6 +272,10 @@ Set values in Replit Secrets or your hosting provider's secret manager. This tab
 | `TAVILY_API_KEY` | Optional project Tavily key; only the account matching `BRIEFING_OWNER_EMAIL` can use it. Other accounts add their own key in Settings. |
 | `USER_CREDENTIALS_ENCRYPTION_KEY` | Needed to save account Tavily keys, Ollama tokens, or SAP OAuth credentials; use a unique 64-character hexadecimal value. |
 | `AI_FEATURE_ENABLED` | Optional server switch for AI summaries; leave unset or set to `false` to keep AI off. |
+| `BRIEF_AI_PROVIDER` | Optional deployment-wide model selection: `ollama` (default) or `bifrost`. |
+| `BIFROST_BASE_URL` | Optional HTTPS URL for the deployment's Bifrost gateway. |
+| `BIFROST_MODEL` | Exact model ID available through that Bifrost gateway. |
+| `BIFROST_VIRTUAL_KEY` | Bifrost virtual key used server-side in the `x-bf-vk` request header. Keep it in Secrets; never commit it. |
 | `LOCAL_API_PROXY_TARGET` | Optional local Vite proxy target, usually `http://127.0.0.1:8080`. |
 
 Clerk development and production environments may have separate accounts. Create and test users in the Clerk environment connected to that app. Give each fork or separate deployment its own database, Clerk configuration, encryption key, and Tavily setup.
